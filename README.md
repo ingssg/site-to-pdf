@@ -20,34 +20,6 @@
 - **Database**: Supabase (PostgreSQL)
 - **배포**: Vercel + AWS Lambda
 
-## 🚦 시작하기
-
-### 1. 설치
-
-```bash
-npm install
-npx playwright install chromium
-```
-
-### 2. 환경 변수 설정
-
-```bash
-cp .env.example .env.local
-```
-
-`.env.local` 파일을 열어 필요한 API 키를 입력하세요:
-
-- `OPENAI_API_KEY`: [OpenAI API](https://platform.openai.com/api-keys)에서 발급
-- (선택) Supabase 키: [Supabase](https://app.supabase.com/)에서 프로젝트 생성
-
-### 3. 개발 서버 실행
-
-```bash
-npm run dev
-```
-
-http://localhost:3000 에서 확인하세요.
-
 ## 📁 프로젝트 구조
 
 ```
@@ -64,13 +36,6 @@ src/
 ├── types/              # TypeScript 타입
 └── utils/              # 헬퍼 함수
 ```
-
-## 🎯 MVP 로드맵 (4주)
-
-- [x] **Week 1**: 환경 셋업 + 크롤러 기초
-- [ ] **Week 2**: 재귀 크롤링 + PDF 병합
-- [ ] **Week 3**: 프론트엔드 UI + LLM 연동
-- [ ] **Week 4**: 배포 + 런칭 준비
 
 ## 📖 사용 예시
 
@@ -92,18 +57,6 @@ const pdf = await generatePDFFromPages(result.pages);
 // 3. AI 요약 생성
 const summary = await generateAISummary(result.pages, 'detailed');
 ```
-
-## 📚 참고 문서
-
-- [프로젝트 기획서](./docs/SiteToPDF_프로젝트_기획서.docx.pdf)
-- [Playwright 문서](https://playwright.dev/docs/intro)
-- [Next.js 문서](https://nextjs.org/docs)
-- [OpenAI API 문서](https://platform.openai.com/docs)
-
-## 👥 팀
-
-- **담당**: 인석
-- **감수**: 보석
 
 ## 📄 라이선스
 
