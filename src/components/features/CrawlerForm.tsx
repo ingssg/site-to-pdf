@@ -69,7 +69,7 @@ export default function CrawlerForm() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900"
               required
             />
           </div>
@@ -105,7 +105,7 @@ export default function CrawlerForm() {
                 id="detailLevel"
                 value={detailLevel}
                 onChange={(e) => setDetailLevel(e.target.value as any)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
                 disabled={!includeAI}
               >
                 <option value="basic">기본</option>

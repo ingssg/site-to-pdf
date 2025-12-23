@@ -68,15 +68,19 @@ export class WebCrawler {
     }
 
     this.visitedUrls.add(url);
+    console.log(`[Crawler] Crawling (${this.crawledPages.length + 1}/${this.config.maxPages}): ${url}`);
 
     try {
       const page = await this.browser!.newPage();
 
-      // 페이지 로드 (네트워크 idle 대기)
+      // 페이지 로드 (더 빠른 타임아웃)
       await page.goto(url, {
-        waitUntil: 'networkidle',
-        timeout: 30000,
+        waitUntil: 'domcontentloaded',
+        timeout: 15000,
       });
+
+      // 조금 더 기다려서 동적 콘텐츠 로딩
+      await page.waitForTimeout(1000);
 
       // 페이지 정보 추출
       const title = await page.title();
@@ -101,14 +105,18 @@ export class WebCrawler {
 
       await page.close();
 
+      console.log(`[Crawler] Found ${links.length} links on ${url}`);
+
       // 재귀적으로 링크 크롤링
       for (const link of links) {
         if (this.crawledPages.length < this.config.maxPages) {
           await this.crawlPage(link, depth + 1);
+        } else {
+          break;
         }
       }
     } catch (error) {
-      console.error(`Failed to crawl ${url}:`, error);
+      console.error(`[Crawler] Failed to crawl ${url}:`, error);
     }
   }
 
@@ -133,13 +141,18 @@ export class WebCrawler {
   }
 
   /**
-   * 같은 도메인인지 확인
+   * 같은 도메인인지 확인 (www. 제외)
    */
   private isSameDomain(url: string): boolean {
     try {
       const baseUrl = new URL(this.config.url);
       const targetUrl = new URL(url);
-      return baseUrl.hostname === targetUrl.hostname;
+
+      // www. 제거 후 비교
+      const baseDomain = baseUrl.hostname.replace(/^www\./, '');
+      const targetDomain = targetUrl.hostname.replace(/^www\./, '');
+
+      return baseDomain === targetDomain;
     } catch {
       return false;
     }
