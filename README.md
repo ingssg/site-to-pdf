@@ -37,6 +37,25 @@ src/
 └── utils/              # 헬퍼 함수
 ```
 
+## 🔤 한글 폰트 설정
+
+PDF에서 한글을 표시하려면 NotoSansKR 폰트 파일이 필요합니다.
+
+### 자동 다운로드 (시도)
+```bash
+npm run download-fonts
+```
+
+### 수동 다운로드
+1. [Google Fonts - Noto Sans KR](https://fonts.google.com/noto/specimen/Noto+Sans+KR) 접속
+2. 우측 상단 **"Download family"** 버튼 클릭
+3. 다운로드한 ZIP 파일 압축 해제
+4. 다음 파일들을 `public/fonts/` 디렉토리에 복사:
+   - `NotoSansKR-Regular.ttf`
+   - `NotoSansKR-Bold.ttf`
+
+폰트 파일이 없으면 표준 폰트(Helvetica)로 대체되며, 한글은 제대로 표시되지 않을 수 있습니다.
+
 ## 📖 사용 예시
 
 ```typescript

@@ -43,3 +43,9 @@ next-env.d.ts
 
 # project docs (internal use only)
 /docs
+
+# fonts (downloaded at build time via postinstall script)
+/public/fonts/*.ttf
+/public/fonts/*.otf
+/public/fonts/*.woff
+/public/fonts/*.woff2

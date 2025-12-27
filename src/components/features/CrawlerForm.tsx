@@ -1,19 +1,34 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { CrawlAPIRequest, CrawlAPIResponse, APIErrorResponse } from '@/types/api';
 import ResultDisplay from './ResultDisplay';
 
 export default function CrawlerForm() {
   const [url, setUrl] = useState('');
   const [maxPages, setMaxPages] = useState(10);
+  const [mode, setMode] = useState<'fast' | 'standard' | 'archive'>('fast');
   const [detailLevel, setDetailLevel] = useState<'basic' | 'detailed' | 'comprehensive'>('basic');
-  const [includePDF, setIncludePDF] = useState(true);
-  const [includeAI, setIncludeAI] = useState(false);
+  const [includePDF, setIncludePDF] = useState(false); // Fast 모드 기본값 false
+  const [includeAI, setIncludeAI] = useState(true); // Fast 모드 기본값 true
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CrawlAPIResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // 모드 변경 시 기본값 자동 조정
+  useEffect(() => {
+    if (mode === 'fast') {
+      setIncludePDF(false);
+      setIncludeAI(true);
+    } else if (mode === 'standard') {
+      setIncludePDF(true);
+      setIncludeAI(true);
+    } else if (mode === 'archive') {
+      setIncludePDF(true);
+      setIncludeAI(false);
+    }
+  }, [mode]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,6 +40,7 @@ export default function CrawlerForm() {
       const requestBody: CrawlAPIRequest = {
         url,
         maxPages,
+        mode,
         detailLevel,
         includePDF,
         includeAI,
@@ -72,6 +88,28 @@ export default function CrawlerForm() {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900"
               required
             />
+          </div>
+
+          {/* Mode Selection */}
+          <div>
+            <label htmlFor="mode" className="block text-sm font-medium text-gray-700 mb-2">
+              크롤링 모드
+            </label>
+            <select
+              id="mode"
+              value={mode}
+              onChange={(e) => setMode(e.target.value as 'fast' | 'standard' | 'archive')}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
+            >
+              <option value="fast">⚡ Fast - 빠른 AI 분석 (텍스트만)</option>
+              <option value="standard">📄 Standard - 텍스트 PDF</option>
+              <option value="archive">🗄️ Archive - 완전 보존 (스크린샷)</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {mode === 'fast' && '텍스트만 크롤링하여 AI 요약을 빠르게 제공합니다.'}
+              {mode === 'standard' && '텍스트 기반 PDF와 AI 요약을 제공합니다.'}
+              {mode === 'archive' && '스크린샷을 포함한 완전한 아카이브 PDF를 생성합니다.'}
+            </p>
           </div>
 
           {/* Options Grid */}

@@ -50,12 +50,35 @@ export class WebCrawler {
   }
 
   /**
+   * URL 정규화 (쿼리, 해시 제거 및 trailing slash 통일)
+   */
+  private normalizeUrl(url: string): string {
+    try {
+      const parsedUrl = new URL(url);
+      let hostname = parsedUrl.hostname;
+
+      // www 제거 (www.naver.com과 naver.com을 같은 것으로 처리)
+      if (hostname.startsWith('www.')) {
+        hostname = hostname.slice(4);
+      }
+
+      const normalizedOrigin = `${parsedUrl.protocol}//${hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
+      // 쿼리 파라미터와 해시 제거, trailing slash 제거
+      return normalizedOrigin + parsedUrl.pathname.replace(/\/$/, '');
+    } catch {
+      return url;
+    }
+  }
+
+  /**
    * 개별 페이지 크롤링 (재귀)
    */
   private async crawlPage(url: string, depth: number): Promise<void> {
+    const normalizedUrl = this.normalizeUrl(url);
+
     // 이미 방문했거나, 최대 페이지 수 도달 시 중단
     if (
-      this.visitedUrls.has(url) ||
+      this.visitedUrls.has(normalizedUrl) ||
       this.crawledPages.length >= this.config.maxPages ||
       (this.config.maxDepth && depth > this.config.maxDepth)
     ) {
@@ -67,7 +90,7 @@ export class WebCrawler {
       return;
     }
 
-    this.visitedUrls.add(url);
+    this.visitedUrls.add(normalizedUrl);
     console.log(`[Crawler] Crawling (${this.crawledPages.length + 1}/${this.config.maxPages}): ${url}`);
 
     try {
@@ -85,10 +108,22 @@ export class WebCrawler {
       // 페이지 정보 추출
       const title = await page.title();
       const content = await page.textContent('body');
-      const screenshot = await page.screenshot({
-        fullPage: true,
-        type: 'png',
-      });
+
+      // 모드에 따라 스크린샷 생성 여부 결정
+      // fast, standard: 스크린샷 없음 (텍스트만)
+      // archive: 스크린샷 포함
+      const mode = this.config.mode || 'archive';
+      let screenshot: Buffer | undefined;
+
+      if (mode === 'archive') {
+        screenshot = await page.screenshot({
+          fullPage: true,
+          type: 'png',
+        });
+        console.log(`[Crawler] Screenshot captured for ${url}`);
+      } else {
+        console.log(`[Crawler] Skipping screenshot (${mode} mode) for ${url}`);
+      }
 
       // 크롤링된 페이지 저장
       this.crawledPages.push({
@@ -105,10 +140,15 @@ export class WebCrawler {
 
       await page.close();
 
-      console.log(`[Crawler] Found ${links.length} links on ${url}`);
+      // 같은 도메인 링크만 필터링
+      const sameDomainLinks = links.filter((link) => this.isSameDomain(link));
+
+      console.log(
+        `[Crawler] Found ${links.length} links on ${url} (${sameDomainLinks.length} same domain)`
+      );
 
       // 재귀적으로 링크 크롤링
-      for (const link of links) {
+      for (const link of sameDomainLinks) {
         if (this.crawledPages.length < this.config.maxPages) {
           await this.crawlPage(link, depth + 1);
         } else {
@@ -141,16 +181,25 @@ export class WebCrawler {
   }
 
   /**
-   * 같은 도메인인지 확인 (www. 제외)
+   * 같은 도메인인지 확인 (서브도메인 포함)
    */
   private isSameDomain(url: string): boolean {
     try {
       const baseUrl = new URL(this.config.url);
       const targetUrl = new URL(url);
 
-      // www. 제거 후 비교
-      const baseDomain = baseUrl.hostname.replace(/^www\./, '');
-      const targetDomain = targetUrl.hostname.replace(/^www\./, '');
+      // 루트 도메인 추출 (예: www.naver.com → naver.com, news.naver.com → naver.com)
+      const getRootDomain = (hostname: string): string => {
+        const parts = hostname.split('.');
+        if (parts.length >= 2) {
+          // 마지막 2개 부분만 (domain.com)
+          return parts.slice(-2).join('.');
+        }
+        return hostname;
+      };
+
+      const baseDomain = getRootDomain(baseUrl.hostname);
+      const targetDomain = getRootDomain(targetUrl.hostname);
 
       return baseDomain === targetDomain;
     } catch {

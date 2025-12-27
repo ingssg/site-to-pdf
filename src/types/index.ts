@@ -9,6 +9,7 @@ export interface CrawlConfig {
   maxDepth?: number;
   sameDomainOnly: boolean;
   excludePatterns?: string[];
+  mode?: 'fast' | 'standard' | 'archive'; // 크롤링 모드
 }
 
 export interface CrawledPage {
@@ -41,6 +42,7 @@ export interface PDFResult {
   individualPdfs?: Buffer[];
   tableOfContents: TableOfContentsItem[];
   totalSize: number;
+  warnings?: string[]; // 경고 메시지 (예: 폰트 파일 없음)
 }
 
 export interface TableOfContentsItem {
@@ -57,18 +59,33 @@ export interface AISummaryRequest {
 }
 
 export interface AISummary {
+  // 웹사이트 기본 정보
+  websiteType: string; // SaaS, 이커머스, 블로그, 뉴스, 커뮤니티, 포트폴리오, 기업소개 등
   companyName?: string;
-  overview: string;
-  mainServices: string[];
-  targetCustomers: string[];
-  uniqueFeatures: string[];
-  swotAnalysis?: {
-    strengths: string[];
-    weaknesses: string[];
-    opportunities: string[];
-    threats: string[];
+  oneLineSummary: string; // 핵심 가치 제안 (30자 이내)
+  overview: string; // 상세 설명
+
+  // 비즈니스 모델
+  businessModel?: {
+    type: string; // B2B, B2C, B2B2C, C2C 등
+    revenueModel?: string; // 구독, 일회성, 광고, 프리미엄, 커미션 등
+    priceRange?: string; // 가격대 (무료, 저가, 중가, 고가)
   };
-  competitorAnalysis?: string;
+
+  // 핵심 정보
+  problemSolved: string; // 해결하는 문제
+  mainServices: string[]; // 주요 서비스/제품
+  targetCustomers: string[]; // 타겟 고객 (구체적 페르소나)
+  uniqueFeatures: string[]; // 차별화 요소
+
+  // 심화 분석 (detailed, comprehensive)
+  keyStrengths?: string[]; // 강점 3가지 (구체적 근거 포함)
+  improvementAreas?: string[]; // 개선 필요 영역 3가지
+  competitorAnalysis?: string; // 경쟁사 분석 및 시장 포지셔닝
+
+  // 실행 인사이트 (comprehensive)
+  actionableInsights?: string[]; // 추천 액션 아이템
+  marketOpportunity?: string; // 시장 기회
 }
 
 // Job/Task 관련 타입
