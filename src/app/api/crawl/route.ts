@@ -5,22 +5,16 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import JSZip from "jszip";
 import { crawlWebsite } from "@/lib/crawler";
-import { generatePDFFromPages } from "@/lib/pdf";
-import { generateAISummary } from "@/lib/ai";
 
 // 요청 스키마 정의
 const CrawlRequestSchema = z.object({
   url: z.string().url("유효한 URL을 입력해주세요"),
   maxPages: z.number().min(1).max(200).optional().default(10),
-  mode: z.enum(["fast", "standard", "archive"]).optional().default("archive"),
   detailLevel: z
     .enum(["basic", "detailed", "comprehensive"])
     .optional()
     .default("basic"),
-  includePDF: z.boolean().optional().default(true),
-  includeAI: z.boolean().optional().default(true),
 });
 
 type CrawlRequest = z.infer<typeof CrawlRequestSchema>;
@@ -31,11 +25,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = CrawlRequestSchema.parse(body);
 
-    const { url, maxPages, mode, detailLevel, includePDF, includeAI } =
-      validatedData;
+    const { url, maxPages, detailLevel } = validatedData;
 
     console.log(
-      `[API] 크롤링 시작: ${url} (최대 ${maxPages}페이지, 모드: ${mode})`
+      `[API] 크롤링 시작: ${url} (최대 ${maxPages}페이지)`
     );
 
     // 2. 웹사이트 크롤링
@@ -43,49 +36,11 @@ export async function POST(request: NextRequest) {
       url,
       maxPages,
       sameDomainOnly: true,
-      mode,
     });
 
     console.log(`[API] 크롤링 완료: ${crawlResult.totalPages}페이지 수집됨`);
 
-    // 3. PDF 생성 (옵션)
-    let pdfResult = null;
-    let individualPdfsZipBase64 = null;
-    if (includePDF && crawlResult.pages.length > 0) {
-      console.log("[API] PDF 생성 시작...");
-      pdfResult = await generatePDFFromPages(crawlResult.pages);
-      console.log(
-        `[API] PDF 생성 완료: ${(pdfResult.totalSize / 1024 / 1024).toFixed(
-          2
-        )}MB`
-      );
-
-      // 개별 PDF를 ZIP으로 압축
-      console.log("[API] 개별 PDF ZIP 생성 시작...");
-      const zip = new JSZip();
-      (pdfResult.individualPdfs || []).forEach((pdfBuffer, index) => {
-        const page = crawlResult.pages[index];
-        const filename = `${index + 1}_${page.title || "page"}.pdf`
-          .replace(/[^a-zA-Z0-9가-힣._-]/g, "_")
-          .slice(0, 100);
-        zip.file(filename, pdfBuffer);
-      });
-      const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
-      individualPdfsZipBase64 = zipBuffer.toString("base64");
-      console.log(
-        `[API] ZIP 생성 완료: ${(zipBuffer.length / 1024 / 1024).toFixed(2)}MB`
-      );
-    }
-
-    // 4. AI 요약 생성 (옵션)
-    let aiSummary = null;
-    if (includeAI && crawlResult.pages.length > 0) {
-      console.log("[API] AI 요약 생성 시작...");
-      aiSummary = await generateAISummary(crawlResult.pages, detailLevel);
-      console.log("[API] AI 요약 생성 완료");
-    }
-
-    // 5. 응답 반환
+    // 3. 응답 반환 (크롤링 결과만)
     return NextResponse.json(
       {
         success: true,
@@ -103,20 +58,9 @@ export async function POST(request: NextRequest) {
               title: page.title,
               content: page.content,
               depth: page.depth,
+              screenshot: page.screenshot, // 스크린샷 데이터 포함
             })),
           },
-          pdf: pdfResult
-            ? {
-                totalSize: pdfResult.totalSize,
-                totalSizeMB: (pdfResult.totalSize / 1024 / 1024).toFixed(2),
-                pageCount: pdfResult.tableOfContents.length,
-                warnings: pdfResult.warnings, // 경고 메시지 포함
-                // PDF 데이터는 Base64로 인코딩하여 전달
-                mergedPdf: pdfResult.mergedPdf.toString("base64"),
-                individualPdfsZip: individualPdfsZipBase64 || "",
-              }
-            : null,
-          summary: aiSummary,
         },
       },
       { status: 200 }
