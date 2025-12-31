@@ -9,14 +9,13 @@ export interface CrawlConfig {
   maxDepth?: number;
   sameDomainOnly: boolean;
   excludePatterns?: string[];
-  mode?: 'fast' | 'standard' | 'archive'; // 크롤링 모드
 }
 
 export interface CrawledPage {
   url: string;
   title: string;
   content: string;
-  screenshot?: Buffer;
+  screenshot?: Buffer; // 페이지 스크린샷 (아카이빙용)
   timestamp: Date;
   depth: number;
 }
