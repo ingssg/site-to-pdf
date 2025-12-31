@@ -96,34 +96,116 @@ export class WebCrawler {
     try {
       const page = await this.browser!.newPage();
 
-      // 페이지 로드 (더 빠른 타임아웃)
+      // 페이지 로드 (네트워크 완료까지 대기 - 웹 폰트 로딩 포함)
       await page.goto(url, {
-        waitUntil: 'domcontentloaded',
-        timeout: 15000,
+        waitUntil: 'networkidle',  // domcontentloaded → networkidle 변경
+        timeout: 30000,  // 15초 → 30초로 증가
       });
 
-      // 조금 더 기다려서 동적 콘텐츠 로딩
-      await page.waitForTimeout(1000);
+      // 웹 폰트 완전 로딩 대기 (추가 시간)
+      await page.waitForTimeout(2000);  // 1초 → 2초로 증가
 
       // 페이지 정보 추출
       const title = await page.title();
-      const content = await page.textContent('body');
 
-      // 모드에 따라 스크린샷 생성 여부 결정
-      // fast, standard: 스크린샷 없음 (텍스트만)
-      // archive: 스크린샷 포함
-      const mode = this.config.mode || 'archive';
-      let screenshot: Buffer | undefined;
+      // HTML 태그를 제거하고 깔끔한 텍스트만 추출
+      const content = await page.evaluate(() => {
+        // 불필요한 요소 제거
+        const unwantedSelectors = [
+          'script',
+          'style',
+          'noscript',
+          'iframe',
+          'svg',
+          'path',
+          'img',
+          'video',
+          'audio',
+          'canvas',
+          'nav',
+          'footer',
+          'header[role="banner"]',
+          '.ad',
+          '.advertisement',
+          '[class*="cookie"]',
+          '[class*="popup"]',
+          '[class*="modal"]',
+        ];
 
-      if (mode === 'archive') {
-        screenshot = await page.screenshot({
-          fullPage: true,
-          type: 'png',
+        // body 클론 생성
+        const bodyClone = document.body.cloneNode(true) as HTMLElement;
+
+        // 불필요한 요소 제거
+        unwantedSelectors.forEach((selector) => {
+          bodyClone.querySelectorAll(selector).forEach((el) => el.remove());
         });
-        console.log(`[Crawler] Screenshot captured for ${url}`);
-      } else {
-        console.log(`[Crawler] Skipping screenshot (${mode} mode) for ${url}`);
-      }
+
+        // 블록 레벨 요소들을 순회하며 텍스트 추출
+        const blockElements = bodyClone.querySelectorAll(
+          'p, h1, h2, h3, h4, h5, h6, div, section, article, li, td, th, blockquote, pre'
+        );
+
+        const textParts: string[] = [];
+        const processedElements = new Set<Element>();
+
+        // 각 블록 요소의 텍스트 추출
+        blockElements.forEach((el) => {
+          // 이미 처리된 요소나 그 자식이면 스킵
+          if (processedElements.has(el)) return;
+
+          const text = (el as HTMLElement).innerText?.trim();
+          if (text && text.length > 0) {
+            textParts.push(text);
+
+            // 이 요소의 모든 자식도 처리됨으로 표시
+            el.querySelectorAll('*').forEach((child) => {
+              processedElements.add(child);
+            });
+            processedElements.add(el);
+          }
+        });
+
+        // 텍스트 조합
+        let fullText = textParts.join('\n\n');
+
+        // 연속된 공백을 하나로
+        fullText = fullText.replace(/[ \t]+/g, ' ');
+
+        // 연속된 줄바꿈을 최대 2개로
+        fullText = fullText.replace(/\n{3,}/g, '\n\n');
+
+        // 앞뒤 공백 제거
+        fullText = fullText.trim();
+
+        return fullText;
+      });
+
+      // 웹 폰트 로딩 완료 대기 (한글 폰트 렌더링 문제 해결)
+      console.log(`[Crawler] Waiting for fonts to load for ${url}`);
+
+      await page.evaluate(() => {
+        return document.fonts.ready;
+      });
+
+      // 폰트 로드 후 강제 리플로우 (브라우저가 폰트를 실제 적용하도록)
+      await page.evaluate(() => {
+        document.body.style.display = 'none';
+        // Force reflow
+        void document.body.offsetHeight;
+        document.body.style.display = '';
+      });
+
+      // 추가 대기 시간 (웹 폰트 렌더링 완전 적용) - 5초로 증가
+      await page.waitForTimeout(5000);
+
+      console.log(`[Crawler] Fonts loaded and applied, taking screenshot for ${url}`);
+
+      // 고해상도 스크린샷 (PNG)
+      const screenshot = await page.screenshot({
+        fullPage: true,
+        type: 'png',
+      });
+      console.log(`[Crawler] Screenshot captured for ${url} (${(screenshot.length / 1024).toFixed(1)}KB)`);
 
       // 크롤링된 페이지 저장
       this.crawledPages.push({
