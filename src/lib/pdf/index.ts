@@ -7,6 +7,7 @@ import * as fontkit from "@pdf-lib/fontkit";
 import * as fs from "fs";
 import * as path from "path";
 import type {
+  AISummary,
   CrawledPage,
   PDFGenerationOptions,
   PDFResult,
@@ -27,33 +28,93 @@ export class PDFGenerator {
   }
 
   /**
-   * 크롤링된 페이지들로부터 PDF 생성
+   * 크롤링된 페이지들로부터 PDF 생성 (최적화: 폰트 1회 임베드)
    */
-  async generatePDFs(pages: CrawledPage[]): Promise<PDFResult> {
-    const individualPdfs: Buffer[] = [];
-    const tableOfContents: TableOfContentsItem[] = [];
-    let currentPage = 1;
+  async generatePDFs(
+    pages: CrawledPage[],
+    aiSummary?: AISummary | null
+  ): Promise<PDFResult> {
+    // 하나의 PDF 문서 생성 (폰트 중복 방지)
+    const pdfDoc = await PDFDocument.create();
 
-    // 각 페이지를 개별 PDF로 변환
+    // fontkit 등록
+    const fontkitToRegister = (fontkit as any).default || fontkit;
+    pdfDoc.registerFontkit(fontkitToRegister);
+    console.log("[PDF] fontkit 등록 성공");
+
+    // 폰트 1회만 로드 (9.9MB → 재사용)
+    const { regularFont, boldFont } = await this.loadFonts(pdfDoc);
+    console.log("[PDF] 폰트 로드 완료 - 모든 페이지에서 재사용");
+
+    const tableOfContents: TableOfContentsItem[] = [];
+    let pageNumber = 1;
+
+    // AI 요약 페이지 추가 (첫 페이지)
+    if (aiSummary) {
+      await this.addAISummaryPage(pdfDoc, aiSummary, regularFont, boldFont);
+      pageNumber++;
+    }
+
+    // 목차 페이지 추가 (옵션)
+    if (this.options.includeTableOfContents) {
+      // 목차 항목 생성 (AI 요약 포함)
+      const tocItems: TableOfContentsItem[] = [];
+
+      // AI 요약을 첫 번째 항목으로 추가
+      if (aiSummary) {
+        tocItems.push({
+          title: 'AI Business Analysis',
+          url: 'AI Summary',
+          pageNumber: 1,
+        });
+      }
+
+      // 나머지 페이지들 추가
+      pages.forEach((page, idx) => {
+        tocItems.push({
+          title: page.title || page.url,
+          url: page.url,
+          pageNumber: idx + 1 + (aiSummary ? 1 : 0) + 1,  // AI요약(1) + 목차(1) + 현재페이지
+        });
+      });
+
+      const tocPageCount = await this.addTableOfContents(
+        pdfDoc,
+        tocItems,
+        regularFont,
+        boldFont
+      );
+      pageNumber += tocPageCount;
+    }
+
+    // 각 페이지를 통합 PDF에 직접 추가 (폰트 재사용)
     for (const page of pages) {
-      const pdf = await this.createPagePDF(page);
-      individualPdfs.push(pdf);
+      await this.addPageToPDF(pdfDoc, page, regularFont, boldFont);
 
       tableOfContents.push({
         title: page.title || page.url,
         url: page.url,
-        pageNumber: currentPage,
+        pageNumber: pageNumber,
       });
 
-      // 대략적인 페이지 수 계산 (스크린샷 기반)
-      currentPage += 1;
+      pageNumber++;
     }
 
-    // 모든 PDF 병합 (페이지 정보도 함께 전달)
-    const mergedPdf = await this.mergePDFs(
-      individualPdfs,
-      tableOfContents,
-      pages
+    // 통합 PDF 저장
+    const mergedPdfBytes = await pdfDoc.save();
+    const mergedPdf = Buffer.from(mergedPdfBytes);
+
+    console.log(
+      `[PDF] 통합 PDF 생성 완료: ${(mergedPdf.length / 1024 / 1024).toFixed(
+        2
+      )}MB (폰트 1회 임베드)`
+    );
+
+    // 개별 PDF 추출 (통합 PDF에서 페이지별로 분리)
+    const individualPdfs = await this.extractIndividualPDFs(
+      pdfDoc,
+      aiSummary ? 1 : 0,
+      this.options.includeTableOfContents ? 1 : 0
     );
 
     return {
@@ -66,19 +127,16 @@ export class PDFGenerator {
   }
 
   /**
-   * 단일 페이지를 PDF로 변환
+   * PDF 문서에 페이지 추가 (폰트 재사용)
    */
-  private async createPagePDF(page: CrawledPage): Promise<Buffer> {
-    const pdfDoc = await PDFDocument.create();
-
-    // fontkit 등록 (텍스트 모드용)
-    if (!page.screenshot) {
-      const fontkitToRegister = (fontkit as any).default || fontkit;
-      pdfDoc.registerFontkit(fontkitToRegister);
-    }
-
+  private async addPageToPDF(
+    pdfDoc: PDFDocument,
+    page: CrawledPage,
+    regularFont: any,
+    boldFont: any
+  ): Promise<void> {
     if (page.screenshot) {
-      // Archive 모드: 스크린샷을 PDF에 삽입
+      // Archive 모드: 스크린샷을 PDF에 임베드 (PNG)
       const image = await pdfDoc.embedPng(page.screenshot);
       const imagePage = pdfDoc.addPage([image.width, image.height]);
 
@@ -90,47 +148,19 @@ export class PDFGenerator {
       });
     } else {
       // Fast/Standard 모드: 텍스트 콘텐츠를 PDF로 렌더링
-      await this.createTextBasedPDF(pdfDoc, page);
+      await this.addTextBasedPage(pdfDoc, page, regularFont, boldFont);
     }
-
-    const pdfBytes = await pdfDoc.save();
-    return Buffer.from(pdfBytes);
   }
 
   /**
-   * 텍스트 기반 PDF 페이지 생성 (Fast/Standard 모드)
+   * 텍스트 기반 PDF 페이지 추가 (Fast/Standard 모드) - 폰트 재사용
    */
-  private async createTextBasedPDF(
+  private async addTextBasedPage(
     pdfDoc: PDFDocument,
-    page: CrawledPage
+    page: CrawledPage,
+    koreanFont: any,
+    titleFont: any
   ): Promise<void> {
-    // 한글 폰트 로드
-    const fontPath = path.join(
-      process.cwd(),
-      "public",
-      "fonts",
-      "NotoSansKR.ttf"
-    );
-
-    let koreanFont;
-    let titleFont;
-
-    if (fs.existsSync(fontPath)) {
-      try {
-        const fontBytes = fs.readFileSync(fontPath);
-        koreanFont = await pdfDoc.embedFont(fontBytes);
-        titleFont = await pdfDoc.embedFont(fontBytes);
-        console.log("[PDF] 텍스트 모드 한글 폰트 로드 성공");
-      } catch (error) {
-        console.warn("[PDF] 폰트 로드 실패, 표준 폰트 사용:", error);
-        koreanFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        titleFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-      }
-    } else {
-      console.warn("[PDF] 한글 폰트 파일 없음, 표준 폰트 사용");
-      koreanFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      titleFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    }
 
     // A4 페이지 생성
     const pageWidth = 595;
@@ -203,6 +233,42 @@ export class PDFGenerator {
   }
 
   /**
+   * 통합 PDF에서 개별 페이지를 추출하여 개별 PDF 생성
+   */
+  private async extractIndividualPDFs(
+    sourcePdf: PDFDocument,
+    aiSummaryPages: number,
+    tocPages: number
+  ): Promise<Buffer[]> {
+    const individualPdfs: Buffer[] = [];
+    const totalPages = sourcePdf.getPageCount();
+    const startPage = aiSummaryPages + tocPages;
+
+    console.log(
+      `[PDF] 개별 PDF 추출 시작 (${startPage + 1}페이지부터 ${totalPages}페이지까지)`
+    );
+
+    // AI 요약과 목차를 제외한 각 페이지를 개별 PDF로 추출
+    for (let i = startPage; i < totalPages; i++) {
+      const newPdf = await PDFDocument.create();
+
+      // fontkit 등록
+      const fontkitToRegister = (fontkit as any).default || fontkit;
+      newPdf.registerFontkit(fontkitToRegister);
+
+      // 페이지 복사 (폰트는 자동으로 포함됨)
+      const [copiedPage] = await newPdf.copyPages(sourcePdf, [i]);
+      newPdf.addPage(copiedPage);
+
+      const pdfBytes = await newPdf.save();
+      individualPdfs.push(Buffer.from(pdfBytes));
+    }
+
+    console.log(`[PDF] ${individualPdfs.length}개 개별 PDF 추출 완료`);
+    return individualPdfs;
+  }
+
+  /**
    * 텍스트를 특정 너비에 맞게 줄바꿈
    */
   private wrapText(
@@ -250,7 +316,8 @@ export class PDFGenerator {
   private async mergePDFs(
     pdfs: Buffer[],
     toc: TableOfContentsItem[],
-    pages: CrawledPage[]
+    pages: CrawledPage[],
+    aiSummary?: AISummary | null
   ): Promise<Buffer> {
     const mergedPdf = await PDFDocument.create();
 
@@ -266,10 +333,18 @@ export class PDFGenerator {
       throw error;
     }
 
+    // 한글 폰트를 한 번만 로드하여 재사용 (중복 임베드 방지)
+    const { regularFont, boldFont } = await this.loadFonts(mergedPdf);
+
+    // AI 요약 페이지 추가 (첫 페이지)
+    if (aiSummary) {
+      await this.addAISummaryPage(mergedPdf, aiSummary, regularFont, boldFont);
+    }
+
     // 목차 페이지 추가 (옵션)
     let tocPageCount = 0;
     if (this.options.includeTableOfContents) {
-      tocPageCount = await this.addTableOfContents(mergedPdf, toc);
+      tocPageCount = await this.addTableOfContents(mergedPdf, toc, regularFont, boldFont);
     }
 
     // 모든 PDF 페이지 병합 및 헤더 추가
@@ -282,13 +357,13 @@ export class PDFGenerator {
 
       for (const page of copiedPages) {
         mergedPdf.addPage(page);
-        // 각 페이지 상단에 헤더 추가
+        // 각 페이지 상단에 헤더 추가 (폰트 재사용)
         await this.addPageHeader(
-          mergedPdf,
           page,
           pageInfo,
           i + 1,
-          pages.length
+          pages.length,
+          regularFont
         );
       }
     }
@@ -316,14 +391,12 @@ export class PDFGenerator {
   }
 
   /**
-   * 목차 페이지 추가 (한글 폰트 임베드 방식)
-   * @returns 목차 페이지 수
+   * 한글 폰트를 로드하여 PDF에 임베드 (한 번만 호출)
    */
-  private async addTableOfContents(
-    pdfDoc: PDFDocument,
-    toc: TableOfContentsItem[]
-  ): Promise<number> {
-    // 한글 폰트 로드 (가변 폰트 사용)
+  private async loadFonts(pdfDoc: PDFDocument): Promise<{
+    regularFont: any;
+    boldFont: any;
+  }> {
     const fontPath = path.join(
       process.cwd(),
       "public",
@@ -334,54 +407,312 @@ export class PDFGenerator {
     let regularFont;
     let boldFont;
 
-    // 커스텀 폰트 시도
-    const hasCustomFonts = fs.existsSync(fontPath);
-
-    if (hasCustomFonts) {
-      const fontBytes = fs.readFileSync(fontPath);
-
-      // TTF 파일 유효성 확인
-      const isValid = this.isValidTTF(fontBytes);
-
-      if (isValid) {
-        try {
-          console.log("[PDF] 커스텀 폰트 임베드 시도:", {
-            fontSize: fontBytes.length,
-            fontPath,
-          });
-
-          // 가변 폰트는 동일한 파일을 두 번 임베드해도 됨
-          regularFont = await pdfDoc.embedFont(fontBytes);
-          console.log("[PDF] Regular 폰트 임베드 성공");
-
-          boldFont = await pdfDoc.embedFont(fontBytes);
-          console.log("[PDF] Bold 폰트 임베드 성공");
-        } catch (error) {
-          const errorMsg = `커스텀 폰트 임베드 실패: ${
-            error instanceof Error ? error.message : String(error)
-          }. 표준 폰트로 대체됩니다. 한글이 제대로 표시되지 않을 수 있습니다.`;
-          console.warn("[PDF]", errorMsg);
-          this.warnings.push(errorMsg);
-          // fallback to standard fonts
-          regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
-          boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    if (fs.existsSync(fontPath)) {
+      try {
+        const fontBytes = fs.readFileSync(fontPath);
+        if (!this.isValidTTF(fontBytes)) {
+          throw new Error("유효하지 않은 TTF 파일");
         }
-      } else {
-        const warningMsg =
-          "폰트 파일이 유효한 TTF 형식이 아닙니다. 표준 폰트로 대체됩니다. 한글이 제대로 표시되지 않을 수 있습니다.";
-        console.warn("[PDF]", warningMsg);
+
+        console.log("[PDF] 한글 폰트 임베드 시작 (1회)");
+        regularFont = await pdfDoc.embedFont(fontBytes);
+        boldFont = await pdfDoc.embedFont(fontBytes);
+        console.log("[PDF] 한글 폰트 임베드 완료 (재사용됨)");
+      } catch (error) {
+        console.warn("[PDF] 한글 폰트 로드 실패, 표준 폰트 사용:", error);
+        const warningMsg = "한글 폰트 로드 실패. 표준 폰트를 사용합니다.";
         this.warnings.push(warningMsg);
         regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
         boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
       }
     } else {
-      const warningMsg =
-        "한글 폰트 파일을 찾을 수 없습니다. 표준 폰트를 사용합니다. 한글이 제대로 표시되지 않을 수 있습니다. NotoSansKR 폰트를 다운로드하여 public/fonts/ 디렉토리에 추가해주세요.";
+      const warningMsg = "한글 폰트 파일을 찾을 수 없습니다. 표준 폰트를 사용합니다.";
       console.warn("[PDF]", warningMsg);
       this.warnings.push(warningMsg);
       regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
       boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     }
+
+    return { regularFont, boldFont };
+  }
+
+  /**
+   * AI 요약 페이지 추가 (Executive Summary)
+   */
+  private async addAISummaryPage(
+    pdfDoc: PDFDocument,
+    aiSummary: AISummary,
+    regularFont: any,
+    boldFont: any
+  ): Promise<void> {
+    const page = pdfDoc.addPage([595, 842]); // A4
+    const { width, height } = page.getSize();
+    const margin = 50;
+    let y = height - margin;
+
+    // 타이틀
+    page.drawText("AI Business Analysis", {
+      x: margin,
+      y: y,
+      size: 24,
+      font: boldFont,
+      color: rgb(0.1, 0.1, 0.1),
+    });
+    y -= 40;
+
+    // 웹사이트 타입 & 회사명
+    const typeText = `[${aiSummary.websiteType}]`;
+    page.drawText(typeText, {
+      x: margin,
+      y: y,
+      size: 11,
+      font: regularFont,
+      color: rgb(0.4, 0.2, 0.6),
+    });
+
+    if (aiSummary.companyName) {
+      const typeWidth = regularFont.widthOfTextAtSize(typeText, 11);
+      page.drawText(aiSummary.companyName, {
+        x: margin + typeWidth + 15,
+        y: y,
+        size: 11,
+        font: boldFont,
+        color: rgb(0.2, 0.4, 0.8),
+      });
+    }
+    y -= 30;
+
+    // 한 줄 요약 (큰 글씨)
+    page.drawText(aiSummary.oneLineSummary, {
+      x: margin,
+      y: y,
+      size: 16,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+      maxWidth: width - 2 * margin,
+    });
+    y -= 35;
+
+    // Overview
+    page.drawText("Overview", {
+      x: margin,
+      y: y,
+      size: 12,
+      font: boldFont,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    y -= 18;
+
+    const overviewLines = this.wrapTextSimple(
+      aiSummary.overview,
+      regularFont,
+      10,
+      width - 2 * margin
+    );
+    for (const line of overviewLines.slice(0, 5)) {
+      page.drawText(line, {
+        x: margin,
+        y: y,
+        size: 10,
+        font: regularFont,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+      y -= 14;
+    }
+    y -= 10;
+
+    // 비즈니스 모델 (있으면)
+    if (aiSummary.businessModel) {
+      page.drawText("Business Model", {
+        x: margin,
+        y: y,
+        size: 12,
+        font: boldFont,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+      y -= 18;
+
+      const bm = aiSummary.businessModel;
+      const items = [
+        `Type: ${bm.type || "N/A"}`,
+        `Revenue: ${bm.revenueModel || "N/A"}`,
+        `Price: ${bm.priceRange || "N/A"}`,
+      ];
+
+      for (const item of items) {
+        page.drawText(`• ${item}`, {
+          x: margin + 10,
+          y: y,
+          size: 9,
+          font: regularFont,
+          color: rgb(0.3, 0.3, 0.3),
+        });
+        y -= 14;
+      }
+      y -= 10;
+    }
+
+    // 해결하는 문제
+    if (y > 150) {
+      page.drawText("Problem Solved", {
+        x: margin,
+        y: y,
+        size: 12,
+        font: boldFont,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+      y -= 18;
+
+      const problemLines = this.wrapTextSimple(
+        aiSummary.problemSolved,
+        regularFont,
+        10,
+        width - 2 * margin
+      );
+      for (const line of problemLines.slice(0, 3)) {
+        page.drawText(line, {
+          x: margin,
+          y: y,
+          size: 10,
+          font: regularFont,
+          color: rgb(0.2, 0.2, 0.2),
+        });
+        y -= 14;
+      }
+      y -= 10;
+    }
+
+    // 주요 서비스
+    if (aiSummary.mainServices.length > 0 && y > 120) {
+      page.drawText("Main Services", {
+        x: margin,
+        y: y,
+        size: 12,
+        font: boldFont,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+      y -= 18;
+
+      for (const service of aiSummary.mainServices.slice(0, 3)) {
+        page.drawText(`• ${service.substring(0, 60)}`, {
+          x: margin + 10,
+          y: y,
+          size: 9,
+          font: regularFont,
+          color: rgb(0.3, 0.3, 0.3),
+          maxWidth: width - 2 * margin - 10,
+        });
+        y -= 14;
+      }
+      y -= 10;
+    }
+
+    // 타겟 고객
+    if (aiSummary.targetCustomers.length > 0 && y > 100) {
+      page.drawText("Target Customers", {
+        x: margin,
+        y: y,
+        size: 12,
+        font: boldFont,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+      y -= 18;
+
+      for (const customer of aiSummary.targetCustomers.slice(0, 2)) {
+        page.drawText(`• ${customer.substring(0, 60)}`, {
+          x: margin + 10,
+          y: y,
+          size: 9,
+          font: regularFont,
+          color: rgb(0.3, 0.3, 0.3),
+          maxWidth: width - 2 * margin - 10,
+        });
+        y -= 14;
+      }
+      y -= 10;
+    }
+
+    // 차별점
+    if (aiSummary.uniqueFeatures.length > 0 && y > 80) {
+      page.drawText("Key Differentiators", {
+        x: margin,
+        y: y,
+        size: 12,
+        font: boldFont,
+        color: rgb(0.2, 0.2, 0.2),
+      });
+      y -= 18;
+
+      for (const feature of aiSummary.uniqueFeatures.slice(0, 3)) {
+        page.drawText(`✓ ${feature.substring(0, 60)}`, {
+          x: margin + 10,
+          y: y,
+          size: 9,
+          font: regularFont,
+          color: rgb(0, 0.5, 0),
+          maxWidth: width - 2 * margin - 10,
+        });
+        y -= 14;
+      }
+    }
+
+    // 하단에 생성 정보
+    page.drawText(
+      `Generated by SiteToPDF | ${new Date().toISOString().split("T")[0]}`,
+      {
+        x: margin,
+        y: 30,
+        size: 8,
+        font: regularFont,
+        color: rgb(0.5, 0.5, 0.5),
+      }
+    );
+  }
+
+  /**
+   * 간단한 텍스트 줄바꿈 (AI Summary용)
+   */
+  private wrapTextSimple(
+    text: string,
+    font: any,
+    fontSize: number,
+    maxWidth: number
+  ): string[] {
+    const words = text.split(" ");
+    const lines: string[] = [];
+    let currentLine = "";
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const width = font.widthOfTextAtSize(testLine, fontSize);
+
+      if (width > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    return lines;
+  }
+
+  /**
+   * 목차 페이지 추가 (한글 폰트 임베드 방식)
+   * @returns 목차 페이지 수
+   */
+  private async addTableOfContents(
+    pdfDoc: PDFDocument,
+    toc: TableOfContentsItem[],
+    regularFont: any,
+    boldFont: any
+  ): Promise<number> {
+    // 목차 추가 전 페이지 수 기록
+    const pagesBefore = pdfDoc.getPages().length;
 
     // 목차 페이지 추가
     let currentPage = pdfDoc.addPage([595, 842]); // A4 size
@@ -455,8 +786,9 @@ export class PDFGenerator {
       yPosition -= 20;
     }
 
-    // 목차 페이지 수 반환
-    const tocPages = pdfDoc.getPages().length;
+    // 목차 페이지 수 반환 (추가된 페이지 수만)
+    const tocPages = pdfDoc.getPages().length - pagesBefore;
+    console.log(`[PDF] 목차 ${tocPages}페이지 추가됨`);
     return tocPages;
   }
 
@@ -464,33 +796,13 @@ export class PDFGenerator {
    * 각 페이지 상단에 헤더 추가
    */
   private async addPageHeader(
-    pdfDoc: PDFDocument,
     page: any,
     pageInfo: CrawledPage,
     pageNum: number,
-    totalPages: number
+    totalPages: number,
+    font: any
   ): Promise<void> {
     try {
-      // 한글 폰트 로드 (mergedPdf에서 폰트 임베드)
-      const fontPath = path.join(
-        process.cwd(),
-        "public",
-        "fonts",
-        "NotoSansKR.ttf"
-      );
-      let font;
-
-      if (fs.existsSync(fontPath)) {
-        const fontBytes = fs.readFileSync(fontPath);
-        if (this.isValidTTF(fontBytes)) {
-          font = await pdfDoc.embedFont(fontBytes);
-        } else {
-          font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-        }
-      } else {
-        font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-      }
-
       const { width, height } = page.getSize();
       const headerHeight = 60;
       const padding = 10;
@@ -637,7 +949,8 @@ export class PDFGenerator {
  */
 export async function generatePDFFromPages(
   pages: CrawledPage[],
-  options?: Partial<PDFGenerationOptions>
+  options?: Partial<PDFGenerationOptions>,
+  aiSummary?: AISummary | null
 ): Promise<PDFResult> {
   const generator = new PDFGenerator({
     includeTableOfContents: true, // 이미지 기반 목차로 활성화
@@ -647,5 +960,5 @@ export async function generatePDFFromPages(
     ...options,
   });
 
-  return await generator.generatePDFs(pages);
+  return await generator.generatePDFs(pages, aiSummary);
 }
