@@ -10,11 +10,7 @@ import { crawlWebsite } from "@/lib/crawler";
 // 요청 스키마 정의
 const CrawlRequestSchema = z.object({
   url: z.string().url("유효한 URL을 입력해주세요"),
-  maxPages: z.number().min(1).max(200).optional().default(10),
-  detailLevel: z
-    .enum(["basic", "detailed", "comprehensive"])
-    .optional()
-    .default("basic"),
+  maxPages: z.number().min(1).max(200).optional().default(30),
 });
 
 type CrawlRequest = z.infer<typeof CrawlRequestSchema>;
@@ -25,46 +21,88 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = CrawlRequestSchema.parse(body);
 
-    const { url, maxPages, detailLevel } = validatedData;
+    const { url, maxPages } = validatedData;
 
     console.log(
       `[API] 크롤링 시작: ${url} (최대 ${maxPages}페이지)`
     );
 
-    // 2. 웹사이트 크롤링
-    const crawlResult = await crawlWebsite({
-      url,
-      maxPages,
-      sameDomainOnly: true,
+    // 2. SSE 스트림 생성
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // 진행 상황 콜백
+          const onProgress = (current: number, total: number, currentUrl: string) => {
+            const progressData = {
+              type: 'progress',
+              current,
+              total,
+              url: currentUrl,
+              percentage: Math.round((current / total) * 100),
+            };
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify(progressData)}\n\n`)
+            );
+          };
+
+          // 크롤링 시작
+          const crawlResult = await crawlWebsite({
+            url,
+            maxPages,
+            sameDomainOnly: true,
+          }, onProgress);
+
+          console.log(`[API] 크롤링 완료: ${crawlResult.totalPages}페이지 수집됨`);
+
+          // 완료 데이터 전송
+          const completeData = {
+            type: 'complete',
+            success: true,
+            data: {
+              crawl: {
+                totalPages: crawlResult.totalPages,
+                failedUrls: crawlResult.failedUrls,
+                duration: `${
+                  (crawlResult.endTime.getTime() -
+                    crawlResult.startTime.getTime()) /
+                  1000
+                }초`,
+                pages: crawlResult.pages.map((page) => ({
+                  url: page.url,
+                  title: page.title,
+                  content: page.content,
+                  depth: page.depth,
+                  screenshot: page.screenshot, // 스크린샷 데이터 포함
+                })),
+              },
+            },
+          };
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(completeData)}\n\n`)
+          );
+          controller.close();
+        } catch (error) {
+          const errorData = {
+            type: 'error',
+            error: error instanceof Error ? error.message : '크롤링 실패',
+          };
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(errorData)}\n\n`)
+          );
+          controller.close();
+        }
+      },
     });
 
-    console.log(`[API] 크롤링 완료: ${crawlResult.totalPages}페이지 수집됨`);
-
-    // 3. 응답 반환 (크롤링 결과만)
-    return NextResponse.json(
-      {
-        success: true,
-        data: {
-          crawl: {
-            totalPages: crawlResult.totalPages,
-            failedUrls: crawlResult.failedUrls,
-            duration: `${
-              (crawlResult.endTime.getTime() -
-                crawlResult.startTime.getTime()) /
-              1000
-            }초`,
-            pages: crawlResult.pages.map((page) => ({
-              url: page.url,
-              title: page.title,
-              content: page.content,
-              depth: page.depth,
-              screenshot: page.screenshot, // 스크린샷 데이터 포함
-            })),
-          },
-        },
+    // SSE 응답 반환
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
       },
-      { status: 200 }
-    );
+    });
   } catch (error) {
     console.error("[API] 크롤링 에러:", error);
 
