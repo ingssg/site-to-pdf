@@ -11,9 +11,11 @@ export class WebCrawler {
   private visitedUrls: Set<string> = new Set();
   private crawledPages: CrawledPage[] = [];
   private config: CrawlConfig;
+  private onProgress?: (current: number, total: number, url: string) => void;
 
-  constructor(config: CrawlConfig) {
+  constructor(config: CrawlConfig, onProgress?: (current: number, total: number, url: string) => void) {
     this.config = config;
+    this.onProgress = onProgress;
   }
 
   /**
@@ -217,6 +219,11 @@ export class WebCrawler {
         depth,
       });
 
+      // 진행 상황 콜백 호출
+      if (this.onProgress) {
+        this.onProgress(this.crawledPages.length, this.config.maxPages, url);
+      }
+
       // 페이지 내 링크 추출
       const links = await this.extractLinks(page);
 
@@ -304,8 +311,9 @@ export class WebCrawler {
  * 크롤링 헬퍼 함수
  */
 export async function crawlWebsite(
-  config: CrawlConfig
+  config: CrawlConfig,
+  onProgress?: (current: number, total: number, url: string) => void
 ): Promise<CrawlResult> {
-  const crawler = new WebCrawler(config);
+  const crawler = new WebCrawler(config, onProgress);
   return await crawler.crawl();
 }
