@@ -8,12 +8,19 @@ import ResultDisplay from './ResultDisplay';
 export default function CrawlerForm() {
   const [url, setUrl] = useState('');
   const [maxPages, setMaxPages] = useState(30);
-  const [detailLevel, setDetailLevel] = useState<'basic' | 'detailed' | 'comprehensive'>('basic');
 
   const [loading, setLoading] = useState(false);
   const [crawlResult, setCrawlResult] = useState<CrawlAPIResponse | null>(null);
   const [pdfResult, setPdfResult] = useState<GeneratePDFResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // 진행률 상태
+  const [progress, setProgress] = useState<{
+    current: number;
+    total: number;
+    url: string;
+    percentage: number;
+  } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,12 +28,12 @@ export default function CrawlerForm() {
     setError(null);
     setCrawlResult(null);
     setPdfResult(null);
+    setProgress(null);
 
     try {
       const requestBody: CrawlAPIRequest = {
         url,
         maxPages,
-        detailLevel,
       };
 
       const response = await fetch('/api/crawl', {
@@ -37,14 +44,62 @@ export default function CrawlerForm() {
         body: JSON.stringify(requestBody),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        const errorData = data as APIErrorResponse;
-        throw new Error(errorData.error || '크롤링에 실패했습니다');
+        throw new Error('크롤링 요청 실패');
       }
 
-      setCrawlResult(data as CrawlAPIResponse);
+      // SSE 스트림 읽기
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('응답을 읽을 수 없습니다');
+      }
+
+      let buffer = '';  // 불완전한 chunk를 모으는 버퍼
+
+      while (true) {
+        const { done, value } = await reader.read();
+
+        if (done) break;
+
+        // 버퍼에 새 chunk 추가
+        buffer += decoder.decode(value, { stream: true });
+
+        // 완전한 라인들만 추출 (마지막 불완전한 라인은 버퍼에 보관)
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';  // 마지막 불완전한 라인은 버퍼에 유지
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const jsonStr = line.slice(6).trim();
+              if (!jsonStr) continue;
+
+              const data = JSON.parse(jsonStr);
+
+              if (data.type === 'progress') {
+                // 진행률 업데이트
+                setProgress({
+                  current: data.current,
+                  total: data.total,
+                  url: data.url,
+                  percentage: data.percentage,
+                });
+              } else if (data.type === 'complete') {
+                // 크롤링 완료
+                setCrawlResult(data as CrawlAPIResponse);
+                setProgress(null);
+              } else if (data.type === 'error') {
+                throw new Error(data.error);
+              }
+            } catch (parseError) {
+              console.error('[SSE Parse Error]', parseError, 'Line:', line);
+              // JSON 파싱 에러는 무시하고 계속 진행
+            }
+          }
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '알 수 없는 에러가 발생했습니다');
     } finally {
@@ -77,44 +132,27 @@ export default function CrawlerForm() {
             />
           </div>
 
-          {/* Options Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Max Pages */}
-            <div>
-              <label htmlFor="maxPages" className="block text-sm font-medium text-gray-700 mb-2">
-                최대 페이지 수: {maxPages}
-              </label>
-              <input
-                type="range"
-                id="maxPages"
-                min="1"
-                max="100"
-                value={maxPages}
-                onChange={(e) => setMaxPages(Number(e.target.value))}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>1</span>
-                <span>100</span>
-              </div>
+          {/* Max Pages */}
+          <div>
+            <label htmlFor="maxPages" className="block text-sm font-medium text-gray-700 mb-2">
+              최대 페이지 수: {maxPages}
+            </label>
+            <input
+              type="range"
+              id="maxPages"
+              min="1"
+              max="100"
+              value={maxPages}
+              onChange={(e) => setMaxPages(Number(e.target.value))}
+              className="w-full"
+            />
+            <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <span>1</span>
+              <span>100</span>
             </div>
-
-            {/* Detail Level */}
-            <div>
-              <label htmlFor="detailLevel" className="block text-sm font-medium text-gray-700 mb-2">
-                AI 요약 상세도
-              </label>
-              <select
-                id="detailLevel"
-                value={detailLevel}
-                onChange={(e) => setDetailLevel(e.target.value as any)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-gray-900"
-              >
-                <option value="basic">기본</option>
-                <option value="detailed">상세</option>
-                <option value="comprehensive">매우 상세</option>
-              </select>
-            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              💡 크롤링 후 PDF에 포함할 페이지를 직접 선택할 수 있습니다
+            </p>
           </div>
 
           {/* Submit Button */}
@@ -137,6 +175,33 @@ export default function CrawlerForm() {
           </button>
         </form>
 
+        {/* 크롤링 진행률 표시 */}
+        {loading && progress && (
+          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-3">
+              <div className="font-semibold text-blue-900">
+                페이지 크롤링 중: {progress.current} / {progress.total}
+              </div>
+              <div className="text-blue-700 font-bold text-lg">
+                {progress.percentage}%
+              </div>
+            </div>
+
+            {/* 프로그레스바 */}
+            <div className="w-full bg-blue-200 rounded-full h-3 mb-3 overflow-hidden">
+              <div
+                className="bg-blue-600 h-full rounded-full transition-all duration-300 ease-out"
+                style={{ width: `${progress.percentage}%` }}
+              />
+            </div>
+
+            {/* 현재 크롤링 중인 URL */}
+            <div className="text-sm text-blue-700 truncate">
+              <span className="font-medium">현재:</span> {progress.url}
+            </div>
+          </div>
+        )}
+
         {/* Error Display */}
         {error && (
           <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
@@ -156,7 +221,6 @@ export default function CrawlerForm() {
         <div className="mt-8">
           <PageSelector
             pages={crawlResult.data.crawl.pages}
-            detailLevel={detailLevel}
             onComplete={handlePDFComplete}
           />
         </div>

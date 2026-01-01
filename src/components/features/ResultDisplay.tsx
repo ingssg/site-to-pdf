@@ -32,6 +32,30 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
   const { pdf, summary } = pdfResult;
   const crawl = crawlResult;
 
+  // 파일명 생성 (예: stclab_website_analysis_2024-01-15.pdf)
+  const generateFilename = (extension: 'pdf' | 'zip') => {
+    try {
+      // 첫 번째 페이지의 URL에서 도메인 추출
+      const firstPageUrl = crawl.pages[0]?.url || 'website';
+      const domain = new URL(firstPageUrl).hostname
+        .replace('www.', '')
+        .replace(/\./g, '_'); // 점을 언더스코어로 변경
+
+      // 날짜 (YYYY-MM-DD)
+      const date = new Date().toISOString().split('T')[0];
+
+      if (extension === 'zip') {
+        return `${domain}_website_analysis_${date}_pages.zip`;
+      }
+      return `${domain}_website_analysis_${date}.pdf`;
+    } catch {
+      const date = new Date().toISOString().split('T')[0];
+      return extension === 'zip'
+        ? `website_analysis_${date}_pages.zip`
+        : `website_analysis_${date}.pdf`;
+    }
+  };
+
   const handleDownloadPDF = async () => {
     // PDF가 너무 큰 경우
     if (pdf.mergedPdfTooLarge) {
@@ -47,6 +71,8 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
     }
 
     try {
+      const filename = generateFilename('pdf');
+
       const response = await fetch('/api/download', {
         method: 'POST',
         headers: {
@@ -54,7 +80,7 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
         },
         body: JSON.stringify({
           pdfBase64: pdf.mergedPdf,
-          filename: 'website.pdf',
+          filename: filename,
         }),
       });
 
@@ -64,7 +90,7 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'website.pdf';
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -78,6 +104,8 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
     if (!pdf.individualPdfsZip) return;
 
     try {
+      const filename = generateFilename('zip');
+
       // Base64를 Blob으로 변환
       const binaryString = window.atob(pdf.individualPdfsZip);
       const bytes = new Uint8Array(binaryString.length);
@@ -90,7 +118,7 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'website-pages.zip';
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
