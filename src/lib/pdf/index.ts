@@ -136,20 +136,149 @@ export class PDFGenerator {
     boldFont: any
   ): Promise<void> {
     if (page.screenshot) {
-      // Archive 모드: 스크린샷을 PDF에 임베드 (PNG)
+      // 1. 스크린샷 페이지 (A4 사이즈에 맞춤)
       const image = await pdfDoc.embedPng(page.screenshot);
-      const imagePage = pdfDoc.addPage([image.width, image.height]);
+
+      // A4 사이즈 (595 x 842)
+      const A4_WIDTH = 595;
+      const A4_HEIGHT = 842;
+      const MARGIN = 40;
+
+      const maxWidth = A4_WIDTH - 2 * MARGIN;
+      const maxHeight = A4_HEIGHT - 2 * MARGIN;
+
+      // 이미지 비율 계산
+      const imageRatio = image.width / image.height;
+      const pageRatio = maxWidth / maxHeight;
+
+      let drawWidth, drawHeight;
+
+      if (imageRatio > pageRatio) {
+        // 이미지가 더 넓음 -> 가로 기준으로 맞춤
+        drawWidth = maxWidth;
+        drawHeight = maxWidth / imageRatio;
+      } else {
+        // 이미지가 더 높음 -> 세로 기준으로 맞춤
+        drawHeight = maxHeight;
+        drawWidth = maxHeight * imageRatio;
+      }
+
+      // A4 페이지 생성
+      const imagePage = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);
+
+      // 중앙 정렬
+      const x = (A4_WIDTH - drawWidth) / 2;
+      const y = (A4_HEIGHT - drawHeight) / 2;
 
       imagePage.drawImage(image, {
-        x: 0,
-        y: 0,
-        width: image.width,
-        height: image.height,
+        x,
+        y,
+        width: drawWidth,
+        height: drawHeight,
       });
+
+      // 2. 페이지 요약 페이지 (AI 분석 결과)
+      if (page.pageSummary) {
+        await this.addPageSummaryPage(pdfDoc, page, regularFont, boldFont);
+      }
     } else {
       // Fast/Standard 모드: 텍스트 콘텐츠를 PDF로 렌더링
       await this.addTextBasedPage(pdfDoc, page, regularFont, boldFont);
     }
+  }
+
+  /**
+   * 페이지 요약 페이지 추가 (스크린샷 다음 페이지)
+   */
+  private async addPageSummaryPage(
+    pdfDoc: PDFDocument,
+    page: CrawledPage,
+    regularFont: any,
+    boldFont: any
+  ): Promise<void> {
+    const pageWidth = 595; // A4
+    const pageHeight = 842;
+    const margin = 60;
+    const summaryPage = pdfDoc.addPage([pageWidth, pageHeight]);
+
+    let yPosition = pageHeight - margin;
+
+    // 제목: "페이지 요약"
+    summaryPage.drawText('📄 페이지 요약', {
+      x: margin,
+      y: yPosition,
+      size: 20,
+      font: boldFont,
+      color: rgb(0, 0.4, 0.8),
+    });
+    yPosition -= 40;
+
+    // 페이지 제목
+    const title = page.title || 'Untitled';
+    const maxWidth = pageWidth - 2 * margin;
+    const titleLines = this.wrapText(title, boldFont, 16, maxWidth);
+    for (const line of titleLines) {
+      summaryPage.drawText(line, {
+        x: margin,
+        y: yPosition,
+        size: 16,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+      yPosition -= 24;
+    }
+
+    // URL
+    yPosition -= 10;
+    const urlLines = this.wrapText(page.url, regularFont, 10, maxWidth);
+    for (const urlLine of urlLines) {
+      summaryPage.drawText(urlLine, {
+        x: margin,
+        y: yPosition,
+        size: 10,
+        font: regularFont,
+        color: rgb(0.4, 0.4, 0.4),
+      });
+      yPosition -= 14;
+    }
+    yPosition -= 16;
+
+    // 구분선
+    summaryPage.drawLine({
+      start: { x: margin, y: yPosition },
+      end: { x: pageWidth - margin, y: yPosition },
+      thickness: 1,
+      color: rgb(0.8, 0.8, 0.8),
+    });
+    yPosition -= 30;
+
+    // AI 요약 텍스트
+    const summary = page.pageSummary || '요약 없음';
+    const summaryLines = this.wrapText(summary, regularFont, 14, maxWidth);
+
+    for (const line of summaryLines) {
+      if (yPosition < margin + 20) {
+        // 페이지 넘김 필요
+        break;
+      }
+      summaryPage.drawText(line, {
+        x: margin,
+        y: yPosition,
+        size: 14,
+        font: regularFont,
+        color: rgb(0.1, 0.1, 0.1),
+      });
+      yPosition -= 22;
+    }
+
+    // 하단 워터마크
+    summaryPage.drawText('AI로 생성된 요약입니다', {
+      x: margin,
+      y: 30,
+      size: 9,
+      font: regularFont,
+      color: rgb(0.6, 0.6, 0.6),
+    });
   }
 
   /**
