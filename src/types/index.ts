@@ -16,6 +16,7 @@ export interface CrawledPage {
   title: string;
   content: string;
   screenshot?: Buffer; // 페이지 스크린샷 (아카이빙용)
+  pageSummary?: string; // 페이지별 AI 요약 (3-4줄)
   timestamp: Date;
   depth: number;
 }

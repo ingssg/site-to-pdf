@@ -8,7 +8,6 @@ import type { AISummary } from './index';
 export interface CrawlAPIRequest {
   url: string;
   maxPages?: number;
-  detailLevel?: 'basic' | 'detailed' | 'comprehensive';
 }
 
 // POST /api/crawl 응답 (크롤링만)
@@ -25,6 +24,7 @@ export interface CrawlAPIResponse {
         content: string; // 텍스트 콘텐츠
         depth: number;
         screenshot?: Buffer; // 스크린샷 데이터
+        pageSummary?: string; // 페이지별 AI 요약
       }>;
     };
   };
@@ -38,6 +38,7 @@ export interface GeneratePDFRequest {
     content: string;
     depth: number;
     screenshot?: Buffer;
+    pageSummary?: string; // 페이지별 AI 요약
   }>;
   detailLevel: 'basic' | 'detailed' | 'comprehensive';
 }
