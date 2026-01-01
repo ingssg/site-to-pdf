@@ -10,6 +10,52 @@ const openai = new OpenAI({
 });
 
 /**
+ * 개별 페이지의 간단한 요약 생성 (3-4줄)
+ */
+export async function generatePageSummary(
+  page: CrawledPage
+): Promise<string> {
+  const prompt = `다음 웹페이지의 핵심 내용을 3-4문장으로 요약해주세요.
+
+URL: ${page.url}
+제목: ${page.title}
+
+내용:
+${page.content.substring(0, 2000)}
+
+요구사항:
+- 핵심 정보만 간결하게 (3-4문장)
+- 불필요한 인사말, 전치사 제거
+- 구체적이고 실용적인 정보 위주
+- 한국어로 작성
+
+출력 형식: 요약문만 출력 (추가 설명 없이)`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: '당신은 웹페이지 내용을 핵심만 간결하게 요약하는 전문가입니다.',
+        },
+        {
+          role: 'user',
+          content: prompt,
+        },
+      ],
+      temperature: 0.3, // 일관성 있는 요약을 위해 낮게 설정
+      max_tokens: 200, // 짧은 요약
+    });
+
+    return completion.choices[0].message.content?.trim() || '요약을 생성할 수 없습니다.';
+  } catch (error) {
+    console.error('[AI] Page summary generation failed:', error);
+    return '페이지 요약 생성 실패';
+  }
+}
+
+/**
  * 크롤링된 페이지들로부터 AI 요약 생성
  */
 export async function generateAISummary(
