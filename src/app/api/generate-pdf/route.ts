@@ -25,7 +25,7 @@ const GeneratePDFRequestSchema = z.object({
   detailLevel: z
     .enum(["basic", "detailed", "comprehensive"])
     .optional()
-    .default("basic"),
+    .default("detailed"),
 });
 
 export async function POST(request: NextRequest) {

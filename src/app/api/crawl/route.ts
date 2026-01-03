@@ -10,7 +10,7 @@ import { crawlWebsite } from "@/lib/crawler";
 // 요청 스키마 정의
 const CrawlRequestSchema = z.object({
   url: z.string().url("유효한 URL을 입력해주세요"),
-  maxPages: z.number().min(1).max(200).optional().default(30),
+  maxPages: z.number().min(1).max(50).optional().default(30), // MVP: 무료 버전은 50페이지 제한
 });
 
 type CrawlRequest = z.infer<typeof CrawlRequestSchema>;
