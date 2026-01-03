@@ -819,31 +819,50 @@ export class PDFGenerator {
     const page = pdfDoc.addPage([595, 842]); // A4
     const { width, height } = page.getSize();
 
-    // 배경 그라데이션 효과 (상단 블루 영역)
-    page.drawRectangle({
-      x: 0,
-      y: height - 250,
-      width: width,
-      height: 250,
-      color: rgb(0.05, 0.15, 0.35), // 진한 네이비
-    });
+    // 배경 그라데이션 효과 (상단 블루 영역) - 더 밝고 모던하게
+    // 그라데이션 시뮬레이션 (여러 레이어)
+    const gradientLayers = 5;
+    const layerHeight = 250 / gradientLayers;
+    for (let i = 0; i < gradientLayers; i++) {
+      const darkness = 0.08 + (i * 0.04); // 0.08 → 0.24
+      page.drawRectangle({
+        x: 0,
+        y: height - 250 + (i * layerHeight),
+        width: width,
+        height: layerHeight,
+        color: rgb(darkness, darkness + 0.15, darkness + 0.35),
+        opacity: 0.9,
+      });
+    }
 
-    // 상단 장식 라인
+    // 상단 장식 라인 - 더 밝고 선명하게
     page.drawRectangle({
       x: 0,
       y: height - 5,
       width: width,
       height: 5,
-      color: rgb(0.2, 0.4, 0.8), // 파란색
+      color: rgb(0.3, 0.6, 1.0), // 밝은 블루
+    });
+
+    // 서브 타이틀
+    const subTitle = "COMPREHENSIVE";
+    const subTitleSize = 11;
+    const subTitleWidth = regularFont.widthOfTextAtSize(subTitle, subTitleSize);
+    page.drawText(subTitle, {
+      x: (width - subTitleWidth) / 2,
+      y: height - 80,
+      size: subTitleSize,
+      font: regularFont,
+      color: rgb(0.7, 0.85, 1.0), // 연한 블루
     });
 
     // 메인 타이틀 - "Website Analysis Report"
     const mainTitle = "Website Analysis Report";
-    const mainTitleSize = 32;
+    const mainTitleSize = 30;
     const mainTitleWidth = boldFont.widthOfTextAtSize(mainTitle, mainTitleSize);
     page.drawText(mainTitle, {
       x: (width - mainTitleWidth) / 2,
-      y: height - 120,
+      y: height - 110,
       size: mainTitleSize,
       font: boldFont,
       color: rgb(1, 1, 1), // 흰색
@@ -861,8 +880,8 @@ export class PDFGenerator {
       companyName = "WEBSITE";
     }
 
-    // 회사명/도메인 (크게 강조)
-    const companyNameSize = 40;
+    // 회사명/도메인 (크게 강조) - 블루 톤으로
+    const companyNameSize = 42;
     const companyNameWidth = boldFont.widthOfTextAtSize(
       companyName,
       companyNameSize
@@ -872,7 +891,7 @@ export class PDFGenerator {
       y: height / 2 + 80,
       size: companyNameSize,
       font: boldFont,
-      color: rgb(0.1, 0.1, 0.1),
+      color: rgb(0.1, 0.2, 0.4), // 다크 블루
     });
 
     // 전체 도메인 (작게)
@@ -886,13 +905,13 @@ export class PDFGenerator {
       color: rgb(0.4, 0.4, 0.4),
     });
 
-    // 구분선
+    // 구분선 - 상단 라인과 일치하는 색상
     const lineY = height / 2 + 10;
     page.drawLine({
-      start: { x: width / 2 - 100, y: lineY },
-      end: { x: width / 2 + 100, y: lineY },
-      thickness: 2,
-      color: rgb(0.2, 0.4, 0.8),
+      start: { x: width / 2 - 120, y: lineY },
+      end: { x: width / 2 + 120, y: lineY },
+      thickness: 3,
+      color: rgb(0.3, 0.6, 1.0),
     });
 
     // 생성 날짜
@@ -924,24 +943,52 @@ export class PDFGenerator {
       color: rgb(0.5, 0.5, 0.5),
     });
 
-    // AI 마크
-    const aiText = "AI-Powered Analysis";
-    const aiSize = 9;
+    // AI 배지 - 더 눈에 띄게
+    const aiText = "🤖 AI-Powered Business Analysis";
+    const aiSize = 10;
     const aiWidth = regularFont.widthOfTextAtSize(aiText, aiSize);
+
+    // AI 배지 배경
+    const badgeWidth = aiWidth + 30;
+    const badgeHeight = 24;
+    page.drawRoundedRectangle({
+      x: (width - badgeWidth) / 2,
+      y: 73,
+      width: badgeWidth,
+      height: badgeHeight,
+      borderRadius: 12,
+      color: rgb(0.95, 0.97, 1.0),
+      borderColor: rgb(0.3, 0.6, 1.0),
+      borderWidth: 1,
+    });
+
     page.drawText(aiText, {
       x: (width - aiWidth) / 2,
       y: 80,
       size: aiSize,
       font: regularFont,
-      color: rgb(0.6, 0.6, 0.6),
+      color: rgb(0.2, 0.4, 0.7),
     });
 
-    // 장식 원 (하단)
+    // 장식 요소 (좌우 대칭)
+    const decorY = 120;
+    page.drawCircle({
+      x: width / 2 - 80,
+      y: decorY,
+      size: 4,
+      color: rgb(0.3, 0.6, 1.0),
+    });
     page.drawCircle({
       x: width / 2,
-      y: 120,
-      size: 3,
-      color: rgb(0.2, 0.4, 0.8),
+      y: decorY,
+      size: 5,
+      color: rgb(0.3, 0.6, 1.0),
+    });
+    page.drawCircle({
+      x: width / 2 + 80,
+      y: decorY,
+      size: 4,
+      color: rgb(0.3, 0.6, 1.0),
     });
 
     // 페이지 번호 (하단 중앙) - 표지는 항상 1페이지
@@ -1336,8 +1383,8 @@ export class PDFGenerator {
         displayTitle = displayTitle.substring(0, maxTitleLength) + "...";
       }
 
-      // 페이지 번호 (굵게)
-      currentPage.drawText(`${item.pageNumber}.`, {
+      // 페이지 번호 (굵게) - "P.1" 형식
+      currentPage.drawText(`Page.${item.pageNumber}`, {
         x: 50,
         y: yPosition,
         size: 11,
