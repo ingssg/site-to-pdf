@@ -94,26 +94,58 @@ export async function POST(request: NextRequest) {
             )}MB`
           );
 
-          // ZIP 압축
+          // ZIP 압축 (각 페이지는 스크린샷 + 요약 = 2개 PDF)
           sendProgress('개별 PDF ZIP 생성 중...', 85);
           console.log("[API] 개별 PDF ZIP 생성 시작...");
           const zip = new JSZip();
           (pdfResult.individualPdfs || []).forEach((pdfBuffer, index) => {
-            const page = crawledPages[index];
+            // 각 크롤링 페이지는 2개의 PDF (스크린샷 + 요약)
+            const pageIndex = Math.floor(index / 2);
+            const isScreenshot = index % 2 === 0;
+
+            const page = crawledPages[pageIndex];
             if (!page) {
-              console.warn(`[API] 페이지 ${index}를 찾을 수 없음. 스킵합니다.`);
+              console.warn(`[API] PDF ${index}에 해당하는 페이지를 찾을 수 없음. 스킵합니다.`);
               return;
             }
-            const filename = `${index + 1}_${page.title || "page"}.pdf`
+
+            const baseName = `${pageIndex + 1}_${page.title || "page"}`;
+            const suffix = isScreenshot ? "" : "_요약";
+            const filename = `${baseName}${suffix}.pdf`
               .replace(/[^a-zA-Z0-9가-힣._-]/g, "_")
               .slice(0, 100);
+
             zip.file(filename, pdfBuffer);
           });
           const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
-          const individualPdfsZipBase64 = zipBuffer.toString("base64");
-          console.log(
-            `[API] ZIP 생성 완료: ${(zipBuffer.length / 1024 / 1024).toFixed(2)}MB`
-          );
+
+          // ZIP이 50MB 이상이면 서버에 저장하고 URL 제공
+          const zipSizeMB = zipBuffer.length / 1024 / 1024;
+          console.log(`[API] ZIP 생성 완료: ${zipSizeMB.toFixed(2)}MB`);
+
+          let individualPdfsZipBase64 = '';
+          let zipDownloadUrl = '';
+
+          if (zipSizeMB > 50) {
+            // 서버에 임시 저장 (공용 폴더)
+            const fs = await import('fs');
+            const path = await import('path');
+            const crypto = await import('crypto');
+
+            const tempDir = path.join(process.cwd(), 'public', 'temp');
+            if (!fs.existsSync(tempDir)) {
+              fs.mkdirSync(tempDir, { recursive: true });
+            }
+
+            const zipFilename = `${crypto.randomUUID()}.zip`;
+            const zipPath = path.join(tempDir, zipFilename);
+            fs.writeFileSync(zipPath, zipBuffer);
+
+            zipDownloadUrl = `/temp/${zipFilename}`;
+            console.log(`[API] ZIP 파일이 너무 커서 서버에 저장: ${zipDownloadUrl}`);
+          } else {
+            individualPdfsZipBase64 = zipBuffer.toString("base64");
+          }
 
           // 완료
           sendProgress('완료!', 100);
@@ -132,6 +164,7 @@ export async function POST(request: NextRequest) {
                     : null,
                 mergedPdfTooLarge: pdfResult.totalSize >= 50 * 1024 * 1024,
                 individualPdfsZip: individualPdfsZipBase64,
+                zipDownloadUrl: zipDownloadUrl, // 큰 ZIP은 URL로 제공
               },
               summary: aiSummary,
             },
