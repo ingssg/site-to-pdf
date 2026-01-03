@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { GeneratePDFResponse } from '@/types/api';
 
 interface ResultDisplayProps {
@@ -32,6 +33,7 @@ interface ResultDisplayProps {
 export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayProps) {
   const { pdf, summary } = pdfResult;
   const crawl = crawlResult;
+  const [showPagesList, setShowPagesList] = useState(false);
 
   // 파일명 생성 (예: stclab_website_analysis_2024-01-15.pdf)
   const generateFilename = (extension: 'pdf' | 'zip') => {
@@ -97,7 +99,8 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      alert('PDF 다운로드에 실패했습니다');
+      console.error('PDF 다운로드 에러:', error);
+      alert('❌ PDF 다운로드에 실패했습니다.\n\n파일 크기가 너무 크거나 네트워크 문제일 수 있습니다.\n잠시 후 다시 시도해주세요.');
     }
   };
 
@@ -118,7 +121,7 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
 
       // Base64 ZIP이 있으면 변환해서 다운로드
       if (!pdf.individualPdfsZip) {
-        alert('ZIP 파일이 없습니다');
+        alert('⚠️ ZIP 파일을 찾을 수 없습니다.\n\n서버에서 ZIP 생성 중 문제가 발생했을 수 있습니다.\n다시 크롤링을 시도해주세요.');
         return;
       }
 
@@ -140,7 +143,8 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      alert('ZIP 다운로드에 실패했습니다');
+      console.error('ZIP 다운로드 에러:', error);
+      alert('❌ ZIP 다운로드에 실패했습니다.\n\n파일 변환 중 문제가 발생했습니다.\n개별 PDF를 하나씩 다운로드하거나, 다시 시도해주세요.');
     }
   };
 
@@ -180,36 +184,60 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
 
       {/* Crawled Pages List */}
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h4 className="font-semibold text-gray-900 mb-4">수집된 페이지 목록</h4>
-        <div className="space-y-3">
-          {crawl.pages.map((page, idx) => (
-            <details key={idx} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition">
-              <summary className="cursor-pointer">
-                <div className="inline-flex items-start gap-3 w-full">
-                  <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-semibold">
-                    {idx + 1}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <h5 className="font-medium text-gray-900 truncate">{page.title || '제목 없음'}</h5>
-                    <p className="text-sm text-blue-600 truncate">{page.url}</p>
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="font-semibold text-gray-900">수집된 페이지 목록</h4>
+          <button
+            onClick={() => setShowPagesList(!showPagesList)}
+            className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-2"
+          >
+            {showPagesList ? (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                </svg>
+                접기
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                펼쳐보기
+              </>
+            )}
+          </button>
+        </div>
+        {showPagesList && (
+          <div className="space-y-3 max-h-96 overflow-y-auto">
+            {crawl.pages.map((page, idx) => (
+              <details key={idx} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition">
+                <summary className="cursor-pointer">
+                  <div className="inline-flex items-start gap-3 w-full">
+                    <span className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-semibold">
+                      {idx + 1}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <h5 className="font-medium text-gray-900 truncate">{page.title || '제목 없음'}</h5>
+                      <p className="text-sm text-blue-600 truncate">{page.url}</p>
+                    </div>
+                  </div>
+                </summary>
+                <div className="mt-4 pl-9 space-y-2">
+                  <div className="text-sm">
+                    <span className="font-medium text-gray-700">깊이:</span>{' '}
+                    <span className="text-gray-600">{page.depth}</span>
+                  </div>
+                  <div className="text-sm">
+                    <span className="font-medium text-gray-700">텍스트 미리보기:</span>
+                    <p className="text-gray-600 mt-1 whitespace-pre-wrap line-clamp-6 bg-gray-50 p-3 rounded">
+                      {page.content.slice(0, 500)}{page.content.length > 500 ? '...' : ''}
+                    </p>
                   </div>
                 </div>
-              </summary>
-              <div className="mt-4 pl-9 space-y-2">
-                <div className="text-sm">
-                  <span className="font-medium text-gray-700">깊이:</span>{' '}
-                  <span className="text-gray-600">{page.depth}</span>
-                </div>
-                <div className="text-sm">
-                  <span className="font-medium text-gray-700">텍스트 미리보기:</span>
-                  <p className="text-gray-600 mt-1 whitespace-pre-wrap line-clamp-6 bg-gray-50 p-3 rounded">
-                    {page.content.slice(0, 500)}{page.content.length > 500 ? '...' : ''}
-                  </p>
-                </div>
-              </div>
-            </details>
-          ))}
-        </div>
+              </details>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* PDF Download */}
