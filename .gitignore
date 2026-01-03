@@ -49,3 +49,6 @@ next-env.d.ts
 /public/fonts/*.otf
 /public/fonts/*.woff
 /public/fonts/*.woff2
+
+# temporary files (PDF/ZIP downloads)
+/public/temp/
