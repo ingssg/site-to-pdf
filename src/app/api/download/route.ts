@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
         {
           success: false,
           error: '잘못된 요청입니다',
-          details: error.errors,
+          details: error.issues,
         },
         { status: 400 }
       );

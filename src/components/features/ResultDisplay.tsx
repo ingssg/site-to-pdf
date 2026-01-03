@@ -22,6 +22,7 @@ interface ResultDisplayProps {
       mergedPdf: string | null;
       mergedPdfTooLarge?: boolean;
       individualPdfsZip: string;
+      zipDownloadUrl?: string; // 큰 ZIP 파일은 서버 URL로 제공
       warnings?: string[];
     };
     summary: any;
@@ -101,10 +102,25 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
   };
 
   const handleDownloadZIP = async () => {
-    if (!pdf.individualPdfsZip) return;
-
     try {
       const filename = generateFilename('zip');
+
+      // 서버에 저장된 ZIP 파일이 있으면 직접 다운로드
+      if (pdf.zipDownloadUrl) {
+        const a = document.createElement('a');
+        a.href = pdf.zipDownloadUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return;
+      }
+
+      // Base64 ZIP이 있으면 변환해서 다운로드
+      if (!pdf.individualPdfsZip) {
+        alert('ZIP 파일이 없습니다');
+        return;
+      }
 
       // Base64를 Blob으로 변환
       const binaryString = window.atob(pdf.individualPdfsZip);
@@ -296,7 +312,7 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
               <div>
                 <h5 className="font-medium text-gray-900 mb-3">주요 서비스/제품</h5>
                 <ul className="space-y-2">
-                  {summary.mainServices.map((service, idx) => (
+                  {summary.mainServices.map((service: string, idx: number) => (
                     <li key={idx} className="flex items-start gap-2 bg-gray-50 p-3 rounded">
                       <span className="text-blue-600 mt-1 font-bold">{idx + 1}.</span>
                       <span className="text-gray-700">{service}</span>
@@ -311,7 +327,7 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
               <div>
                 <h5 className="font-medium text-gray-900 mb-3">타겟 고객</h5>
                 <div className="space-y-2">
-                  {summary.targetCustomers.map((customer, idx) => (
+                  {summary.targetCustomers.map((customer: string, idx: number) => (
                     <div key={idx} className="bg-indigo-50 border border-indigo-200 px-4 py-3 rounded-lg text-gray-700">
                       👤 {customer}
                     </div>
@@ -325,7 +341,7 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
               <div>
                 <h5 className="font-medium text-gray-900 mb-3">차별화 요소</h5>
                 <ul className="space-y-2">
-                  {summary.uniqueFeatures.map((feature, idx) => (
+                  {summary.uniqueFeatures.map((feature: string, idx: number) => (
                     <li key={idx} className="flex items-start gap-2 p-3 border border-green-200 rounded bg-green-50">
                       <span className="text-green-600 mt-1">✓</span>
                       <span className="text-gray-700">{feature}</span>
@@ -344,7 +360,7 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
                       💪 핵심 강점
                     </h5>
                     <ul className="space-y-2 text-sm">
-                      {summary.keyStrengths.map((item, idx) => (
+                      {summary.keyStrengths.map((item: string, idx: number) => (
                         <li key={idx} className="text-gray-700 leading-relaxed">• {item}</li>
                       ))}
                     </ul>
@@ -356,7 +372,7 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
                       🔧 개선 영역
                     </h5>
                     <ul className="space-y-2 text-sm">
-                      {summary.improvementAreas.map((item, idx) => (
+                      {summary.improvementAreas.map((item: string, idx: number) => (
                         <li key={idx} className="text-gray-700 leading-relaxed">• {item}</li>
                       ))}
                     </ul>
@@ -382,7 +398,7 @@ export default function ResultDisplay({ crawlResult, pdfResult }: ResultDisplayP
                   🎯 실행 제안
                 </h5>
                 <ul className="space-y-3">
-                  {summary.actionableInsights.map((insight, idx) => (
+                  {summary.actionableInsights.map((insight: string, idx: number) => (
                     <li key={idx} className="flex items-start gap-3 bg-white p-3 rounded shadow-sm">
                       <span className="flex-shrink-0 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold">
                         {idx + 1}

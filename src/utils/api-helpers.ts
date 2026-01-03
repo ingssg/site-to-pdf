@@ -26,14 +26,16 @@ export function errorResponse(
   status: number = 500,
   details?: unknown
 ): NextResponse<APIErrorResponse> {
-  return NextResponse.json(
-    {
-      success: false,
-      error,
-      ...(details && { details }),
-    },
-    { status }
-  );
+  const response: APIErrorResponse = {
+    success: false,
+    error,
+  };
+
+  if (details !== undefined) {
+    response.details = details;
+  }
+
+  return NextResponse.json(response, { status });
 }
 
 /**
