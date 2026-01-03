@@ -28,6 +28,18 @@ export class PDFGenerator {
   }
 
   /**
+   * URL에서 도메인 추출
+   */
+  private getDomainFromUrl(url: string): string {
+    try {
+      const urlObj = new URL(url);
+      return urlObj.hostname.replace("www.", "");
+    } catch {
+      return "Website";
+    }
+  }
+
+  /**
    * 크롤링된 페이지들로부터 PDF 생성 (최적화: 폰트 1회 임베드)
    */
   async generatePDFs(
@@ -47,57 +59,104 @@ export class PDFGenerator {
     console.log("[PDF] 폰트 로드 완료 - 모든 페이지에서 재사용");
 
     const tableOfContents: TableOfContentsItem[] = [];
-    let pageNumber = 1;
+    let currentPageNum = 1;
 
-    // AI 요약 페이지 추가 (첫 페이지)
+    // 1. 표지 페이지 추가
+    const firstPageUrl = pages[0]?.url || "";
+    await this.addCoverPage(pdfDoc, firstPageUrl, regularFont, boldFont);
+    currentPageNum++; // 표지는 페이지 번호에 포함
+
+    // 2. AI 비즈니스 분석 페이지
     if (aiSummary) {
       await this.addAISummaryPage(pdfDoc, aiSummary, regularFont, boldFont);
-      pageNumber++;
+      currentPageNum++;
     }
 
-    // 목차 페이지 추가 (옵션)
+    // 3. 목차 페이지 (페이지 번호 재계산 필요)
+    let tocPageCount = 0;
     if (this.options.includeTableOfContents) {
-      // 목차 항목 생성 (AI 요약 포함)
       const tocItems: TableOfContentsItem[] = [];
 
-      // AI 요약을 첫 번째 항목으로 추가
+      // 1. 표지 페이지
+      const domain = this.getDomainFromUrl(firstPageUrl);
+      tocItems.push({
+        title: `${domain} - Website Analysis`,
+        url: firstPageUrl,
+        pageNumber: 1,
+      });
+
+      // 2. AI 분석 페이지
       if (aiSummary) {
         tocItems.push({
-          title: 'AI Business Analysis',
-          url: 'AI Summary',
-          pageNumber: 1,
+          title: "AI Business Analysis",
+          url: "AI Summary",
+          pageNumber: 2,
         });
       }
 
-      // 나머지 페이지들 추가
-      pages.forEach((page, idx) => {
-        tocItems.push({
-          title: page.title || page.url,
-          url: page.url,
-          pageNumber: idx + 1 + (aiSummary ? 1 : 0) + 1,  // AI요약(1) + 목차(1) + 현재페이지
-        });
+      // 3. 목차 페이지 자체
+      tocItems.push({
+        title: "목차 (Table of Contents)",
+        url: "TOC",
+        pageNumber: 3,
       });
 
-      const tocPageCount = await this.addTableOfContents(
+      // 각 페이지 항목 계산
+      // 표지(1) + AI분석(1) + 목차(1) = 3페이지 이후부터 시작
+      let pageNum = 4;
+
+      pages.forEach((page, idx) => {
+        const pageTitle = page.title || page.url;
+
+        // 스크린샷 페이지
+        tocItems.push({
+          title: pageTitle,
+          url: page.url,
+          pageNumber: pageNum,
+        });
+        pageNum++;
+
+        // 요약 페이지도 목차에 추가 (있으면)
+        if (page.pageSummary) {
+          tocItems.push({
+            title: `  └ ${pageTitle} - 요약`,
+            url: page.url,
+            pageNumber: pageNum,
+          });
+          pageNum++;
+        }
+      });
+
+      tocPageCount = await this.addTableOfContents(
         pdfDoc,
         tocItems,
         regularFont,
         boldFont
       );
-      pageNumber += tocPageCount;
     }
 
-    // 각 페이지를 통합 PDF에 직접 추가 (폰트 재사용)
+    // 4. 각 페이지 추가 (스크린샷 + 요약)
+    // 표지(1) + AI분석(1) + 목차(1) = 3 이후부터 시작
+    currentPageNum = 4;
+
     for (const page of pages) {
-      await this.addPageToPDF(pdfDoc, page, regularFont, boldFont);
+      // 각 페이지에 절대 페이지 번호 전달
+      await this.addPageToPDF(
+        pdfDoc,
+        page,
+        regularFont,
+        boldFont,
+        currentPageNum
+      );
 
       tableOfContents.push({
         title: page.title || page.url,
         url: page.url,
-        pageNumber: pageNumber,
+        pageNumber: currentPageNum,
       });
 
-      pageNumber++;
+      // 스크린샷(1) + 요약(1) = 2페이지
+      currentPageNum += page.screenshot && page.pageSummary ? 2 : 1;
     }
 
     // 통합 PDF 저장
@@ -111,10 +170,11 @@ export class PDFGenerator {
     );
 
     // 개별 PDF 추출 (통합 PDF에서 페이지별로 분리)
+    const skipPages = 1 + (aiSummary ? 1 : 0) + tocPageCount; // 표지 + AI분석 + 목차
     const individualPdfs = await this.extractIndividualPDFs(
       pdfDoc,
-      aiSummary ? 1 : 0,
-      this.options.includeTableOfContents ? 1 : 0
+      skipPages,
+      0 // tocPageCount는 위에서 이미 포함됨
     );
 
     return {
@@ -127,48 +187,116 @@ export class PDFGenerator {
   }
 
   /**
+   * 이미지를 PDF에 임베드 (PNG 또는 JPEG 자동 감지)
+   */
+  private async embedImage(
+    pdfDoc: PDFDocument,
+    imageBuffer: Buffer
+  ): Promise<any> {
+    // 이미지 타입 감지 (첫 바이트로 판단)
+    const isPng = imageBuffer[0] === 0x89 && imageBuffer[1] === 0x50;
+    const isJpeg = imageBuffer[0] === 0xff && imageBuffer[1] === 0xd8;
+
+    if (isPng) {
+      return await pdfDoc.embedPng(imageBuffer);
+    } else if (isJpeg) {
+      return await pdfDoc.embedJpg(imageBuffer);
+    } else {
+      // 기본값으로 PNG 시도
+      console.warn("[PDF] Unknown image format, trying PNG");
+      return await pdfDoc.embedPng(imageBuffer);
+    }
+  }
+
+  /**
    * PDF 문서에 페이지 추가 (폰트 재사용)
    */
   private async addPageToPDF(
     pdfDoc: PDFDocument,
     page: CrawledPage,
     regularFont: any,
-    boldFont: any
+    boldFont: any,
+    pageNumber?: number
   ): Promise<void> {
     if (page.screenshot) {
       // 1. 스크린샷 페이지 (A4 사이즈에 맞춤)
-      const image = await pdfDoc.embedPng(page.screenshot);
+      // JPEG 또는 PNG 자동 감지하여 임베드
+      const image = await this.embedImage(pdfDoc, page.screenshot);
 
       // A4 사이즈 (595 x 842)
       const A4_WIDTH = 595;
       const A4_HEIGHT = 842;
-      const MARGIN = 40;
+      const HEADER_HEIGHT = 60; // 헤더 영역
+      const FOOTER_HEIGHT = 30; // 푸터 영역 (페이지 번호)
+      const SIDE_MARGIN = 15;
 
-      const maxWidth = A4_WIDTH - 2 * MARGIN;
-      const maxHeight = A4_HEIGHT - 2 * MARGIN;
+      // 스크린샷 영역 계산 (헤더와 푸터 제외)
+      const imageAreaHeight = A4_HEIGHT - HEADER_HEIGHT - FOOTER_HEIGHT;
+      const imageAreaWidth = A4_WIDTH - 2 * SIDE_MARGIN;
 
       // 이미지 비율 계산
       const imageRatio = image.width / image.height;
-      const pageRatio = maxWidth / maxHeight;
+      const areaRatio = imageAreaWidth / imageAreaHeight;
 
       let drawWidth, drawHeight;
 
-      if (imageRatio > pageRatio) {
+      if (imageRatio > areaRatio) {
         // 이미지가 더 넓음 -> 가로 기준으로 맞춤
-        drawWidth = maxWidth;
-        drawHeight = maxWidth / imageRatio;
+        drawWidth = imageAreaWidth;
+        drawHeight = imageAreaWidth / imageRatio;
       } else {
         // 이미지가 더 높음 -> 세로 기준으로 맞춤
-        drawHeight = maxHeight;
-        drawWidth = maxHeight * imageRatio;
+        drawHeight = imageAreaHeight;
+        drawWidth = imageAreaHeight * imageRatio;
       }
 
       // A4 페이지 생성
       const imagePage = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);
 
+      // === 헤더 영역 ===
+      // 페이지 제목
+      const pageTitle = page.title || "Untitled";
+      const titleLines = this.wrapText(
+        pageTitle,
+        boldFont,
+        12,
+        A4_WIDTH - 2 * SIDE_MARGIN
+      );
+      imagePage.drawText(titleLines[0] || pageTitle, {
+        x: SIDE_MARGIN,
+        y: A4_HEIGHT - 25,
+        size: 12,
+        font: boldFont,
+        color: rgb(0.1, 0.1, 0.1),
+      });
+
+      // URL
+      const urlLines = this.wrapText(
+        page.url,
+        regularFont,
+        8,
+        A4_WIDTH - 2 * SIDE_MARGIN
+      );
+      imagePage.drawText(urlLines[0] || page.url, {
+        x: SIDE_MARGIN,
+        y: A4_HEIGHT - 42,
+        size: 8,
+        font: regularFont,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+
+      // 헤더 구분선
+      imagePage.drawLine({
+        start: { x: SIDE_MARGIN, y: A4_HEIGHT - HEADER_HEIGHT + 5 },
+        end: { x: A4_WIDTH - SIDE_MARGIN, y: A4_HEIGHT - HEADER_HEIGHT + 5 },
+        thickness: 0.5,
+        color: rgb(0.7, 0.7, 0.7),
+      });
+
+      // === 스크린샷 영역 ===
       // 중앙 정렬
       const x = (A4_WIDTH - drawWidth) / 2;
-      const y = (A4_HEIGHT - drawHeight) / 2;
+      const y = FOOTER_HEIGHT + (imageAreaHeight - drawHeight) / 2;
 
       imagePage.drawImage(image, {
         x,
@@ -177,9 +305,32 @@ export class PDFGenerator {
         height: drawHeight,
       });
 
+      // === 푸터 영역 (페이지 번호) ===
+      if (pageNumber) {
+        const pageNumText = `- ${pageNumber} -`;
+        const pageNumSize = 9;
+        const pageNumWidth = regularFont.widthOfTextAtSize(
+          pageNumText,
+          pageNumSize
+        );
+        imagePage.drawText(pageNumText, {
+          x: (A4_WIDTH - pageNumWidth) / 2,
+          y: 15,
+          size: pageNumSize,
+          font: regularFont,
+          color: rgb(0.5, 0.5, 0.5),
+        });
+      }
+
       // 2. 페이지 요약 페이지 (AI 분석 결과)
       if (page.pageSummary) {
-        await this.addPageSummaryPage(pdfDoc, page, regularFont, boldFont);
+        await this.addPageSummaryPage(
+          pdfDoc,
+          page,
+          regularFont,
+          boldFont,
+          pageNumber ? pageNumber + 1 : undefined
+        );
       }
     } else {
       // Fast/Standard 모드: 텍스트 콘텐츠를 PDF로 렌더링
@@ -194,7 +345,8 @@ export class PDFGenerator {
     pdfDoc: PDFDocument,
     page: CrawledPage,
     regularFont: any,
-    boldFont: any
+    boldFont: any,
+    pageNumber?: number
   ): Promise<void> {
     const pageWidth = 595; // A4
     const pageHeight = 842;
@@ -204,7 +356,7 @@ export class PDFGenerator {
     let yPosition = pageHeight - margin;
 
     // 제목: "페이지 요약"
-    summaryPage.drawText('📄 페이지 요약', {
+    summaryPage.drawText("페이지 요약", {
       x: margin,
       y: yPosition,
       size: 20,
@@ -214,8 +366,8 @@ export class PDFGenerator {
     yPosition -= 40;
 
     // 페이지 제목
-    const title = page.title || 'Untitled';
-    const maxWidth = pageWidth - 2 * margin;
+    const title = page.title || "Untitled";
+    const maxWidth = pageWidth - 2 * margin - 40; // 안전 마진 40px 추가
     const titleLines = this.wrapText(title, boldFont, 16, maxWidth);
     for (const line of titleLines) {
       summaryPage.drawText(line, {
@@ -253,7 +405,7 @@ export class PDFGenerator {
     yPosition -= 30;
 
     // AI 요약 텍스트
-    const summary = page.pageSummary || '요약 없음';
+    const summary = page.pageSummary || "요약 없음";
     const summaryLines = this.wrapText(summary, regularFont, 14, maxWidth);
 
     for (const line of summaryLines) {
@@ -272,13 +424,30 @@ export class PDFGenerator {
     }
 
     // 하단 워터마크
-    summaryPage.drawText('AI로 생성된 요약입니다', {
+    summaryPage.drawText("AI로 생성된 요약입니다", {
       x: margin,
       y: 30,
       size: 9,
       font: regularFont,
       color: rgb(0.6, 0.6, 0.6),
     });
+
+    // 페이지 번호 표시 (하단 중앙)
+    if (pageNumber) {
+      const pageNumText = `- ${pageNumber} -`;
+      const pageNumSize = 9;
+      const pageNumWidth = regularFont.widthOfTextAtSize(
+        pageNumText,
+        pageNumSize
+      );
+      summaryPage.drawText(pageNumText, {
+        x: (pageWidth - pageNumWidth) / 2,
+        y: 15,
+        size: pageNumSize,
+        font: regularFont,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+    }
   }
 
   /**
@@ -290,7 +459,6 @@ export class PDFGenerator {
     koreanFont: any,
     titleFont: any
   ): Promise<void> {
-
     // A4 페이지 생성
     const pageWidth = 595;
     const pageHeight = 842;
@@ -374,7 +542,9 @@ export class PDFGenerator {
     const startPage = aiSummaryPages + tocPages;
 
     console.log(
-      `[PDF] 개별 PDF 추출 시작 (${startPage + 1}페이지부터 ${totalPages}페이지까지)`
+      `[PDF] 개별 PDF 추출 시작 (${
+        startPage + 1
+      }페이지부터 ${totalPages}페이지까지)`
     );
 
     // AI 요약과 목차를 제외한 각 페이지를 개별 PDF로 추출
@@ -398,7 +568,7 @@ export class PDFGenerator {
   }
 
   /**
-   * 텍스트를 특정 너비에 맞게 줄바꿈
+   * 텍스트를 특정 너비에 맞게 줄바꿈 (한글 지원 개선)
    */
   private wrapText(
     text: string,
@@ -415,6 +585,7 @@ export class PDFGenerator {
         continue;
       }
 
+      // 공백으로 분리
       const words = paragraph.split(" ");
       let currentLine = "";
 
@@ -422,9 +593,50 @@ export class PDFGenerator {
         const testLine = currentLine ? `${currentLine} ${word}` : word;
         const width = font.widthOfTextAtSize(testLine, fontSize);
 
-        if (width > maxWidth && currentLine) {
-          lines.push(currentLine);
-          currentLine = word;
+        if (width > maxWidth) {
+          if (currentLine) {
+            // 현재 줄 저장
+            lines.push(currentLine);
+            currentLine = word;
+
+            // word 자체가 maxWidth보다 큰 경우, 문자 단위로 자르기
+            const wordWidth = font.widthOfTextAtSize(word, fontSize);
+            if (wordWidth > maxWidth) {
+              let charLine = "";
+              for (let i = 0; i < word.length; i++) {
+                const char = word[i];
+                const testCharLine = charLine + char;
+                const charWidth = font.widthOfTextAtSize(
+                  testCharLine,
+                  fontSize
+                );
+
+                if (charWidth > maxWidth && charLine) {
+                  lines.push(charLine);
+                  charLine = char;
+                } else {
+                  charLine = testCharLine;
+                }
+              }
+              currentLine = charLine;
+            }
+          } else {
+            // currentLine이 비어있는데 testLine이 너무 길면 문자 단위로 자르기
+            let charLine = "";
+            for (let i = 0; i < word.length; i++) {
+              const char = word[i];
+              const testCharLine = charLine + char;
+              const charWidth = font.widthOfTextAtSize(testCharLine, fontSize);
+
+              if (charWidth > maxWidth && charLine) {
+                lines.push(charLine);
+                charLine = char;
+              } else {
+                charLine = testCharLine;
+              }
+            }
+            currentLine = charLine;
+          }
         } else {
           currentLine = testLine;
         }
@@ -473,7 +685,12 @@ export class PDFGenerator {
     // 목차 페이지 추가 (옵션)
     let tocPageCount = 0;
     if (this.options.includeTableOfContents) {
-      tocPageCount = await this.addTableOfContents(mergedPdf, toc, regularFont, boldFont);
+      tocPageCount = await this.addTableOfContents(
+        mergedPdf,
+        toc,
+        regularFont,
+        boldFont
+      );
     }
 
     // 모든 PDF 페이지 병합 및 헤더 추가
@@ -526,7 +743,16 @@ export class PDFGenerator {
     regularFont: any;
     boldFont: any;
   }> {
-    const fontPath = path.join(
+    // Noto Sans CJK Korean (더 완전한 한글 지원)
+    const cjkFontPath = path.join(
+      process.cwd(),
+      "public",
+      "fonts",
+      "NotoSansCJKkr-Regular.otf"
+    );
+
+    // 기존 Noto Sans KR (fallback)
+    const fallbackFontPath = path.join(
       process.cwd(),
       "public",
       "fonts",
@@ -536,17 +762,32 @@ export class PDFGenerator {
     let regularFont;
     let boldFont;
 
-    if (fs.existsSync(fontPath)) {
+    // CJK 폰트 우선 시도
+    if (fs.existsSync(cjkFontPath)) {
       try {
-        const fontBytes = fs.readFileSync(fontPath);
+        const fontBytes = fs.readFileSync(cjkFontPath);
+        console.log("[PDF] Noto Sans CJK KR 폰트 임베드 시작 (1회)");
+        regularFont = await pdfDoc.embedFont(fontBytes);
+        boldFont = await pdfDoc.embedFont(fontBytes);
+        console.log("[PDF] Noto Sans CJK KR 폰트 임베드 완료 (재사용됨)");
+        return { regularFont, boldFont };
+      } catch (error) {
+        console.warn("[PDF] CJK 폰트 로드 실패, fallback 시도:", error);
+      }
+    }
+
+    // Fallback: 기존 Noto Sans KR
+    if (fs.existsSync(fallbackFontPath)) {
+      try {
+        const fontBytes = fs.readFileSync(fallbackFontPath);
         if (!this.isValidTTF(fontBytes)) {
           throw new Error("유효하지 않은 TTF 파일");
         }
 
-        console.log("[PDF] 한글 폰트 임베드 시작 (1회)");
+        console.log("[PDF] Noto Sans KR 폰트 임베드 시작 (1회)");
         regularFont = await pdfDoc.embedFont(fontBytes);
         boldFont = await pdfDoc.embedFont(fontBytes);
-        console.log("[PDF] 한글 폰트 임베드 완료 (재사용됨)");
+        console.log("[PDF] Noto Sans KR 폰트 임베드 완료 (재사용됨)");
       } catch (error) {
         console.warn("[PDF] 한글 폰트 로드 실패, 표준 폰트 사용:", error);
         const warningMsg = "한글 폰트 로드 실패. 표준 폰트를 사용합니다.";
@@ -555,7 +796,8 @@ export class PDFGenerator {
         boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
       }
     } else {
-      const warningMsg = "한글 폰트 파일을 찾을 수 없습니다. 표준 폰트를 사용합니다.";
+      const warningMsg =
+        "한글 폰트 파일을 찾을 수 없습니다. 표준 폰트를 사용합니다.";
       console.warn("[PDF]", warningMsg);
       this.warnings.push(warningMsg);
       regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -563,6 +805,159 @@ export class PDFGenerator {
     }
 
     return { regularFont, boldFont };
+  }
+
+  /**
+   * 표지 페이지 추가
+   */
+  private async addCoverPage(
+    pdfDoc: PDFDocument,
+    websiteUrl: string,
+    regularFont: any,
+    boldFont: any
+  ): Promise<void> {
+    const page = pdfDoc.addPage([595, 842]); // A4
+    const { width, height } = page.getSize();
+
+    // 배경 그라데이션 효과 (상단 블루 영역)
+    page.drawRectangle({
+      x: 0,
+      y: height - 250,
+      width: width,
+      height: 250,
+      color: rgb(0.05, 0.15, 0.35), // 진한 네이비
+    });
+
+    // 상단 장식 라인
+    page.drawRectangle({
+      x: 0,
+      y: height - 5,
+      width: width,
+      height: 5,
+      color: rgb(0.2, 0.4, 0.8), // 파란색
+    });
+
+    // 메인 타이틀 - "Website Analysis Report"
+    const mainTitle = "Website Analysis Report";
+    const mainTitleSize = 32;
+    const mainTitleWidth = boldFont.widthOfTextAtSize(mainTitle, mainTitleSize);
+    page.drawText(mainTitle, {
+      x: (width - mainTitleWidth) / 2,
+      y: height - 120,
+      size: mainTitleSize,
+      font: boldFont,
+      color: rgb(1, 1, 1), // 흰색
+    });
+
+    // 도메인명 추출
+    let domain = "";
+    let companyName = "";
+    try {
+      const urlObj = new URL(websiteUrl);
+      domain = urlObj.hostname.replace("www.", "");
+      companyName = domain.split(".")[0].toUpperCase();
+    } catch {
+      domain = websiteUrl;
+      companyName = "WEBSITE";
+    }
+
+    // 회사명/도메인 (크게 강조)
+    const companyNameSize = 40;
+    const companyNameWidth = boldFont.widthOfTextAtSize(
+      companyName,
+      companyNameSize
+    );
+    page.drawText(companyName, {
+      x: (width - companyNameWidth) / 2,
+      y: height / 2 + 80,
+      size: companyNameSize,
+      font: boldFont,
+      color: rgb(0.1, 0.1, 0.1),
+    });
+
+    // 전체 도메인 (작게)
+    const domainSize = 14;
+    const domainWidth = regularFont.widthOfTextAtSize(domain, domainSize);
+    page.drawText(domain, {
+      x: (width - domainWidth) / 2,
+      y: height / 2 + 40,
+      size: domainSize,
+      font: regularFont,
+      color: rgb(0.4, 0.4, 0.4),
+    });
+
+    // 구분선
+    const lineY = height / 2 + 10;
+    page.drawLine({
+      start: { x: width / 2 - 100, y: lineY },
+      end: { x: width / 2 + 100, y: lineY },
+      thickness: 2,
+      color: rgb(0.2, 0.4, 0.8),
+    });
+
+    // 생성 날짜
+    const today = new Date();
+    const dateStr = today.toISOString().split("T")[0]; // YYYY-MM-DD
+    const dateText = `Generated on ${dateStr}`;
+    const dateSize = 12;
+    const dateWidth = regularFont.widthOfTextAtSize(dateText, dateSize);
+    page.drawText(dateText, {
+      x: (width - dateWidth) / 2,
+      y: height / 2 - 30,
+      size: dateSize,
+      font: regularFont,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+
+    // 하단 브랜딩
+    const brandingText = "Powered by SiteToPDF";
+    const brandingSize = 10;
+    const brandingWidth = regularFont.widthOfTextAtSize(
+      brandingText,
+      brandingSize
+    );
+    page.drawText(brandingText, {
+      x: (width - brandingWidth) / 2,
+      y: 100,
+      size: brandingSize,
+      font: regularFont,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+
+    // AI 마크
+    const aiText = "AI-Powered Analysis";
+    const aiSize = 9;
+    const aiWidth = regularFont.widthOfTextAtSize(aiText, aiSize);
+    page.drawText(aiText, {
+      x: (width - aiWidth) / 2,
+      y: 80,
+      size: aiSize,
+      font: regularFont,
+      color: rgb(0.6, 0.6, 0.6),
+    });
+
+    // 장식 원 (하단)
+    page.drawCircle({
+      x: width / 2,
+      y: 120,
+      size: 3,
+      color: rgb(0.2, 0.4, 0.8),
+    });
+
+    // 페이지 번호 (하단 중앙) - 표지는 항상 1페이지
+    const pageNumText = "- 1 -";
+    const pageNumSize = 9;
+    const pageNumWidth = regularFont.widthOfTextAtSize(
+      pageNumText,
+      pageNumSize
+    );
+    page.drawText(pageNumText, {
+      x: (width - pageNumWidth) / 2,
+      y: 15,
+      size: pageNumSize,
+      font: regularFont,
+      color: rgb(0.5, 0.5, 0.5),
+    });
   }
 
   /**
@@ -576,7 +971,7 @@ export class PDFGenerator {
   ): Promise<void> {
     const page = pdfDoc.addPage([595, 842]); // A4
     const { width, height } = page.getSize();
-    const margin = 50;
+    const margin = 60; // 50 → 60으로 증가 (우측 텍스트 잘림 방지)
     let y = height - margin;
 
     // 타이틀
@@ -611,16 +1006,24 @@ export class PDFGenerator {
     }
     y -= 30;
 
-    // 한 줄 요약 (큰 글씨)
-    page.drawText(aiSummary.oneLineSummary, {
-      x: margin,
-      y: y,
-      size: 16,
-      font: boldFont,
-      color: rgb(0, 0, 0),
-      maxWidth: width - 2 * margin,
-    });
-    y -= 35;
+    // 한 줄 요약 (큰 글씨) - 텍스트 줄바꿈 처리
+    const summaryLines = this.wrapText(
+      aiSummary.oneLineSummary,
+      boldFont,
+      16,
+      width - 2 * margin - 40 // 안전 마진 40px 추가
+    );
+    for (const line of summaryLines.slice(0, 2)) {
+      page.drawText(line, {
+        x: margin,
+        y: y,
+        size: 16,
+        font: boldFont,
+        color: rgb(0, 0, 0),
+      });
+      y -= 22;
+    }
+    y -= 15;
 
     // Overview
     page.drawText("Overview", {
@@ -632,11 +1035,11 @@ export class PDFGenerator {
     });
     y -= 18;
 
-    const overviewLines = this.wrapTextSimple(
+    const overviewLines = this.wrapText(
       aiSummary.overview,
       regularFont,
       10,
-      width - 2 * margin
+      width - 2 * margin - 40 // 안전 마진 40px 추가
     );
     for (const line of overviewLines.slice(0, 5)) {
       page.drawText(line, {
@@ -692,11 +1095,11 @@ export class PDFGenerator {
       });
       y -= 18;
 
-      const problemLines = this.wrapTextSimple(
+      const problemLines = this.wrapText(
         aiSummary.problemSolved,
         regularFont,
         10,
-        width - 2 * margin
+        width - 2 * margin - 40 // 안전 마진 40px 추가
       );
       for (const line of problemLines.slice(0, 3)) {
         page.drawText(line, {
@@ -723,15 +1126,23 @@ export class PDFGenerator {
       y -= 18;
 
       for (const service of aiSummary.mainServices.slice(0, 3)) {
-        page.drawText(`• ${service.substring(0, 60)}`, {
-          x: margin + 10,
-          y: y,
-          size: 9,
-          font: regularFont,
-          color: rgb(0.3, 0.3, 0.3),
-          maxWidth: width - 2 * margin - 10,
-        });
-        y -= 14;
+        const serviceText = `• ${service}`;
+        const serviceLines = this.wrapText(
+          serviceText,
+          regularFont,
+          9,
+          width - 2 * margin - 50 // 안전 마진 50px 추가
+        );
+        for (const line of serviceLines.slice(0, 1)) {
+          page.drawText(line, {
+            x: margin + 10,
+            y: y,
+            size: 9,
+            font: regularFont,
+            color: rgb(0.3, 0.3, 0.3),
+          });
+          y -= 14;
+        }
       }
       y -= 10;
     }
@@ -748,15 +1159,23 @@ export class PDFGenerator {
       y -= 18;
 
       for (const customer of aiSummary.targetCustomers.slice(0, 2)) {
-        page.drawText(`• ${customer.substring(0, 60)}`, {
-          x: margin + 10,
-          y: y,
-          size: 9,
-          font: regularFont,
-          color: rgb(0.3, 0.3, 0.3),
-          maxWidth: width - 2 * margin - 10,
-        });
-        y -= 14;
+        const customerText = `• ${customer}`;
+        const customerLines = this.wrapText(
+          customerText,
+          regularFont,
+          9,
+          width - 2 * margin - 50 // 안전 마진 50px 추가
+        );
+        for (const line of customerLines.slice(0, 1)) {
+          page.drawText(line, {
+            x: margin + 10,
+            y: y,
+            size: 9,
+            font: regularFont,
+            color: rgb(0.3, 0.3, 0.3),
+          });
+          y -= 14;
+        }
       }
       y -= 10;
     }
@@ -773,15 +1192,23 @@ export class PDFGenerator {
       y -= 18;
 
       for (const feature of aiSummary.uniqueFeatures.slice(0, 3)) {
-        page.drawText(`✓ ${feature.substring(0, 60)}`, {
-          x: margin + 10,
-          y: y,
-          size: 9,
-          font: regularFont,
-          color: rgb(0, 0.5, 0),
-          maxWidth: width - 2 * margin - 10,
-        });
-        y -= 14;
+        const featureText = `✓ ${feature}`;
+        const featureLines = this.wrapText(
+          featureText,
+          regularFont,
+          9,
+          width - 2 * margin - 50 // 안전 마진 50px 추가
+        );
+        for (const line of featureLines.slice(0, 1)) {
+          page.drawText(line, {
+            x: margin + 10,
+            y: y,
+            size: 9,
+            font: regularFont,
+            color: rgb(0, 0.5, 0),
+          });
+          y -= 14;
+        }
       }
     }
 
@@ -796,6 +1223,21 @@ export class PDFGenerator {
         color: rgb(0.5, 0.5, 0.5),
       }
     );
+
+    // 페이지 번호 (하단 중앙) - AI 분석 페이지는 항상 2페이지
+    const pageNumText = "- 2 -";
+    const pageNumSize = 9;
+    const pageNumWidth = regularFont.widthOfTextAtSize(
+      pageNumText,
+      pageNumSize
+    );
+    page.drawText(pageNumText, {
+      x: (width - pageNumWidth) / 2,
+      y: 15,
+      size: pageNumSize,
+      font: regularFont,
+      color: rgb(0.5, 0.5, 0.5),
+    });
   }
 
   /**
@@ -913,6 +1355,27 @@ export class PDFGenerator {
       });
 
       yPosition -= 20;
+    }
+
+    // 페이지 번호 추가 (목차는 항상 3페이지)
+    const allPages = pdfDoc.getPages();
+    for (let i = pagesBefore; i < allPages.length; i++) {
+      const tocPage = allPages[i];
+      const pageNum = 3; // 목차는 항상 3페이지
+      const pageNumText = `- ${pageNum} -`;
+      const pageNumSize = 9;
+      const pageNumWidth = regularFont.widthOfTextAtSize(
+        pageNumText,
+        pageNumSize
+      );
+
+      tocPage.drawText(pageNumText, {
+        x: (595 - pageNumWidth) / 2, // A4 width
+        y: 15,
+        size: pageNumSize,
+        font: regularFont,
+        color: rgb(0.5, 0.5, 0.5),
+      });
     }
 
     // 목차 페이지 수 반환 (추가된 페이지 수만)
