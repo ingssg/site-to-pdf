@@ -14,7 +14,34 @@ import ResultDisplay from "./ResultDisplay";
 
 interface CrawlerFormProps {
   onClose?: () => void;
-  onComplete?: () => void;
+  onComplete?: (data: {
+    crawlResult: {
+      totalPages: number;
+      failedUrls: string[];
+      duration: string;
+      pages: Array<{
+        url: string;
+        title: string;
+        content: string;
+        depth: number;
+        screenshot?: any;
+        pageSummary?: string;
+      }>;
+    };
+    pdfResult: {
+      pdf: {
+        totalSize: number;
+        totalSizeMB: string;
+        pageCount: number;
+        mergedPdf: string | null;
+        mergedPdfTooLarge?: boolean;
+        individualPdfsZip: string;
+        zipDownloadUrl?: string;
+        warnings?: string[];
+      };
+      summary: any;
+    };
+  }) => void;
 }
 
 export default function CrawlerForm({
@@ -126,8 +153,14 @@ export default function CrawlerForm({
 
   const handlePDFComplete = (result: GeneratePDFResponse) => {
     setPdfResult(result);
-    if (onComplete) {
-      onComplete();
+    if (onComplete && crawlResult) {
+      onComplete({
+        crawlResult: crawlResult.data.crawl,
+        pdfResult: {
+          pdf: result.data.pdf,
+          summary: result.data.summary,
+        },
+      });
     }
   };
 
@@ -143,24 +176,18 @@ export default function CrawlerForm({
         <PageSelector
           pages={crawlResult.data.crawl.pages}
           onComplete={handlePDFComplete}
+          onClose={onClose || (() => {})}
         />
       </Modal>
     );
   }
 
-  // PDF 생성 완료 - 결과창으로 이동 (모달 닫기)
-  if (pdfResult && crawlResult) {
-    if (onClose) {
-      onClose();
-    }
-    // 결과창은 별도 페이지나 컴포넌트로 표시
-    return null;
-  }
+  // PDF 생성 완료는 PageSelector에서 완료 모달을 표시하므로 여기서는 처리하지 않음
 
   // 초기 폼 (URL 입력)
   return (
-    <Modal isOpen={true} onClose={onClose || (() => {})}>
-      <div className="w-full">
+    <Modal isOpen={true} onClose={onClose || (() => {})} showCloseButton={true}>
+      <div className="w-full p-6 sm:p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* URL Input */}
           <div>
@@ -211,64 +238,11 @@ export default function CrawlerForm({
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-semibold py-4 px-6 rounded-lg transition-colors"
           >
-            {loading ? (
-              <>
-                <svg
-                  className="animate-spin h-5 w-5 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                크롤링 중...
-              </>
-            ) : (
-              "크롤링 시작"
-            )}
+            크롤링 시작
           </button>
         </form>
-
-        {/* 크롤링 진행률 표시 */}
-        {loading && progress && (
-          <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
-            <div className="flex items-center justify-between mb-3">
-              <div className="font-semibold text-blue-900 dark:text-blue-200">
-                페이지 크롤링 중: {progress.current} / {progress.total}
-              </div>
-              <div className="text-blue-700 dark:text-blue-300 font-bold text-lg">
-                {progress.percentage}%
-              </div>
-            </div>
-
-            {/* 프로그레스바 */}
-            <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-3 mb-3 overflow-hidden">
-              <div
-                className="bg-blue-600 dark:bg-blue-500 h-full rounded-full transition-all duration-300 ease-out"
-                style={{ width: `${progress.percentage}%` }}
-              />
-            </div>
-
-            {/* 현재 크롤링 중인 URL */}
-            <div className="text-sm text-blue-700 dark:text-blue-300 truncate">
-              <span className="font-medium">현재:</span> {progress.url}
-            </div>
-          </div>
-        )}
 
         {/* Error Display */}
         {error && (
