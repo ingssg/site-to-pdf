@@ -138,17 +138,17 @@ export default function PageSelector({ pages, onComplete }: PageSelectorProps) {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-8">
+    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8">
       {/* 헤더 - 직관적인 설명 */}
-      <div className="mb-6 pb-6 border-b border-gray-200">
-        <h3 className="text-2xl font-bold text-gray-900 mb-3">
+      <div className="mb-6 pb-6 border-b border-gray-200 dark:border-slate-700">
+        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
           📋 PDF에 포함할 페이지 선택
         </h3>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
-          <p className="text-sm text-blue-900 font-medium">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-2">
+          <p className="text-sm text-blue-900 dark:text-blue-200 font-medium">
             💡 사용 방법
           </p>
-          <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+          <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-1 list-disc list-inside">
             <li><strong>기본 설정:</strong> 모든 페이지가 선택되어 있습니다</li>
             <li><strong>제외하려면:</strong> 불필요한 페이지의 체크박스를 클릭해서 해제하세요</li>
             <li><strong>법적 증거/완전 보존:</strong> 그대로 두고 PDF 생성 버튼을 누르세요</li>
@@ -159,14 +159,14 @@ export default function PageSelector({ pages, onComplete }: PageSelectorProps) {
 
       {/* 통계 및 액션 버튼 */}
       <div className="flex items-center justify-between mb-6">
-        <div className="text-sm text-gray-600">
-          <span className="font-semibold text-blue-600 text-lg">{selectedUrls.size}</span>
+        <div className="text-sm text-gray-600 dark:text-slate-400">
+          <span className="font-semibold text-blue-600 dark:text-blue-400 text-lg">{selectedUrls.size}</span>
           <span className="mx-1">/ {pages.length}</span>
           <span>페이지 선택됨</span>
         </div>
         <button
           onClick={toggleAll}
-          className="text-sm text-blue-600 hover:text-blue-700 font-medium underline"
+          className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium underline"
         >
           {selectedUrls.size === pages.length ? '전체 해제' : '전체 선택'}
         </button>
@@ -181,8 +181,8 @@ export default function PageSelector({ pages, onComplete }: PageSelectorProps) {
               key={page.url}
               className={`flex items-start gap-4 p-4 border rounded-lg cursor-pointer transition-all ${
                 isSelected
-                  ? 'bg-blue-50 border-blue-300'
-                  : 'bg-white border-gray-200 hover:bg-gray-50'
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-300 dark:border-blue-700'
+                  : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50'
               }`}
             >
               <input
@@ -193,15 +193,15 @@ export default function PageSelector({ pages, onComplete }: PageSelectorProps) {
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="flex-shrink-0 w-6 h-6 bg-gray-200 text-gray-700 rounded-full flex items-center justify-center text-xs font-semibold">
+                  <span className="flex-shrink-0 w-6 h-6 bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-slate-300 rounded-full flex items-center justify-center text-xs font-semibold">
                     {idx + 1}
                   </span>
-                  <h4 className="font-medium text-gray-900 truncate">
+                  <h4 className="font-medium text-gray-900 dark:text-white truncate">
                     {page.title || '제목 없음'}
                   </h4>
                 </div>
-                <p className="text-sm text-blue-600 truncate">{page.url}</p>
-                <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                <p className="text-sm text-blue-600 dark:text-blue-400 truncate">{page.url}</p>
+                <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 line-clamp-2">
                   {page.content.slice(0, 150)}...
                 </p>
               </div>
@@ -212,20 +212,20 @@ export default function PageSelector({ pages, onComplete }: PageSelectorProps) {
 
       {/* PDF 생성 진행률 표시 */}
       {generating && progress && (
-        <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-6">
+        <div className="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6">
           <div className="flex items-center justify-between mb-3">
-            <div className="font-semibold text-green-900">
+            <div className="font-semibold text-green-900 dark:text-green-200">
               {progress.message}
             </div>
-            <div className="text-green-700 font-bold text-lg">
+            <div className="text-green-700 dark:text-green-300 font-bold text-lg">
               {progress.percentage}%
             </div>
           </div>
 
           {/* 프로그레스바 */}
-          <div className="w-full bg-green-200 rounded-full h-3 overflow-hidden">
+          <div className="w-full bg-green-200 dark:bg-green-800 rounded-full h-3 overflow-hidden">
             <div
-              className="bg-green-600 h-full rounded-full transition-all duration-300 ease-out"
+              className="bg-green-600 dark:bg-green-500 h-full rounded-full transition-all duration-300 ease-out"
               style={{ width: `${progress.percentage}%` }}
             />
           </div>
@@ -234,13 +234,13 @@ export default function PageSelector({ pages, onComplete }: PageSelectorProps) {
 
       {/* 에러 표시 */}
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <span className="text-red-600 text-xl">❌</span>
+            <span className="text-red-600 dark:text-red-400 text-xl">❌</span>
             <div className="flex-1">
-              <h4 className="font-semibold text-red-900">PDF 생성 실패</h4>
-              <p className="text-red-700 text-sm mt-1">{error}</p>
-              <p className="text-gray-600 text-xs mt-2">
+              <h4 className="font-semibold text-red-900 dark:text-red-200">PDF 생성 실패</h4>
+              <p className="text-red-700 dark:text-red-300 text-sm mt-1">{error}</p>
+              <p className="text-gray-600 dark:text-slate-400 text-xs mt-2">
                 💡 크롤링한 데이터는 보존되어 있습니다. 아래 버튼을 눌러 PDF 생성을 다시 시도하세요.
               </p>
             </div>
@@ -300,7 +300,7 @@ export default function PageSelector({ pages, onComplete }: PageSelectorProps) {
         )}
       </button>
 
-      <p className="text-xs text-gray-500 text-center mt-3">
+      <p className="text-xs text-gray-500 dark:text-slate-400 text-center mt-3">
         선택한 페이지만 AI 요약 및 PDF에 포함됩니다
       </p>
     </div>

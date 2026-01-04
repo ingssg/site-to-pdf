@@ -7,10 +7,20 @@ import type {
   APIErrorResponse,
   GeneratePDFResponse,
 } from "@/types/api";
+import Modal from "@/components/ui/modal";
+import CrawlingProgressModal from "./CrawlingProgressModal";
 import PageSelector from "./PageSelector";
 import ResultDisplay from "./ResultDisplay";
 
-export default function CrawlerForm() {
+interface CrawlerFormProps {
+  onClose?: () => void;
+  onComplete?: () => void;
+}
+
+export default function CrawlerForm({
+  onClose,
+  onComplete,
+}: CrawlerFormProps = {}) {
   const [url, setUrl] = useState("");
   const [maxPages, setMaxPages] = useState(30);
 
@@ -116,18 +126,47 @@ export default function CrawlerForm() {
 
   const handlePDFComplete = (result: GeneratePDFResponse) => {
     setPdfResult(result);
+    if (onComplete) {
+      onComplete();
+    }
   };
 
+  // 모달이 열려있고 크롤링 중일 때
+  if (loading && progress) {
+    return <CrawlingProgressModal isOpen={true} progress={progress} />;
+  }
+
+  // 크롤링 완료 후 페이지 선택 단계
+  if (crawlResult && !pdfResult) {
+    return (
+      <Modal isOpen={true} onClose={onClose || (() => {})}>
+        <PageSelector
+          pages={crawlResult.data.crawl.pages}
+          onComplete={handlePDFComplete}
+        />
+      </Modal>
+    );
+  }
+
+  // PDF 생성 완료 - 결과창으로 이동 (모달 닫기)
+  if (pdfResult && crawlResult) {
+    if (onClose) {
+      onClose();
+    }
+    // 결과창은 별도 페이지나 컴포넌트로 표시
+    return null;
+  }
+
+  // 초기 폼 (URL 입력)
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Form Card */}
-      <div className="bg-white rounded-xl shadow-lg p-8 mb-8">
+    <Modal isOpen={true} onClose={onClose || (() => {})}>
+      <div className="w-full">
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* URL Input */}
           <div>
             <label
               htmlFor="url"
-              className="block text-sm font-medium text-gray-700 mb-2"
+              className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2"
             >
               웹사이트 URL
             </label>
@@ -137,7 +176,7 @@ export default function CrawlerForm() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition text-gray-900 dark:text-white bg-white dark:bg-slate-800"
               required
             />
           </div>
@@ -146,7 +185,7 @@ export default function CrawlerForm() {
           <div>
             <label
               htmlFor="maxPages"
-              className="block text-sm font-medium text-gray-700 mb-2"
+              className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2"
             >
               최대 페이지 수: {maxPages}
             </label>
@@ -159,11 +198,11 @@ export default function CrawlerForm() {
               onChange={(e) => setMaxPages(Number(e.target.value))}
               className="w-full"
             />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400 mt-1">
               <span>1</span>
               <span>50</span>
             </div>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
               💡 크롤링 후 PDF에 포함할 페이지를 직접 선택할 수 있습니다
             </p>
           </div>
@@ -206,26 +245,26 @@ export default function CrawlerForm() {
 
         {/* 크롤링 진행률 표시 */}
         {loading && progress && (
-          <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-6">
+          <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
             <div className="flex items-center justify-between mb-3">
-              <div className="font-semibold text-blue-900">
+              <div className="font-semibold text-blue-900 dark:text-blue-200">
                 페이지 크롤링 중: {progress.current} / {progress.total}
               </div>
-              <div className="text-blue-700 font-bold text-lg">
+              <div className="text-blue-700 dark:text-blue-300 font-bold text-lg">
                 {progress.percentage}%
               </div>
             </div>
 
             {/* 프로그레스바 */}
-            <div className="w-full bg-blue-200 rounded-full h-3 mb-3 overflow-hidden">
+            <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-3 mb-3 overflow-hidden">
               <div
-                className="bg-blue-600 h-full rounded-full transition-all duration-300 ease-out"
+                className="bg-blue-600 dark:bg-blue-500 h-full rounded-full transition-all duration-300 ease-out"
                 style={{ width: `${progress.percentage}%` }}
               />
             </div>
 
             {/* 현재 크롤링 중인 URL */}
-            <div className="text-sm text-blue-700 truncate">
+            <div className="text-sm text-blue-700 dark:text-blue-300 truncate">
               <span className="font-medium">현재:</span> {progress.url}
             </div>
           </div>
@@ -233,23 +272,29 @@ export default function CrawlerForm() {
 
         {/* Error Display */}
         {error && (
-          <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-6">
+          <div className="mt-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
             <div className="flex items-start gap-3">
-              <span className="text-red-600 text-2xl">⚠️</span>
+              <span className="text-red-600 dark:text-red-400 text-2xl">
+                ⚠️
+              </span>
               <div className="flex-1">
-                <h4 className="font-semibold text-red-900 text-lg mb-2">
+                <h4 className="font-semibold text-red-900 dark:text-red-200 text-lg mb-2">
                   크롤링 실패
                 </h4>
-                <p className="text-red-700 text-sm mb-3">{error}</p>
+                <p className="text-red-700 dark:text-red-300 text-sm mb-3">
+                  {error}
+                </p>
 
                 {/* 도움말 */}
-                <div className="bg-white rounded p-3 mb-3">
-                  <p className="text-xs text-gray-700 font-medium mb-2">
+                <div className="bg-white dark:bg-slate-800 rounded p-3 mb-3">
+                  <p className="text-xs text-gray-700 dark:text-slate-300 font-medium mb-2">
                     💡 문제 해결 방법:
                   </p>
-                  <ul className="text-xs text-gray-600 space-y-1 ml-4">
+                  <ul className="text-xs text-gray-600 dark:text-slate-400 space-y-1 ml-4">
                     <li>• URL이 올바른지 확인해주세요 (https:// 포함)</li>
-                    <li>• 웹사이트가 robots.txt로 크롤링을 차단하지 않는지 확인</li>
+                    <li>
+                      • 웹사이트가 robots.txt로 크롤링을 차단하지 않는지 확인
+                    </li>
                     <li>• 페이지 수를 줄여보세요 (10-20페이지 권장)</li>
                     <li>• 잠시 후 다시 시도해주세요</li>
                   </ul>
@@ -271,24 +316,6 @@ export default function CrawlerForm() {
           </div>
         )}
       </div>
-
-      {/* 크롤링 성공 → 페이지 선택 */}
-      {crawlResult && !pdfResult && (
-        <div className="mt-8">
-          <PageSelector
-            pages={crawlResult.data.crawl.pages}
-            onComplete={handlePDFComplete}
-          />
-        </div>
-      )}
-
-      {/* PDF 생성 완료 → 결과 표시 */}
-      {pdfResult && crawlResult && (
-        <ResultDisplay
-          crawlResult={crawlResult.data.crawl}
-          pdfResult={pdfResult.data}
-        />
-      )}
-    </div>
+    </Modal>
   );
 }

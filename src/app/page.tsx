@@ -1,134 +1,291 @@
+"use client";
+
+import { useState } from "react";
+import dynamic from "next/dynamic";
 import CrawlerForm from "@/components/features/CrawlerForm";
 
+const ThemeToggle = dynamic(() => import("@/components/ui/ThemeToggle"), {
+  ssr: false,
+});
+
 export default function Home() {
+  const [showModal, setShowModal] = useState(false);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      <main className="container mx-auto px-4 py-16">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-5xl font-bold text-gray-900 mb-4">SiteToPDF</h1>
-          <p className="text-xl text-gray-700 max-w-2xl mx-auto mb-3">
-            웹사이트를 PDF로 변환하고 AI가 비즈니스 인사이트를 제공합니다
-          </p>
-          <p className="text-sm text-gray-600 max-w-xl mx-auto">
-            VC 투자심사 · 영업 고객조사 · 경쟁사 분석을 5분 안에
-          </p>
-
-          {/* Trust Badges */}
-          <div className="flex items-center justify-center gap-6 mt-6">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <span className="text-green-600">✓</span>
-              <span>무료 체험</span>
+    <div className="min-h-screen bg-[#f8f9fc] dark:bg-[#0f172a] antialiased">
+      {/* Header */}
+      <header className="fixed top-0 z-50 w-full backdrop-blur-xl bg-white/70 dark:bg-[#0f172a]/80 border-b border-slate-200/60 dark:border-slate-800/60">
+        <div className="flex items-center h-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="bg-primary text-white p-1.5 rounded-lg shadow-lg shadow-blue-500/20">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
             </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <span className="text-green-600">✓</span>
-              <span>2-3분 소요</span>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <span className="text-green-600">✓</span>
-              <span>데이터 저장 안함</span>
+            <span className="text-slate-900 dark:text-white text-lg font-bold tracking-tight">
+              SiteToPDF
+            </span>
+          </div>
+          <div className="flex items-center gap-6">
+            <nav className="hidden md:flex gap-6 text-sm font-semibold text-slate-600 dark:text-slate-300">
+              <a
+                className="hover:text-primary dark:hover:text-blue-400 transition-colors"
+                href="#features"
+              >
+                Features
+              </a>
+              <a
+                className="hover:text-primary dark:hover:text-blue-400 transition-colors"
+                href="#pricing"
+              >
+                Pricing
+              </a>
+              <a
+                className="hover:text-primary dark:hover:text-blue-400 transition-colors"
+                href="#enterprise"
+              >
+                Enterprise
+              </a>
+            </nav>
+            <div className="flex items-center gap-3">
+              <ThemeToggle />
+              <a
+                className="hidden sm:block text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-bold"
+                href="#"
+              >
+                Log in
+              </a>
+              <a
+                className="hidden sm:inline-flex items-center justify-center h-9 px-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-bold hover:opacity-90 transition-opacity"
+                href="#"
+              >
+                Get Started
+              </a>
             </div>
           </div>
         </div>
+      </header>
 
-        {/* Main Form */}
-        <CrawlerForm />
-
-        {/* Features */}
-        <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-          <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow">
-            <div className="text-3xl mb-3">🌐</div>
-            <h3 className="text-lg font-semibold mb-2 text-gray-900">
-              전체 사이트 크롤링
-            </h3>
-            <p className="text-gray-700 text-sm">
-              최대 50페이지를 자동으로 수집하고 스크린샷 캡처
-            </p>
+      {/* Main Content */}
+      <main className="flex-1 w-full pt-16">
+        <section className="relative pt-12 pb-16 md:pt-20 lg:pt-32 lg:pb-32 overflow-hidden">
+          {/* Background Decoration */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full z-0 pointer-events-none">
+            <div className="absolute top-[10%] left-[10%] w-[500px] h-[500px] bg-blue-200/20 dark:bg-blue-900/10 rounded-full blur-[100px]"></div>
+            <div className="absolute top-[20%] right-[10%] w-[400px] h-[400px] bg-indigo-200/20 dark:bg-indigo-900/10 rounded-full blur-[100px]"></div>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow">
-            <div className="text-3xl mb-3">📄</div>
-            <h3 className="text-lg font-semibold mb-2 text-gray-900">
-              고품질 PDF 생성
-            </h3>
-            <p className="text-gray-700 text-sm">
-              한글 폰트 지원, 자동 목차, 개별 페이지 다운로드
-            </p>
+
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+              {/* Left Column - Text Content */}
+              <div className="flex flex-col text-center lg:text-left">
+                {/* Badge */}
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 w-fit mx-auto lg:mx-0 shadow-sm mb-8">
+                  <span className="flex h-2 w-2 relative">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                  </span>
+                  <span className="text-slate-600 dark:text-slate-300 text-xs font-bold uppercase tracking-wide">
+                    New: AI Executive Summaries
+                  </span>
+                </div>
+
+                {/* Heading */}
+                <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] leading-[1.1] font-extrabold text-slate-900 dark:text-white tracking-tight mb-6">
+                  Turn Any Website into a{" "}
+                  <span className="text-primary dark:text-blue-400">
+                    Professional PDF
+                  </span>
+                </h1>
+
+                {/* Description */}
+                <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 leading-relaxed mb-8 max-w-2xl mx-auto lg:mx-0">
+                  Stop taking messy screenshots. Capture full webpages, generate
+                  AI summaries, and create archive-ready documents instantly.
+                </p>
+
+                {/* CTA Buttons */}
+                <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start mb-8">
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-primary hover:bg-primary-dark transition-all shadow-xl shadow-blue-500/20 text-white text-base font-bold tracking-wide group"
+                  >
+                    <span>Convert Your First URL</span>
+                    <svg
+                      className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 7l5 5m0 0l-5 5m5-5H6"
+                      />
+                    </svg>
+                  </button>
+                  <button className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-slate-700 dark:text-white text-base font-bold tracking-wide">
+                    View Sample PDF
+                  </button>
+                </div>
+
+                {/* Trust Badges */}
+                <div className="flex flex-col gap-4 border-t border-slate-200 dark:border-slate-800 pt-6">
+                  <div className="flex flex-wrap gap-x-6 gap-y-3 justify-center lg:justify-start">
+                    <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-sm font-medium">
+                      <svg
+                        className="w-5 h-5 text-green-500"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <span>Time-stamped Archiving</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-sm font-medium">
+                      <svg
+                        className="w-5 h-5 text-green-500"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <span>AI Key Insights</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-sm font-medium">
+                      <svg
+                        className="w-5 h-5 text-green-500"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      <span>SOC-2 Compliant</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-medium text-center lg:text-left mt-2 uppercase tracking-wider">
+                    Trusted by 500+ Analysts at
+                  </p>
+                  <div className="flex gap-6 justify-center lg:justify-start opacity-50 grayscale dark:invert">
+                    <span className="text-sm font-black text-slate-800 dark:text-slate-200">
+                      SEQUOIA
+                    </span>
+                    <span className="text-sm font-black text-slate-800 dark:text-slate-200">
+                      DELOITTE
+                    </span>
+                    <span className="text-sm font-black text-slate-800 dark:text-slate-200">
+                      MCKINSEY
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column - Preview Image */}
+              <div className="relative lg:h-auto w-full max-w-lg mx-auto lg:max-w-none">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] bg-gradient-to-tr from-blue-100 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-full blur-3xl -z-10"></div>
+                <div className="rounded-xl bg-white dark:bg-slate-900 shadow-2xl ring-1 ring-slate-900/5 dark:ring-white/10 overflow-hidden transform transition-transform hover:scale-[1.01] duration-500">
+                  {/* Browser Mockup */}
+                  <div className="flex items-center px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200/60 dark:border-slate-700">
+                    <div className="flex space-x-2">
+                      <div className="w-3 h-3 rounded-full bg-red-400/80"></div>
+                      <div className="w-3 h-3 rounded-full bg-amber-400/80"></div>
+                      <div className="w-3 h-3 rounded-full bg-green-400/80"></div>
+                    </div>
+                    <div className="flex-1 mx-4">
+                      <div className="flex items-center justify-center w-full h-7 bg-white dark:bg-slate-950 rounded border border-slate-200 dark:border-slate-700 text-[10px] text-slate-500 dark:text-slate-300 font-mono overflow-hidden whitespace-nowrap px-2">
+                        <svg
+                          className="w-3 h-3 mr-1"
+                          fill="currentColor"
+                          viewBox="0 0 20 20"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                        sitetopdf.com/dashboard/preview/techcrunch-article
+                      </div>
+                    </div>
+                  </div>
+                  {/* Preview Content */}
+                  <div className="relative aspect-[4/3] bg-slate-100 dark:bg-slate-950 group">
+                    <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-900 dark:to-slate-800"></div>
+                    {/* Progress Card Overlay */}
+                    <div className="absolute bottom-6 right-6 w-72 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-lg shadow-2xl ring-1 ring-black/5 dark:ring-white/10 p-4 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-500">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 rounded-md bg-blue-50 dark:bg-blue-900/30 text-primary">
+                            <svg
+                              className="w-5 h-5 animate-pulse"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.75c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-800 dark:text-white">
+                              Generating Summary
+                            </p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-300">
+                              Processing text & images...
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-xs font-bold text-primary dark:text-blue-400">
+                          85%
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mb-3 overflow-hidden">
+                        <div className="bg-primary h-1.5 rounded-full w-[85%] shadow-[0_0_10px_rgba(19,55,236,0.5)]"></div>
+                      </div>
+                      <div className="space-y-1.5 opacity-60">
+                        <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-700 rounded-full"></div>
+                        <div className="h-1.5 w-3/4 bg-slate-200 dark:bg-slate-700 rounded-full"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div className="bg-white p-6 rounded-lg shadow-md hover:shadow-xl transition-shadow">
-            <div className="text-3xl mb-3">🤖</div>
-            <h3 className="text-lg font-semibold mb-2 text-gray-900">
-              AI 비즈니스 분석
-            </h3>
-            <p className="text-gray-700 text-sm">
-              비즈니스 모델, 강점, 개선점까지 상세 분석
-            </p>
-          </div>
-        </div>
-
-        {/* Use Cases */}
-        <div className="mt-20 max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
-            이런 분들에게 추천합니다
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white p-6 rounded-lg border-l-4 border-blue-500">
-              <h3 className="text-lg font-semibold mb-2 text-gray-900">
-                💼 VC/PE 투자심사역
-              </h3>
-              <p className="text-gray-700 text-sm mb-3">
-                투자 대상 기업의 웹사이트를 빠르게 분석하고 비즈니스 모델 파악
-              </p>
-              <ul className="text-xs text-gray-600 space-y-1">
-                <li>✓ 회사 개요 및 사업 모델 즉시 확인</li>
-                <li>✓ 타겟 고객과 차별화 요소 분석</li>
-                <li>✓ PDF로 저장하여 투자위원회 공유</li>
-              </ul>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg border-l-4 border-green-500">
-              <h3 className="text-lg font-semibold mb-2 text-gray-900">
-                📊 B2B 영업팀
-              </h3>
-              <p className="text-gray-700 text-sm mb-3">
-                미팅 전 잠재 고객사 웹사이트를 분석하여 맞춤형 제안 준비
-              </p>
-              <ul className="text-xs text-gray-600 space-y-1">
-                <li>✓ 고객사의 주요 서비스와 타겟 파악</li>
-                <li>✓ Pain Point 분석으로 제안 포인트 도출</li>
-                <li>✓ 팀원들과 공유 가능한 PDF 자료</li>
-              </ul>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg border-l-4 border-purple-500">
-              <h3 className="text-lg font-semibold mb-2 text-gray-900">
-                🔍 컨설팅 펌
-              </h3>
-              <p className="text-gray-700 text-sm mb-3">
-                경쟁사 분석, 시장 조사 시 여러 웹사이트를 체계적으로 정리
-              </p>
-              <ul className="text-xs text-gray-600 space-y-1">
-                <li>✓ 경쟁사 서비스 및 포지셔닝 비교</li>
-                <li>✓ 시장 트렌드 파악용 자료 수집</li>
-                <li>✓ 클라이언트 보고서에 활용</li>
-              </ul>
-            </div>
-
-            <div className="bg-white p-6 rounded-lg border-l-4 border-orange-500">
-              <h3 className="text-lg font-semibold mb-2 text-gray-900">
-                ⚖️ 법무팀/로펌
-              </h3>
-              <p className="text-gray-700 text-sm mb-3">
-                특정 시점의 웹사이트 상태를 증거 자료로 보존
-              </p>
-              <ul className="text-xs text-gray-600 space-y-1">
-                <li>✓ 웹사이트 스크린샷 자동 캡처</li>
-                <li>✓ 날짜 및 URL 기록 포함</li>
-                <li>✓ 법적 증거 자료로 활용 가능</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+        </section>
       </main>
+
+      {/* Crawler Form - Shown in modal */}
+      {showModal && (
+        <CrawlerForm
+          onClose={() => setShowModal(false)}
+          onComplete={() => {
+            setShowModal(false);
+            // 결과창으로 이동하거나 상태 업데이트
+          }}
+        />
+      )}
     </div>
   );
 }

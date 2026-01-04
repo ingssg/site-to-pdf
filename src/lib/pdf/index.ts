@@ -824,10 +824,10 @@ export class PDFGenerator {
     const gradientLayers = 5;
     const layerHeight = 250 / gradientLayers;
     for (let i = 0; i < gradientLayers; i++) {
-      const darkness = 0.08 + (i * 0.04); // 0.08 → 0.24
+      const darkness = 0.08 + i * 0.04; // 0.08 → 0.24
       page.drawRectangle({
         x: 0,
-        y: height - 250 + (i * layerHeight),
+        y: height - 250 + i * layerHeight,
         width: width,
         height: layerHeight,
         color: rgb(darkness, darkness + 0.15, darkness + 0.35),
@@ -951,12 +951,11 @@ export class PDFGenerator {
     // AI 배지 배경
     const badgeWidth = aiWidth + 30;
     const badgeHeight = 24;
-    page.drawRoundedRectangle({
+    page.drawRectangle({
       x: (width - badgeWidth) / 2,
       y: 73,
       width: badgeWidth,
       height: badgeHeight,
-      borderRadius: 12,
       color: rgb(0.95, 0.97, 1.0),
       borderColor: rgb(0.3, 0.6, 1.0),
       borderWidth: 1,
@@ -1383,22 +1382,32 @@ export class PDFGenerator {
         displayTitle = displayTitle.substring(0, maxTitleLength) + "...";
       }
 
-      // 페이지 번호 (굵게) - "P.1" 형식
-      currentPage.drawText(`Page.${item.pageNumber}`, {
-        x: 50,
+      // 페이지 번호 텍스트 (굵게) - "Page.1" 형식
+      const pageNumText = `Page.${item.pageNumber}`;
+      const pageNumSize = 11;
+      const pageNumWidth = boldFont.widthOfTextAtSize(pageNumText, pageNumSize);
+
+      // 페이지 번호를 오른쪽 정렬 (여백 50px)
+      const pageNumX = 595 - 50 - pageNumWidth; // A4 width - right margin - text width
+
+      // 페이지 번호 (굵게) - 오른쪽 정렬
+      currentPage.drawText(pageNumText, {
+        x: pageNumX,
         y: yPosition,
-        size: 11,
+        size: pageNumSize,
         font: boldFont,
         color: rgb(0.15, 0.39, 0.92), // 파란색
       });
 
-      // 제목 (일반)
+      // 제목 (일반) - 왼쪽 정렬, 페이지 번호와 겹치지 않도록 여백 확보
+      const titleMaxWidth = pageNumX - 50 - 10; // 페이지 번호까지의 여백
       currentPage.drawText(displayTitle, {
-        x: 80,
+        x: 50,
         y: yPosition,
         size: 10,
         font: regularFont,
         color: rgb(0.2, 0.2, 0.2),
+        maxWidth: titleMaxWidth,
       });
 
       yPosition -= 20;
