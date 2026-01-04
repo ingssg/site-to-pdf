@@ -3,6 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import CrawlerForm from "@/components/features/CrawlerForm";
+import ResultDisplay from "@/components/features/ResultDisplay";
 
 const ThemeToggle = dynamic(() => import("@/components/ui/ThemeToggle"), {
   ssr: false,
@@ -10,6 +11,11 @@ const ThemeToggle = dynamic(() => import("@/components/ui/ThemeToggle"), {
 
 export default function Home() {
   const [showModal, setShowModal] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [resultData, setResultData] = useState<{
+    crawlResult: any;
+    pdfResult: any;
+  } | null>(null);
 
   return (
     <div className="min-h-screen bg-[#f8f9fc] dark:bg-[#0f172a] antialiased">
@@ -42,19 +48,19 @@ export default function Home() {
                 className="hover:text-primary dark:hover:text-blue-400 transition-colors"
                 href="#features"
               >
-                Features
+                기능
               </a>
               <a
                 className="hover:text-primary dark:hover:text-blue-400 transition-colors"
                 href="#pricing"
               >
-                Pricing
+                가격
               </a>
               <a
                 className="hover:text-primary dark:hover:text-blue-400 transition-colors"
                 href="#enterprise"
               >
-                Enterprise
+                기업용
               </a>
             </nav>
             <div className="flex items-center gap-3">
@@ -63,13 +69,13 @@ export default function Home() {
                 className="hidden sm:block text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary transition-colors text-sm font-bold"
                 href="#"
               >
-                Log in
+                로그인
               </a>
               <a
                 className="hidden sm:inline-flex items-center justify-center h-9 px-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-sm font-bold hover:opacity-90 transition-opacity"
                 href="#"
               >
-                Get Started
+                시작하기
               </a>
             </div>
           </div>
@@ -96,22 +102,23 @@ export default function Home() {
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
                   </span>
                   <span className="text-slate-600 dark:text-slate-300 text-xs font-bold uppercase tracking-wide">
-                    New: AI Executive Summaries
+                    신규: AI 경영진 요약
                   </span>
                 </div>
 
                 {/* Heading */}
                 <h1 className="text-4xl sm:text-5xl lg:text-[3.5rem] leading-[1.1] font-extrabold text-slate-900 dark:text-white tracking-tight mb-6">
-                  Turn Any Website into a{" "}
+                  어떤 웹사이트든{" "}
                   <span className="text-primary dark:text-blue-400">
-                    Professional PDF
-                  </span>
+                    전문 PDF로
+                  </span>{" "}
+                  변환하세요
                 </h1>
 
                 {/* Description */}
                 <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 leading-relaxed mb-8 max-w-2xl mx-auto lg:mx-0">
-                  Stop taking messy screenshots. Capture full webpages, generate
-                  AI summaries, and create archive-ready documents instantly.
+                  지저분한 스크린샷은 그만. 전체 웹페이지를 캡처하고, AI 요약을
+                  생성하며, 아카이브 준비가 완료된 문서를 즉시 만들어보세요.
                 </p>
 
                 {/* CTA Buttons */}
@@ -120,7 +127,7 @@ export default function Home() {
                     onClick={() => setShowModal(true)}
                     className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-primary hover:bg-primary-dark transition-all shadow-xl shadow-blue-500/20 text-white text-base font-bold tracking-wide group"
                   >
-                    <span>Convert Your First URL</span>
+                    <span>첫 URL 변환하기</span>
                     <svg
                       className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform"
                       fill="none"
@@ -136,7 +143,7 @@ export default function Home() {
                     </svg>
                   </button>
                   <button className="inline-flex items-center justify-center h-14 px-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-slate-700 dark:text-white text-base font-bold tracking-wide">
-                    View Sample PDF
+                    샘플 PDF 보기
                   </button>
                 </div>
 
@@ -155,7 +162,7 @@ export default function Home() {
                           clipRule="evenodd"
                         />
                       </svg>
-                      <span>Time-stamped Archiving</span>
+                      <span>타임스탬프 아카이빙</span>
                     </div>
                     <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-sm font-medium">
                       <svg
@@ -169,7 +176,7 @@ export default function Home() {
                           clipRule="evenodd"
                         />
                       </svg>
-                      <span>AI Key Insights</span>
+                      <span>AI 핵심 인사이트</span>
                     </div>
                     <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-sm font-medium">
                       <svg
@@ -183,11 +190,11 @@ export default function Home() {
                           clipRule="evenodd"
                         />
                       </svg>
-                      <span>SOC-2 Compliant</span>
+                      <span>SOC-2 인증</span>
                     </div>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-medium text-center lg:text-left mt-2 uppercase tracking-wider">
-                    Trusted by 500+ Analysts at
+                    500명 이상의 분석가가 신뢰하는 서비스
                   </p>
                 </div>
               </div>
@@ -238,10 +245,10 @@ export default function Home() {
                           </div>
                           <div>
                             <p className="text-xs font-bold text-slate-800 dark:text-white">
-                              Generating Summary
+                              요약 생성 중
                             </p>
                             <p className="text-[10px] text-slate-500 dark:text-slate-300">
-                              Processing text & images...
+                              텍스트 및 이미지 처리 중...
                             </p>
                           </div>
                         </div>
@@ -266,13 +273,22 @@ export default function Home() {
       </main>
 
       {/* Crawler Form - Shown in modal */}
-      {showModal && (
+      {showModal && !showResults && (
         <CrawlerForm
           onClose={() => setShowModal(false)}
-          onComplete={() => {
+          onComplete={(data) => {
             setShowModal(false);
-            // 결과창으로 이동하거나 상태 업데이트
+            setResultData(data);
+            setShowResults(true);
           }}
+        />
+      )}
+
+      {/* Results Display */}
+      {showResults && resultData && (
+        <ResultDisplay
+          crawlResult={resultData.crawlResult}
+          pdfResult={resultData.pdfResult}
         />
       )}
     </div>
