@@ -189,17 +189,6 @@ export default function Home() {
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-medium text-center lg:text-left mt-2 uppercase tracking-wider">
                     Trusted by 500+ Analysts at
                   </p>
-                  <div className="flex gap-6 justify-center lg:justify-start opacity-50 grayscale dark:invert">
-                    <span className="text-sm font-black text-slate-800 dark:text-slate-200">
-                      SEQUOIA
-                    </span>
-                    <span className="text-sm font-black text-slate-800 dark:text-slate-200">
-                      DELOITTE
-                    </span>
-                    <span className="text-sm font-black text-slate-800 dark:text-slate-200">
-                      MCKINSEY
-                    </span>
-                  </div>
                 </div>
               </div>
 
