@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import type { GeneratePDFRequest, GeneratePDFResponse, APIErrorResponse } from '@/types/api';
+import PDFGenerationProgressModal from './PDFGenerationProgressModal';
+import PDFCompletionModal from './PDFCompletionModal';
 
 interface PageSelectorProps {
   pages: Array<{
@@ -12,15 +14,19 @@ interface PageSelectorProps {
     screenshot?: any;
   }>;
   onComplete: (result: GeneratePDFResponse) => void;
+  onClose?: () => void;
 }
 
-export default function PageSelector({ pages, onComplete }: PageSelectorProps) {
+export default function PageSelector({ pages, onComplete, onClose }: PageSelectorProps) {
   // 기본값: 모든 페이지 선택됨
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(
     new Set(pages.map((p) => p.url))
   );
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [completed, setCompleted] = useState(false);
+  const [pdfResult, setPdfResult] = useState<GeneratePDFResponse | null>(null);
+  const [showUsageGuide, setShowUsageGuide] = useState(false);
 
   // PDF 생성 진행률 상태
   const [progress, setProgress] = useState<{
@@ -119,7 +125,9 @@ export default function PageSelector({ pages, onComplete }: PageSelectorProps) {
                 // PDF 생성 완료
                 console.log('[PDF Complete]', data);
                 setProgress(null);
-                onComplete(data as GeneratePDFResponse);
+                setGenerating(false);
+                setCompleted(true);
+                setPdfResult(data as GeneratePDFResponse);
               } else if (data.type === 'error') {
                 throw new Error(data.error);
               }
@@ -138,27 +146,73 @@ export default function PageSelector({ pages, onComplete }: PageSelectorProps) {
   };
 
   return (
-    <div className="bg-white dark:bg-slate-800 rounded-xl shadow-lg p-8">
+    <div className="flex flex-col h-full max-h-[calc(100vh-2rem)] relative overflow-hidden">
+      {/* X 버튼 */}
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="absolute top-6 right-6 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 z-10"
+          aria-label="닫기"
+        >
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M6 18L18 6M6 6l12 12"
+            />
+          </svg>
+        </button>
+      )}
+      
       {/* 헤더 - 직관적인 설명 */}
-      <div className="mb-6 pb-6 border-b border-gray-200 dark:border-slate-700">
+      <div className="p-6 sm:p-8 pb-6 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
         <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
           📋 PDF에 포함할 페이지 선택
         </h3>
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-2">
-          <p className="text-sm text-blue-900 dark:text-blue-200 font-medium">
-            💡 사용 방법
-          </p>
-          <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-1 list-disc list-inside">
-            <li><strong>기본 설정:</strong> 모든 페이지가 선택되어 있습니다</li>
-            <li><strong>제외하려면:</strong> 불필요한 페이지의 체크박스를 클릭해서 해제하세요</li>
-            <li><strong>법적 증거/완전 보존:</strong> 그대로 두고 PDF 생성 버튼을 누르세요</li>
-            <li><strong>맞춤형:</strong> 개인정보처리방침, 이용약관 등은 제외해도 좋습니다</li>
-          </ul>
-        </div>
+        {/* 사용 방법 토글 */}
+        <button
+          onClick={() => setShowUsageGuide(!showUsageGuide)}
+          className="w-full bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-center justify-between hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-blue-900 dark:text-blue-200 font-medium">
+              💡 사용 방법
+            </span>
+          </div>
+          <svg
+            className={`w-5 h-5 text-blue-600 dark:text-blue-400 transition-transform ${showUsageGuide ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
+        </button>
+        {showUsageGuide && (
+          <div className="mt-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-2">
+            <ul className="text-sm text-blue-800 dark:text-blue-300 space-y-1 list-disc list-inside">
+              <li><strong>기본 설정:</strong> 모든 페이지가 선택되어 있습니다</li>
+              <li><strong>제외하려면:</strong> 불필요한 페이지의 체크박스를 클릭해서 해제하세요</li>
+              <li><strong>법적 증거/완전 보존:</strong> 그대로 두고 PDF 생성 버튼을 누르세요</li>
+              <li><strong>맞춤형:</strong> 개인정보처리방침, 이용약관 등은 제외해도 좋습니다</li>
+            </ul>
+          </div>
+        )}
       </div>
 
       {/* 통계 및 액션 버튼 */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between px-6 sm:px-8 pt-6 pb-4 flex-shrink-0">
         <div className="text-sm text-gray-600 dark:text-slate-400">
           <span className="font-semibold text-blue-600 dark:text-blue-400 text-lg">{selectedUrls.size}</span>
           <span className="mx-1">/ {pages.length}</span>
@@ -172,8 +226,9 @@ export default function PageSelector({ pages, onComplete }: PageSelectorProps) {
         </button>
       </div>
 
-      {/* 페이지 목록 */}
-      <div className="space-y-3 mb-6 max-h-96 overflow-y-auto">
+      {/* 페이지 목록 - 스크롤 가능 영역 */}
+      <div className="flex-1 overflow-y-auto px-6 sm:px-8">
+        <div className="space-y-3 pb-4">
         {pages.map((page, idx) => {
           const isSelected = selectedUrls.has(page.url);
           return (
@@ -208,85 +263,68 @@ export default function PageSelector({ pages, onComplete }: PageSelectorProps) {
             </label>
           );
         })}
+        </div>
       </div>
 
-      {/* PDF 생성 진행률 표시 */}
-      {generating && progress && (
-        <div className="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-6">
-          <div className="flex items-center justify-between mb-3">
-            <div className="font-semibold text-green-900 dark:text-green-200">
-              {progress.message}
-            </div>
-            <div className="text-green-700 dark:text-green-300 font-bold text-lg">
-              {progress.percentage}%
-            </div>
-          </div>
-
-          {/* 프로그레스바 */}
-          <div className="w-full bg-green-200 dark:bg-green-800 rounded-full h-3 overflow-hidden">
-            <div
-              className="bg-green-600 dark:bg-green-500 h-full rounded-full transition-all duration-300 ease-out"
-              style={{ width: `${progress.percentage}%` }}
-            />
-          </div>
-        </div>
+      {/* PDF 생성 진행률 모달 */}
+      {generating && !completed && (
+        <PDFGenerationProgressModal
+          isOpen={true}
+          progress={progress}
+          onClose={onClose}
+        />
       )}
 
-      {/* 에러 표시 */}
-      {error && (
-        <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <span className="text-red-600 dark:text-red-400 text-xl">❌</span>
-            <div className="flex-1">
-              <h4 className="font-semibold text-red-900 dark:text-red-200">PDF 생성 실패</h4>
-              <p className="text-red-700 dark:text-red-300 text-sm mt-1">{error}</p>
-              <p className="text-gray-600 dark:text-slate-400 text-xs mt-2">
-                💡 크롤링한 데이터는 보존되어 있습니다. 아래 버튼을 눌러 PDF 생성을 다시 시도하세요.
-              </p>
+      {/* PDF 생성 완료 모달 */}
+      {completed && pdfResult && (
+        <PDFCompletionModal
+          isOpen={true}
+          onClose={() => {
+            setCompleted(false);
+            if (onClose) onClose();
+          }}
+          onViewResults={() => {
+            setCompleted(false);
+            onComplete(pdfResult);
+          }}
+          fileName={pdfResult.data?.mergedPdf ? "website.pdf" : "website.zip"}
+          fileSize={pdfResult.data?.mergedPdf ? "2.4 MB" : "24.8 MB"}
+        />
+      )}
+
+      {/* 하단 고정 영역 (팝업창 하단에 붙임) */}
+      <div className="flex-shrink-0 px-6 sm:px-8 pt-4 pb-6 sm:pb-8 border-t border-gray-200 dark:border-slate-700">
+
+        {/* 에러 표시 */}
+        {error && (
+          <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-red-600 dark:text-red-400 text-xl">❌</span>
+              <div className="flex-1">
+                <h4 className="font-semibold text-red-900 dark:text-red-200">PDF 생성 실패</h4>
+                <p className="text-red-700 dark:text-red-300 text-sm mt-1">{error}</p>
+                <p className="text-gray-600 dark:text-slate-400 text-xs mt-2">
+                  💡 크롤링한 데이터는 보존되어 있습니다. 아래 버튼을 눌러 PDF 생성을 다시 시도하세요.
+                </p>
+              </div>
             </div>
+            <button
+              onClick={handleGeneratePDF}
+              disabled={generating}
+              className="mt-4 w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+            >
+              🔄 PDF 생성 재시도 (크롤링 없이)
+            </button>
           </div>
+        )}
+
+        {/* PDF 생성 버튼 */}
+        {!generating && (
           <button
             onClick={handleGeneratePDF}
-            disabled={generating}
-            className="mt-4 w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+            disabled={selectedUrls.size === 0}
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-4 px-6 rounded-xl transition-colors flex items-center justify-center gap-3 text-lg"
           >
-            🔄 PDF 생성 재시도 (크롤링 없이)
-          </button>
-        </div>
-      )}
-
-      {/* PDF 생성 버튼 */}
-      <button
-        onClick={handleGeneratePDF}
-        disabled={generating || selectedUrls.size === 0}
-        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-3 text-lg"
-      >
-        {generating ? (
-          <>
-            <svg
-              className="animate-spin h-6 w-6 text-white"
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              ></circle>
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              ></path>
-            </svg>
-            PDF 생성 중... (AI 요약 + PDF 변환)
-          </>
-        ) : (
-          <>
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 strokeLinecap="round"
@@ -296,13 +334,13 @@ export default function PageSelector({ pages, onComplete }: PageSelectorProps) {
               />
             </svg>
             선택한 {selectedUrls.size}개 페이지로 PDF 생성
-          </>
+          </button>
         )}
-      </button>
 
-      <p className="text-xs text-gray-500 dark:text-slate-400 text-center mt-3">
-        선택한 페이지만 AI 요약 및 PDF에 포함됩니다
-      </p>
+        <p className="text-xs text-gray-500 dark:text-slate-400 text-center mt-3">
+          선택한 페이지만 AI 요약 및 PDF에 포함됩니다
+        </p>
+      </div>
     </div>
   );
 }
