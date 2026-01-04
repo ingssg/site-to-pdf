@@ -23,8 +23,9 @@ export default function CrawlingProgressModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose || (() => {})}>
-      {/* Step Indicator */}
-      <div className="flex flex-col items-center w-full mb-8">
+      <div className="w-full p-6 sm:p-8 flex flex-col items-center">
+        {/* Step Indicator */}
+        <div className="flex flex-col items-center w-full mb-8">
         <span className="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 uppercase mb-3">
           Step 1 of 3
         </span>
@@ -82,25 +83,6 @@ export default function CrawlingProgressModal({
       <div className="w-full mb-6">
         <div className="flex items-center justify-center w-full">
           <div className="flex h-9 max-w-full items-center justify-center gap-x-2.5 rounded-full bg-slate-100 dark:bg-slate-700/50 pl-3 pr-4 py-1 border border-slate-200 dark:border-slate-600/50">
-            <svg
-              className="text-primary text-[18px] animate-spin"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              ></circle>
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              ></path>
-            </svg>
             <p className="text-slate-700 dark:text-slate-200 text-xs font-mono font-medium leading-normal truncate">
               Processing: {progress?.url || ""}
             </p>
@@ -108,11 +90,12 @@ export default function CrawlingProgressModal({
         </div>
       </div>
 
-      {/* Footer Warning */}
-      <div className="mt-2 text-center">
-        <p className="text-slate-400 dark:text-slate-500 text-xs font-medium">
-          Please do not close the app
-        </p>
+        {/* Footer Warning */}
+        <div className="mt-2 text-center">
+          <p className="text-slate-400 dark:text-slate-500 text-xs font-medium">
+            Please do not close the app
+          </p>
+        </div>
       </div>
     </Modal>
   );
