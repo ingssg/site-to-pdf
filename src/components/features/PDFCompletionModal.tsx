@@ -42,10 +42,10 @@ export default function PDFCompletionModal({
 
         {/* Text Content */}
         <h3 className="text-2xl font-bold leading-tight text-slate-900 dark:text-white mb-2">
-          완료되었습니다!
+          분석 완료!
         </h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 max-w-[260px]">
-          웹사이트 변환이 완료되었습니다. PDF와 AI 생성 요약이 검토할 준비가 되었습니다.
+          비즈니스 인텔리전스 리포트와 AI 분석이 준비되었습니다.
         </p>
 
         {/* Document Preview Card */}
@@ -66,14 +66,14 @@ export default function PDFCompletionModal({
             </svg>
           </div>
           <div className="flex flex-col items-start overflow-hidden flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate w-full">
+            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate w-full text-left">
               {fileName}
             </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400 text-left">
               {fileSize} • 방금 전
             </p>
           </div>
-          <div className="ml-auto">
+          <div className="ml-auto shrink-0">
             <svg
               className="w-5 h-5 text-green-500"
               fill="currentColor"
@@ -89,20 +89,13 @@ export default function PDFCompletionModal({
         </div>
 
         {/* Actions */}
-        <div className="flex flex-col w-full gap-3">
+        <div className="flex flex-col w-full">
           <button
             onClick={onViewResults}
             className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-3.5 text-sm font-bold text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all"
             type="button"
           >
             결과 보기
-          </button>
-          <button
-            onClick={onClose}
-            className="inline-flex w-full items-center justify-center rounded-lg bg-transparent px-4 py-3.5 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 focus:outline-none transition-colors"
-            type="button"
-          >
-            닫기
           </button>
         </div>
       </div>

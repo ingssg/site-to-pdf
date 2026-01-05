@@ -102,7 +102,7 @@ export default function Home() {
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
                   </span>
                   <span className="text-slate-600 dark:text-slate-300 text-xs font-bold uppercase tracking-wide">
-                    신규: AI 경영진 요약
+                    신규: AI 비즈니스 분석
                   </span>
                 </div>
 
@@ -162,7 +162,7 @@ export default function Home() {
                           clipRule="evenodd"
                         />
                       </svg>
-                      <span>타임스탬프 아카이빙</span>
+                      <span>무료 체험</span>
                     </div>
                     <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-sm font-medium">
                       <svg
@@ -176,7 +176,7 @@ export default function Home() {
                           clipRule="evenodd"
                         />
                       </svg>
-                      <span>AI 핵심 인사이트</span>
+                      <span>2-3분 소요</span>
                     </div>
                     <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 text-sm font-medium">
                       <svg
@@ -190,11 +190,11 @@ export default function Home() {
                           clipRule="evenodd"
                         />
                       </svg>
-                      <span>SOC-2 인증</span>
+                      <span>데이터 저장 안함</span>
                     </div>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 font-medium text-center lg:text-left mt-2 uppercase tracking-wider">
-                    500명 이상의 분석가가 신뢰하는 서비스
+                    VC 투자심사 · B2B 영업 · 컨설팅 · 법무팀 전문
                   </p>
                 </div>
               </div>
@@ -284,12 +284,14 @@ export default function Home() {
         />
       )}
 
-      {/* Results Display */}
+      {/* Results Display - Full Screen Overlay */}
       {showResults && resultData && (
-        <ResultDisplay
-          crawlResult={resultData.crawlResult}
-          pdfResult={resultData.pdfResult}
-        />
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-[#f6f6f8] dark:bg-[#101322]">
+          <ResultDisplay
+            crawlResult={resultData.crawlResult}
+            pdfResult={resultData.pdfResult}
+          />
+        </div>
       )}
     </div>
   );

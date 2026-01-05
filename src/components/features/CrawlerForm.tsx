@@ -70,7 +70,13 @@ export default function CrawlerForm({
     setError(null);
     setCrawlResult(null);
     setPdfResult(null);
-    setProgress(null);
+    // 크롤링 시작 시 즉시 진행 모달 표시를 위해 초기 progress 설정
+    setProgress({
+      current: 0,
+      total: maxPages,
+      url: url,
+      percentage: 0,
+    });
 
     try {
       const requestBody: CrawlAPIRequest = {

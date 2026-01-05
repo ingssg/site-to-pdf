@@ -35,6 +35,7 @@ export interface PDFGenerationOptions {
   pageSize?: 'A4' | 'Letter';
   orientation?: 'portrait' | 'landscape';
   quality?: 'low' | 'medium' | 'high';
+  detailLevel?: 'basic' | 'detailed' | 'comprehensive';
 }
 
 export interface PDFResult {

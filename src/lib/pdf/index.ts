@@ -844,8 +844,13 @@ export class PDFGenerator {
       color: rgb(0.3, 0.6, 1.0), // 밝은 블루
     });
 
-    // 서브 타이틀
-    const subTitle = "COMPREHENSIVE";
+    // 서브 타이틀 - AI 상세도에 따라 동적 변경
+    const detailLevelMap = {
+      basic: "BASIC ANALYSIS",
+      detailed: "DETAILED ANALYSIS",
+      comprehensive: "COMPREHENSIVE ANALYSIS",
+    };
+    const subTitle = detailLevelMap[this.options.detailLevel || "detailed"];
     const subTitleSize = 11;
     const subTitleWidth = regularFont.widthOfTextAtSize(subTitle, subTitleSize);
     page.drawText(subTitle, {
@@ -856,8 +861,8 @@ export class PDFGenerator {
       color: rgb(0.7, 0.85, 1.0), // 연한 블루
     });
 
-    // 메인 타이틀 - "Website Analysis Report"
-    const mainTitle = "Website Analysis Report";
+    // 메인 타이틀 - "Business Intelligence Report"
+    const mainTitle = "Business Intelligence Report";
     const mainTitleSize = 30;
     const mainTitleWidth = boldFont.widthOfTextAtSize(mainTitle, mainTitleSize);
     page.drawText(mainTitle, {
@@ -1594,19 +1599,22 @@ export class PDFGenerator {
 
 /**
  * PDF 생성 헬퍼 함수
+ * HTML/CSS + Playwright 방식 사용 (Stitch 디자인)
  */
 export async function generatePDFFromPages(
   pages: CrawledPage[],
   options?: Partial<PDFGenerationOptions>,
   aiSummary?: AISummary | null
 ): Promise<PDFResult> {
-  const generator = new PDFGenerator({
-    includeTableOfContents: true, // 이미지 기반 목차로 활성화
-    pageSize: "A4",
-    orientation: "portrait",
-    quality: "medium",
-    ...options,
+  // HTML 기반 PDF 생성기 사용
+  const { HTMLPDFGenerator } = await import("./html-generator");
+  const generator = new HTMLPDFGenerator({
+    includeTableOfContents: options?.includeTableOfContents ?? true,
   });
 
-  return await generator.generatePDFs(pages, aiSummary);
+  try {
+    return await generator.generatePDFs(pages, aiSummary);
+  } finally {
+    await generator.close();
+  }
 }

@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
           console.log("[API] PDF 생성 시작...");
           const pdfResult = await generatePDFFromPages(
             crawledPages,
-            undefined,
+            { detailLevel },
             aiSummary
           );
           console.log(
