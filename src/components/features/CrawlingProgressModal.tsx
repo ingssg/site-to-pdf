@@ -20,10 +20,22 @@ export default function CrawlingProgressModal({
   onClose,
 }: CrawlingProgressModalProps) {
   const percentage = progress?.percentage || 0;
+  
+  // URL에서 경로만 추출
+  const getUrlPath = (url: string | undefined): string => {
+    if (!url) return "";
+    try {
+      const urlObj = new URL(url);
+      return urlObj.pathname || "/";
+    } catch {
+      // URL 파싱 실패 시 원본 반환
+      return url;
+    }
+  };
 
   return (
     <Modal isOpen={isOpen} onClose={onClose || (() => {})}>
-      <div className="w-full p-6 sm:p-8 flex flex-col items-center">
+      <div className="w-full p-6 sm:p-8 flex flex-col items-center relative">
         {/* Step Indicator */}
         <div className="flex flex-col items-center w-full mb-8">
         <span className="text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 uppercase mb-3">
@@ -72,19 +84,20 @@ export default function CrawlingProgressModal({
       {/* Text Content */}
       <div className="flex flex-col items-center text-center w-full mb-6 space-y-2">
         <h2 className="text-slate-900 dark:text-white text-xl font-bold leading-tight">
-          Crawling Website...
+          웹사이트 크롤링 중...
         </h2>
         <p className="text-slate-500 dark:text-slate-400 text-sm font-normal leading-relaxed max-w-[260px]">
-          We are mapping out pages for you to select. This usually takes less than a minute.
+          선택할 페이지를 매핑하고 있습니다. 보통 1분 이내에 완료됩니다.
         </p>
       </div>
 
       {/* Active Process Chip */}
-      <div className="w-full mb-6">
+      <div className="w-full mb-6 px-4">
         <div className="flex items-center justify-center w-full">
-          <div className="flex h-9 max-w-full items-center justify-center gap-x-2.5 rounded-full bg-slate-100 dark:bg-slate-700/50 pl-3 pr-4 py-1 border border-slate-200 dark:border-slate-600/50">
-            <p className="text-slate-700 dark:text-slate-200 text-xs font-mono font-medium leading-normal truncate">
-              Processing: {progress?.url || ""}
+          <div className="flex h-11 w-full items-center justify-center gap-x-2.5 rounded-full bg-slate-100 dark:bg-slate-700/50 pl-4 pr-5 py-2 border border-slate-200 dark:border-slate-600/50">
+            <span className="material-symbols-outlined text-primary text-[18px] animate-spin">sync</span>
+            <p className="text-slate-700 dark:text-slate-200 text-sm font-medium leading-normal">
+              Processing: {getUrlPath(progress?.url)}
             </p>
           </div>
         </div>
@@ -93,7 +106,7 @@ export default function CrawlingProgressModal({
         {/* Footer Warning */}
         <div className="mt-2 text-center">
           <p className="text-slate-400 dark:text-slate-500 text-xs font-medium">
-            Please do not close the app
+            앱을 닫지 마세요
           </p>
         </div>
       </div>
