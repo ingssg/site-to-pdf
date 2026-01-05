@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detailed Section</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <style>
+    @page {
+      size: A4;
+      margin: 0;
+      @bottom-right {
+        content: "Page " counter(page);
+        font-family: 'Manrope', sans-serif;
+        font-size: 9px;
+        font-weight: 700;
+        color: #9ca3af;
+      }
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 210mm;
+      min-height: 297mm;
+      font-family: 'Manrope', sans-serif;
+      background: #ffffff;
+      position: relative;
+      padding: 20mm 18mm 30mm;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      counter-reset: page {{PAGE_NUMBER_START}};
+    }
+    
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+    }
+    
+    .header-left {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .analysis-for-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: #94a3b8;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    
+    .analysis-domain {
+      font-size: 10px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    
+    .header-right {
+      text-align: right;
+    }
+    
+    .date-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: #94a3b8;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    
+    .date-value {
+      font-size: 10px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    
+    .article {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    
+    .section-header {
+      margin-bottom: 20px;
+    }
+    
+    .section-number {
+      font-size: 9px;
+      font-weight: 800;
+      color: #1337ec;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 4px;
+      display: block;
+    }
+    
+    h2 {
+      font-family: 'Merriweather', serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+      line-height: 1.2;
+    }
+    
+    .ai-summary-box {
+      background: #f8fafc;
+      border-top: 2px solid #e2e8f0;
+      border-bottom: 2px solid #e2e8f0;
+      padding: 16px;
+      margin-bottom: 24px;
+      position: relative;
+    }
+    
+    .ai-summary-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 8px;
+      color: #1337ec;
+    }
+    
+    .ai-icon {
+      font-size: 16px;
+    }
+    
+    .ai-summary-title {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #0f172a;
+    }
+    
+    .ai-summary-text {
+      font-size: 12px;
+      line-height: 1.6;
+      color: #374151;
+      font-weight: 500;
+      text-align: justify;
+      font-family: 'Merriweather', serif;
+      font-style: italic;
+    }
+    
+    .content-columns {
+      columns: 2;
+      column-gap: 24px;
+      font-size: 10px;
+      line-height: 1.65;
+      text-align: justify;
+      font-family: 'Merriweather', serif;
+      color: #4b5563;
+    }
+    
+    .content-section {
+      break-inside: avoid;
+      margin-bottom: 24px;
+    }
+    
+    .content-subtitle {
+      font-family: 'Manrope', sans-serif;
+      font-weight: 700;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 8px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #f3f4f6;
+      padding-bottom: 4px;
+    }
+    
+    .content-text {
+      margin-bottom: 12px;
+    }
+    
+    .content-list {
+      list-style: disc;
+      list-style-position: outside;
+      margin-left: 12px;
+      margin-bottom: 12px;
+      color: #1e293b;
+    }
+    
+    .content-list li {
+      margin-bottom: 4px;
+    }
+    
+    .content-list strong {
+      color: #0f172a;
+    }
+    
+    .pricing-table {
+      font-family: 'Manrope', sans-serif;
+      border: 1px solid #f3f4f6;
+      border-radius: 2px;
+      padding: 8px;
+      background: #ffffff;
+      margin-top: 8px;
+    }
+    
+    .pricing-row {
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px dashed #e5e7eb;
+      padding-bottom: 4px;
+    }
+    
+    .pricing-row:last-child {
+      border-bottom: none;
+    }
+    
+    .pricing-name {
+      font-weight: 700;
+      color: #0f172a;
+    }
+    
+    .footer {
+      margin-top: auto;
+      padding: 16px 0;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 9px;
+      color: #9ca3af;
+      font-family: 'Manrope', sans-serif;
+      font-weight: 500;
+    }
+    
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .lock-icon {
+      font-size: 14px;
+      color: #1337ec;
+    }
+    
+    .page-number {
+      font-size: 9px;
+      font-weight: 700;
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <div class="analysis-for-label">Analysis For</div>
+      <div class="analysis-domain">{{DOMAIN_NAME}}</div>
+    </div>
+    <div class="header-right">
+      <div class="date-label">Date Generated</div>
+      <div class="date-value">{{GENERATED_DATE}}</div>
+    </div>
+  </div>
+  <article class="article">
+    <div class="section-header">
+      <span class="section-number">{{SECTION_NUMBER}}</span>
+      <h2>{{SECTION_TITLE}}</h2>
+    </div>
+    {{AI_SUMMARY_BOX}}
+    <div class="content-columns">
+      {{CONTENT_SECTIONS}}
+    </div>
+  </article>
+  <div class="footer">
+    <div class="footer-left">
+      <span class="material-symbols-outlined lock-icon">lock</span>
+      <span>CONFIDENTIAL - SiteToPDF Analysis Report</span>
+    </div>
+  </div>
+</body>
+</html>

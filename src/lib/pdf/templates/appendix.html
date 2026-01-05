@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Appendix</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <style>
+    @page {
+      size: A4;
+      margin: 0;
+      @bottom-center {
+        content: "Page " counter(page);
+        font-family: 'Manrope', sans-serif;
+        font-size: 9px;
+        font-weight: 700;
+        color: #9ca3af;
+      }
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 210mm;
+      min-height: 297mm;
+      font-family: 'Manrope', sans-serif;
+      background: #ffffff;
+      position: relative;
+      padding: 24mm 20mm 30mm;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+      counter-reset: page {{PAGE_NUMBER_START}};
+    }
+    
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 8px;
+      margin-bottom: 32px;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      font-weight: 500;
+    }
+    
+    .report-title {
+      color: #1337ec;
+      max-width: 40%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .report-number {
+      display: flex;
+      gap: 16px;
+    }
+    
+    .title-section {
+      margin-bottom: 24px;
+    }
+    
+    .section-number {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    
+    .section-number-label {
+      font-size: 20px;
+      font-weight: 300;
+      color: #cbd5e1;
+      user-select: none;
+    }
+    
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: -0.01em;
+    }
+    
+    .section-description {
+      font-size: 10px;
+      line-height: 1.6;
+      color: #64748b;
+      max-width: 384px;
+      border-left: 2px solid #1337ec;
+      padding-left: 12px;
+    }
+    
+    .screenshots-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap-x: 24px;
+      gap-y: 32px;
+      align-content: start;
+    }
+    
+    .screenshot-item {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .screenshot-header {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #f3f4f6;
+      padding-bottom: 4px;
+    }
+    
+    .screenshot-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #0f172a;
+      text-transform: uppercase;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .screenshot-url {
+      font-size: 9px;
+      color: #94a3b8;
+      font-family: monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    .screenshot-image-container {
+      position: relative;
+      width: 100%;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      background: #f9fafb;
+      padding: 4px;
+    }
+    
+    .screenshot-image {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    
+    .screenshot-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top;
+    }
+    
+    .footer {
+      margin-top: auto;
+      padding: 16px 0;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 9px;
+      color: #9ca3af;
+      font-family: 'Manrope', sans-serif;
+      font-weight: 500;
+    }
+    
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .page-number {
+      font-size: 9px;
+      font-weight: 700;
+      color: #9ca3af;
+    }
+    
+    .footer-divider {
+      width: 1px;
+      height: 12px;
+      background: #cbd5e1;
+    }
+    
+    .footer-right {
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 500;
+      color: #9ca3af;
+      font-size: 9px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span class="report-title">{{REPORT_TITLE}}</span>
+    <div class="report-number">
+      <span>Report #{{REPORT_ID}}</span>
+    </div>
+  </div>
+  <div class="title-section">
+    <div class="section-number">
+      <span class="section-number-label">/{{SECTION_NUMBER}}</span>
+      <h2>Appendix: Website Evidence</h2>
+    </div>
+    <p class="section-description">
+      Digital evidence captured during the automated due diligence process. These snapshots confirm the visible state of key pages at the time of report generation.
+    </p>
+  </div>
+  <div class="screenshots-grid">
+    {{SCREENSHOT_ITEMS}}
+  </div>
+  <div class="footer">
+    <div class="footer-left">
+      <span>Generated {{GENERATED_DATE}}</span>
+    </div>
+    <span class="footer-right">SiteToPDF Confidential</span>
+  </div>
+</body>
+</html>

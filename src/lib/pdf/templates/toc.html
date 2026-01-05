@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Table of Contents</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    @page {
+      size: A4;
+      margin: 0;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 210mm;
+      height: 297mm;
+      min-height: 297mm;
+      max-height: 297mm;
+      font-family: 'Manrope', sans-serif;
+      background: #ffffff;
+      position: relative;
+      overflow: hidden;
+      page-break-after: always;
+      padding: 32px 40px;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+    }
+    
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 16px;
+      margin-bottom: 32px;
+    }
+    
+    .header-left {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .source-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-weight: 700;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+    
+    .domain-name {
+      font-size: 12px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    
+    .header-right {
+      text-align: right;
+    }
+    
+    .generated-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-weight: 700;
+      color: #94a3b8;
+      margin-bottom: 4px;
+    }
+    
+    .generated-date {
+      font-size: 12px;
+      font-weight: 500;
+      color: #475569;
+    }
+    
+    .title-section {
+      margin-bottom: 48px;
+    }
+    
+    h2 {
+      font-size: 36px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      margin-bottom: 12px;
+    }
+    
+    .subtitle {
+      font-size: 14px;
+      color: #64748b;
+      font-weight: 500;
+    }
+    
+    .toc-list {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    
+    .toc-item {
+      display: flex;
+      align-items: baseline;
+      width: 100%;
+    }
+    
+    .toc-number {
+      width: 32px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #1337ec;
+    }
+    
+    .toc-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.01em;
+    }
+    
+    /* 첫 번째 항목(표지)도 동일한 색상 적용 */
+    .toc-item:first-child .toc-title {
+      color: #0f172a;
+    }
+    
+    .toc-leader {
+      flex-grow: 1;
+      border-bottom: 2px dotted #d1d5db;
+      margin: 0 8px;
+      position: relative;
+      top: -4px;
+    }
+    
+    .toc-page {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+      font-variant-numeric: tabular-nums;
+    }
+    
+    .toc-subitems {
+      padding-left: 32px;
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    
+    .toc-subitem {
+      display: flex;
+      align-items: baseline;
+      width: 100%;
+    }
+    
+    .toc-subnumber {
+      width: 24px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #475569;
+    }
+    
+    .toc-subtitle {
+      font-size: 12px;
+      font-weight: 500;
+      color: #475569;
+    }
+    
+    .toc-subleader {
+      flex-grow: 1;
+      border-bottom: 2px dotted #e5e7eb;
+      margin: 0 8px;
+      position: relative;
+      top: -4px;
+    }
+    
+    .toc-subpage {
+      font-size: 12px;
+      font-weight: 500;
+      color: #475569;
+      font-variant-numeric: tabular-nums;
+    }
+    
+    .footer {
+      margin-top: auto;
+      padding: 16px 0;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 9px;
+      color: #9ca3af;
+      font-family: 'Manrope', sans-serif;
+      font-weight: 500;
+    }
+    
+    .footer-left {
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .report-id-label {
+      font-size: 9px;
+      font-weight: 500;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 2px;
+    }
+    
+    .report-id {
+      font-size: 9px;
+      color: #9ca3af;
+      font-family: monospace;
+    }
+    
+    .footer-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    
+    .page-number {
+      font-size: 9px;
+      font-weight: 700;
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-left">
+      <span class="source-label">Source Website</span>
+      <span class="domain-name">{{DOMAIN_NAME}}</span>
+    </div>
+    <div class="header-right">
+      <span class="generated-label">Generated</span>
+      <span class="generated-date">{{GENERATED_DATE}}</span>
+    </div>
+  </div>
+  <div class="title-section">
+    <h2>Table of Contents</h2>
+    <p class="subtitle">Comprehensive business analysis & website report.</p>
+  </div>
+  <div class="toc-list">
+    {{TOC_ITEMS}}
+  </div>
+  <div class="footer">
+    <div class="footer-left">
+      <span class="report-id-label">Report ID</span>
+      <span class="report-id">{{REPORT_ID}}</span>
+    </div>
+    <div class="footer-right">
+      <span class="page-number">Page {{PAGE_NUMBER}}</span>
+    </div>
+  </div>
+</body>
+</html>

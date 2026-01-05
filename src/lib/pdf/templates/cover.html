@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cover Page</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
+  <style>
+    @page {
+      size: A4;
+      margin: 0;
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      width: 210mm;
+      height: 297mm;
+      min-height: 297mm;
+      max-height: 297mm;
+      font-family: 'Manrope', sans-serif;
+      background: #ffffff;
+      position: relative;
+      overflow: hidden;
+      page-break-after: always;
+      box-sizing: border-box;
+    }
+    
+    .paper-texture {
+      position: absolute;
+      inset: 0;
+      background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHdpZHRoPSc0JyBoZWlnaHQ9JzQnPgo8cmVjdCB3aWR0aD0nNCcgaGVpZ2h0PSc0JyBmaWxsPScjZmZmJy8+CjxyZWN0IHdpZHRoPScxJyBoZWlnaHQ9JzEnIGZpbGw9JyMwMDAwMDAnIG9wYWNpdHk9JzAuMDInLz4KPC9zdmc+');
+      opacity: 1;
+      z-index: 0;
+      pointer-events: none;
+    }
+    
+    .content {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding: 40px 32px;
+      justify-content: space-between;
+      align-items: center;
+      text-align: center;
+    }
+    
+    .top-line {
+      width: 32px;
+      height: 2px;
+      background: #0f172a;
+      margin-top: 8px;
+    }
+    
+    .main-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      margin-top: -32px;
+    }
+    
+    .confidential {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.25em;
+      color: #94a3b8;
+      text-transform: uppercase;
+      margin-bottom: 32px;
+    }
+    
+    h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 2.75rem;
+      font-weight: 700;
+      color: #0f172a;
+      line-height: 1.1;
+      margin-bottom: 32px;
+      letter-spacing: -0.02em;
+    }
+    
+    .divider {
+      width: 100%;
+      max-width: 40px;
+      height: 1px;
+      background: #cbd5e1;
+      margin: 24px 0;
+    }
+    
+    .prepared-for {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    
+    .prepared-for-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 4px;
+    }
+    
+    .company-name {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.01em;
+    }
+    
+    .company-url {
+      font-size: 14px;
+      color: #1337ec;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+    }
+    
+    .footer {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      padding-bottom: 8px;
+    }
+    
+    .generated-date {
+      font-size: 10px;
+      color: #64748b;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    
+    .powered-by {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      opacity: 0.7;
+    }
+    
+    .powered-by-label {
+      font-size: 9px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-weight: 600;
+    }
+    
+    .powered-by-name {
+      font-size: 9px;
+      font-weight: 700;
+      color: #1e293b;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+    
+    .page-number {
+      font-size: 9px;
+      font-weight: 700;
+      color: #9ca3af;
+      margin-top: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="paper-texture"></div>
+  <div class="content">
+    <div class="top-line"></div>
+    <div class="main-content">
+      <p class="confidential">Confidential Audit</p>
+      <h1>
+        Website<br/>Analysis<br/>Report
+      </h1>
+      <div class="divider"></div>
+      <div class="prepared-for">
+        <p class="prepared-for-label">Prepared For</p>
+        <h2 class="company-name">{{COMPANY_NAME}}</h2>
+        <p class="company-url">{{COMPANY_URL}}</p>
+      </div>
+    </div>
+    <div class="footer">
+      <div>
+        <p class="generated-date">Generated on {{GENERATED_DATE}}</p>
+      </div>
+      <div class="powered-by">
+        <span class="powered-by-label">Powered by</span>
+        <span class="powered-by-name">SiteToPDF</span>
+      </div>
+      <span class="page-number">Page {{PAGE_NUMBER}}</span>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Business Intelligence Report</title>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <style>
+    /* ==================== GLOBAL STYLES ==================== */
+    @page {
+      size: A4;
+      margin: 0;
+      @bottom-center {
+        content: "Page " counter(page);
+        font-family: 'Manrope', sans-serif;
+        font-size: 9px;
+        font-weight: 700;
+        color: #9ca3af;
+        margin-bottom: 10mm;
+      }
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 210mm;
+      font-family: 'Manrope', sans-serif;
+      background: #ffffff;
+      color: #111827;
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      page-break-after: always;
+      position: relative;
+    }
+
+    .page:last-child {
+      page-break-after: auto;
+    }
+
+    /* ==================== COVER PAGE ==================== */
+    .cover-page {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      padding: 40mm 20mm;
+    }
+
+    .cover-watermark {
+      position: absolute;
+      top: 20mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.3em;
+      color: #9ca3af;
+      text-transform: uppercase;
+    }
+
+    .cover-title {
+      text-align: center;
+      margin-bottom: 40mm;
+    }
+
+    .cover-title h1 {
+      font-family: 'Merriweather', serif;
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 10mm;
+      color: #0f172a;
+    }
+
+    .cover-prepared {
+      text-align: center;
+      margin-bottom: 5mm;
+    }
+
+    .cover-prepared-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      text-transform: uppercase;
+      margin-bottom: 3mm;
+    }
+
+    .cover-company {
+      font-size: 28px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 2mm;
+    }
+
+    .cover-url {
+      font-size: 14px;
+      color: #1337ec;
+      text-decoration: none;
+    }
+
+    .cover-footer {
+      position: absolute;
+      bottom: 20mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+    }
+
+    .cover-date {
+      font-size: 11px;
+      font-weight: 600;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 3mm;
+    }
+
+    .cover-powered {
+      font-size: 9px;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .cover-powered strong {
+      color: #0f172a;
+      font-weight: 700;
+    }
+
+    /* ==================== EXECUTIVE SUMMARY PAGE ==================== */
+    .exec-summary-page {
+      padding: 0;
+    }
+
+    .primary-bar {
+      width: 100%;
+      height: 6px;
+      background: #1337ec;
+    }
+
+    .exec-header {
+      padding: 10mm 8mm 4mm;
+      border-bottom: 1px solid #f3f4f6;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+
+    .exec-header-left {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .confidential-label {
+      font-size: 9px;
+      font-weight: 700;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      margin-bottom: 1mm;
+    }
+
+    .domain-name {
+      font-size: 12px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: 0.05em;
+    }
+
+    .exec-header-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+
+    .generated-label {
+      font-size: 9px;
+      font-weight: 500;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .generated-date {
+      font-size: 12px;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .exec-content {
+      padding: 8mm 10mm 15mm;
+    }
+
+    .exec-title-section {
+      margin-bottom: 8mm;
+    }
+
+    .exec-title-section h1 {
+      font-family: 'Merriweather', serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: #111827;
+      letter-spacing: -0.02em;
+      margin-bottom: 2mm;
+    }
+
+    .exec-subtitle {
+      font-size: 14px;
+      color: #6b7280;
+      font-weight: 500;
+    }
+
+    .exec-main-grid {
+      display: grid;
+      grid-template-columns: 7fr 5fr;
+      gap: 8mm;
+    }
+
+    .exec-left-column {
+      display: flex;
+      flex-direction: column;
+      gap: 8mm;
+    }
+
+    .exec-right-column {
+      display: flex;
+      flex-direction: column;
+      gap: 8mm;
+    }
+
+    .exec-section {
+      display: flex;
+      flex-direction: column;
+      gap: 2mm;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 2mm;
+      margin-bottom: 1mm;
+    }
+
+    .section-indicator {
+      width: 4px;
+      height: 12px;
+      background: #1337ec;
+      border-radius: 2px;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #111827;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .section-content {
+      font-family: 'Merriweather', serif;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #374151;
+      text-align: justify;
+    }
+
+    .problem-solved-box {
+      background: #f9fafb;
+      padding: 4mm;
+      border-left: 2px solid #e5e7eb;
+    }
+
+    .problem-solved-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 2mm;
+    }
+
+    .problem-solved-item {
+      font-size: 11px;
+      line-height: 1.4;
+      color: #374151;
+      display: flex;
+      align-items: flex-start;
+      gap: 2mm;
+    }
+
+    .check-icon {
+      font-size: 14px;
+      color: #1337ec;
+      flex-shrink: 0;
+      margin-top: 0.5mm;
+    }
+
+    .products-services {
+      display: flex;
+      flex-direction: column;
+      gap: 3mm;
+    }
+
+    .products-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: #111827;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 1mm;
+    }
+
+    .product-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5mm;
+    }
+
+    .product-name {
+      font-size: 12px;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .product-desc {
+      font-size: 10px;
+      color: #6b7280;
+      line-height: 1.4;
+    }
+
+    .target-customers {
+      display: flex;
+      flex-direction: column;
+      gap: 3mm;
+    }
+
+    .customer-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2mm;
+    }
+
+    .customer-tag {
+      background: #f3f4f6;
+      color: #374151;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 1mm 2mm;
+      border-radius: 2px;
+      border: 1px solid #e5e7eb;
+    }
+
+    .stat-box {
+      background: rgba(19, 55, 236, 0.05);
+      padding: 4mm;
+      border-radius: 2px;
+      border: 1px solid rgba(19, 55, 236, 0.1);
+      margin-top: 2mm;
+    }
+
+    .stat-value {
+      font-family: 'Merriweather', serif;
+      font-size: 24px;
+      font-weight: 700;
+      color: #1337ec;
+      margin-bottom: 1mm;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: #4b5563;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+
+    .stat-desc {
+      font-size: 10px;
+      color: #6b7280;
+      line-height: 1.4;
+      margin-top: 1mm;
+    }
+
+    .exec-footer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 4mm 8mm;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 9px;
+      color: #9ca3af;
+      font-weight: 500;
+      background: #ffffff;
+    }
+
+    .exec-footer-left {
+      display: flex;
+      align-items: center;
+      gap: 2mm;
+    }
+
+    .footer-icon {
+      font-size: 14px;
+      color: #1337ec;
+    }
+
+    /* ==================== TOC PAGE ==================== */
+    .toc-page {
+      padding: 8mm 10mm;
+    }
+
+    .toc-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 4mm;
+      margin-bottom: 8mm;
+    }
+
+    .toc-header-left {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .source-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      font-weight: 700;
+      color: #94a3b8;
+      margin-bottom: 1mm;
+    }
+
+    .toc-header-right {
+      text-align: right;
+    }
+
+    .toc-title-section {
+      margin-bottom: 12mm;
+    }
+
+    .toc-title-section h2 {
+      font-size: 36px;
+      font-weight: 800;
+      color: #0f172a;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      margin-bottom: 3mm;
+    }
+
+    .toc-subtitle {
+      font-size: 14px;
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    .toc-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6mm;
+    }
+
+    .toc-item {
+      display: flex;
+      align-items: baseline;
+      width: 100%;
+    }
+
+    .toc-number {
+      width: 8mm;
+      font-size: 16px;
+      font-weight: 700;
+      color: #1337ec;
+    }
+
+    .toc-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+      letter-spacing: -0.01em;
+    }
+
+    .toc-leader {
+      flex-grow: 1;
+      border-bottom: 2px dotted #d1d5db;
+      margin: 0 2mm;
+      position: relative;
+      top: -1mm;
+    }
+
+    .toc-page-num {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .toc-footer {
+      position: absolute;
+      bottom: 4mm;
+      left: 10mm;
+      right: 10mm;
+      padding: 4mm 0;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 9px;
+      color: #9ca3af;
+      font-weight: 500;
+    }
+
+    .toc-footer-left {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .report-id-label {
+      font-size: 9px;
+      font-weight: 500;
+      color: #9ca3af;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 0.5mm;
+    }
+
+    .report-id {
+      font-size: 9px;
+      color: #9ca3af;
+      font-family: monospace;
+    }
+
+    /* ==================== DETAILED SECTION PAGE ==================== */
+    .detailed-page {
+      padding: 20mm 18mm 30mm;
+    }
+
+    .detailed-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 3mm;
+      margin-bottom: 6mm;
+    }
+
+    .header-left {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header-right {
+      text-align: right;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .analysis-for-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: #94a3b8;
+      font-weight: 700;
+      margin-bottom: 0.5mm;
+    }
+
+    .analysis-domain {
+      font-size: 10px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .date-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.2em;
+      color: #94a3b8;
+      font-weight: 700;
+      margin-bottom: 0.5mm;
+    }
+
+    .date-value {
+      font-size: 10px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .detailed-article {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .detailed-section-header {
+      margin-bottom: 5mm;
+    }
+
+    .section-number {
+      font-size: 9px;
+      font-weight: 800;
+      color: #1337ec;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 1mm;
+      display: block;
+    }
+
+    .detailed-section-header h2 {
+      font-family: 'Merriweather', serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+      line-height: 1.2;
+    }
+
+    .ai-summary-box {
+      background: #f8fafc;
+      border-top: 2px solid #e2e8f0;
+      border-bottom: 2px solid #e2e8f0;
+      padding: 4mm;
+      margin-bottom: 6mm;
+      position: relative;
+    }
+
+    .ai-summary-header {
+      display: flex;
+      align-items: center;
+      gap: 1.5mm;
+      margin-bottom: 2mm;
+      color: #1337ec;
+    }
+
+    .ai-icon {
+      font-size: 16px;
+    }
+
+    .ai-summary-title {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #0f172a;
+    }
+
+    .ai-summary-text {
+      font-size: 12px;
+      line-height: 1.6;
+      color: #374151;
+      font-weight: 500;
+      text-align: justify;
+      font-family: 'Merriweather', serif;
+      font-style: italic;
+    }
+
+    .content-columns {
+      columns: 2;
+      column-gap: 6mm;
+      font-size: 10px;
+      line-height: 1.65;
+      text-align: justify;
+      font-family: 'Merriweather', serif;
+      color: #4b5563;
+    }
+
+    .content-section {
+      break-inside: avoid;
+      margin-bottom: 6mm;
+    }
+
+    .content-subtitle {
+      font-family: 'Manrope', sans-serif;
+      font-weight: 700;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 8px;
+      margin-bottom: 2mm;
+      border-bottom: 1px solid #f3f4f6;
+      padding-bottom: 1mm;
+    }
+
+    .content-text {
+      margin-bottom: 3mm;
+    }
+
+    /* ==================== APPENDIX PAGE ==================== */
+    .appendix-page {
+      padding: 24mm 20mm 30mm;
+      page-break-after: auto;
+    }
+
+    .appendix-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 2mm;
+      margin-bottom: 8mm;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    .report-title {
+      color: #1337ec;
+      max-width: 40%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .appendix-title-section {
+      margin-bottom: 6mm;
+    }
+
+    .appendix-section-number {
+      display: flex;
+      align-items: baseline;
+      gap: 2mm;
+      margin-bottom: 1mm;
+    }
+
+    .section-number-label {
+      font-size: 20px;
+      font-weight: 300;
+      color: #cbd5e1;
+      user-select: none;
+    }
+
+    .appendix-title-section h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: -0.01em;
+    }
+
+    .section-description {
+      font-size: 10px;
+      line-height: 1.6;
+      color: #64748b;
+      max-width: 96mm;
+      border-left: 2px solid #1337ec;
+      padding-left: 3mm;
+    }
+
+    .screenshots-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6mm 6mm;
+      align-content: start;
+    }
+
+    .screenshot-item {
+      display: flex;
+      flex-direction: column;
+      break-inside: avoid;
+    }
+
+    .screenshot-header {
+      display: flex;
+      flex-direction: column;
+      gap: 1mm;
+      margin-bottom: 2mm;
+      border-bottom: 1px solid #f3f4f6;
+      padding-bottom: 1mm;
+    }
+
+    .screenshot-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #0f172a;
+      text-transform: uppercase;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .screenshot-url {
+      font-size: 9px;
+      color: #94a3b8;
+      font-family: monospace;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .screenshot-image-container {
+      position: relative;
+      width: 100%;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      background: #f9fafb;
+      padding: 1mm;
+    }
+
+    .screenshot-image {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    .screenshot-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: top;
+    }
+
+    .appendix-footer {
+      margin-top: auto;
+      padding: 4mm 0;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 9px;
+      color: #9ca3af;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <!-- COVER PAGE -->
+  <div class="page cover-page">
+    <div class="cover-watermark">CONFIDENTIAL AUDIT</div>
+    <div class="cover-title">
+      <h1>Website<br>Analysis<br>Report</h1>
+    </div>
+    <div class="cover-prepared">
+      <div class="cover-prepared-label">Prepared For</div>
+      <div class="cover-company">{{COMPANY_NAME}}</div>
+      <a href="{{COMPANY_URL}}" class="cover-url">{{COMPANY_URL}}</a>
+    </div>
+    <div class="cover-footer">
+      <div class="cover-date">Generated on {{GENERATED_DATE}}</div>
+      <div class="cover-powered">Powered by <strong>SiteToPDF</strong></div>
+    </div>
+  </div>
+
+  <!-- EXECUTIVE SUMMARY PAGE -->
+  <div class="page exec-summary-page">
+    <div class="primary-bar"></div>
+    <div class="exec-header">
+      <div class="exec-header-left">
+        <span class="confidential-label">Confidential Report</span>
+        <span class="domain-name">{{DOMAIN_NAME}}</span>
+      </div>
+      <div class="exec-header-right">
+        <span class="generated-label">Generated on</span>
+        <span class="generated-date">{{GENERATED_DATE}}</span>
+      </div>
+    </div>
+    <div class="exec-content">
+      <div class="exec-title-section">
+        <h1>Executive Summary</h1>
+        <p class="exec-subtitle">A high-level overview of business performance and market positioning.</p>
+      </div>
+      <div class="exec-main-grid">
+        <div class="exec-left-column">
+          <div class="exec-section">
+            <div class="section-header">
+              <div class="section-indicator"></div>
+              <h3 class="section-title">Company Overview</h3>
+            </div>
+            <p class="section-content">{{COMPANY_OVERVIEW}}</p>
+          </div>
+          <div class="exec-section">
+            <div class="section-header">
+              <div class="section-indicator"></div>
+              <h3 class="section-title">Problem Solved</h3>
+            </div>
+            <div class="problem-solved-box">
+              <ul class="problem-solved-list">
+                {{PROBLEM_SOLVED_ITEMS}}
+              </ul>
+            </div>
+          </div>
+          <div class="exec-section">
+            <div class="section-header">
+              <div class="section-indicator"></div>
+              <h3 class="section-title">Key Differentiators</h3>
+            </div>
+            <p class="section-content">{{KEY_DIFFERENTIATORS}}</p>
+          </div>
+        </div>
+        <div class="exec-right-column">
+          <div class="products-services">
+            <h3 class="products-title">Products & Services</h3>
+            {{PRODUCTS_SERVICES}}
+          </div>
+          <div class="target-customers">
+            <h3 class="products-title">Target Customers</h3>
+            <div class="customer-tags">
+              {{TARGET_CUSTOMERS}}
+            </div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-value">{{STAT_VALUE}}</div>
+            <div class="stat-label">{{STAT_LABEL}}</div>
+            <p class="stat-desc">{{STAT_DESC}}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="exec-footer">
+      <div class="exec-footer-left">
+        <span class="material-symbols-outlined footer-icon">picture_as_pdf</span>
+        <span>SiteToPDF AI Analysis • Private & Confidential</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLE OF CONTENTS PAGE -->
+  <div class="page toc-page">
+    <div class="toc-header">
+      <div class="toc-header-left">
+        <span class="source-label">Source Website</span>
+        <span class="domain-name">{{DOMAIN_NAME}}</span>
+      </div>
+      <div class="toc-header-right">
+        <span class="source-label">Generated</span>
+        <span class="domain-name">{{GENERATED_DATE}}</span>
+      </div>
+    </div>
+    <div class="toc-title-section">
+      <h2>Table of Contents</h2>
+      <p class="toc-subtitle">Comprehensive business analysis & website report.</p>
+    </div>
+    <div class="toc-list">
+      {{TOC_ITEMS}}
+    </div>
+    <div class="toc-footer">
+      <div class="toc-footer-left">
+        <span class="report-id-label">Report ID</span>
+        <span class="report-id">{{REPORT_ID}}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- DETAILED SECTIONS -->
+  {{DETAILED_SECTIONS}}
+
+  <!-- APPENDIX (SCREENSHOTS) -->
+  {{APPENDIX_SECTION}}
+</body>
+</html>
