@@ -6,11 +6,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { crawlWebsite } from "@/lib/crawler";
+import { enrichPagesWithFilterMetadata } from "@/lib/crawler/page-filter";
 
 // 요청 스키마 정의
 const CrawlRequestSchema = z.object({
   url: z.string().url("유효한 URL을 입력해주세요"),
   maxPages: z.number().min(1).max(50).optional().default(30), // MVP: 무료 버전은 50페이지 제한
+  crawlMode: z.enum(['full', 'smart']).optional().default('smart'), // 크롤링 모드
 });
 
 type CrawlRequest = z.infer<typeof CrawlRequestSchema>;
@@ -21,10 +23,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = CrawlRequestSchema.parse(body);
 
-    const { url, maxPages } = validatedData;
+    const { url, maxPages, crawlMode } = validatedData;
 
     console.log(
-      `[API] 크롤링 시작: ${url} (최대 ${maxPages}페이지)`
+      `[API] 크롤링 시작: ${url} (최대 ${maxPages}페이지, 모드: ${crawlMode})`
     );
 
     // 2. SSE 스트림 생성
@@ -51,9 +53,24 @@ export async function POST(request: NextRequest) {
             url,
             maxPages,
             sameDomainOnly: true,
+            crawlMode, // 크롤링 모드 전달
           }, onProgress);
 
           console.log(`[API] 크롤링 완료: ${crawlResult.totalPages}페이지 수집됨`);
+
+          // 페이지에 필터 메타데이터 추가
+          // 스마트 모드: 이미 크롤링 단계에서 필터링했으므로 모든 페이지가 중요 페이지
+          // 전체 모드: 크롤링 후 필터 메타데이터 추가 (사용자가 선택할 수 있도록)
+          const enrichedPages = crawlMode === 'smart'
+            ? crawlResult.pages.map(page => ({
+                ...page,
+                defaultChecked: true, // 스마트 모드: 모든 크롤링된 페이지는 중요
+                importance: 100,
+                pageType: 'Important',
+              }))
+            : enrichPagesWithFilterMetadata(crawlResult.pages); // 전체 모드: 필터 메타데이터 추가
+
+          console.log(`[API] 필터링 완료 (${crawlMode} 모드): ${enrichedPages.filter(p => p.defaultChecked).length}/${enrichedPages.length}페이지 추천`);
 
           // 완료 데이터 전송
           const completeData = {
@@ -63,17 +80,22 @@ export async function POST(request: NextRequest) {
               crawl: {
                 totalPages: crawlResult.totalPages,
                 failedUrls: crawlResult.failedUrls,
+                crawlMode, // 크롤링 모드 전달
                 duration: `${
                   (crawlResult.endTime.getTime() -
                     crawlResult.startTime.getTime()) /
                   1000
                 }초`,
-                pages: crawlResult.pages.map((page) => ({
+                pages: enrichedPages.map((page) => ({
                   url: page.url,
                   title: page.title,
                   content: page.content,
                   depth: page.depth,
                   screenshot: page.screenshot, // 스크린샷 데이터 포함
+                  defaultChecked: page.defaultChecked, // 기본 체크 상태
+                  importance: page.importance, // 중요도 점수
+                  exclusionReason: page.exclusionReason, // 체크 해제 이유
+                  pageType: page.pageType, // 페이지 타입
                 })),
               },
             },

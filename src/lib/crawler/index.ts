@@ -5,6 +5,7 @@
 
 import { chromium, Browser, Page } from 'playwright';
 import type { CrawlConfig, CrawledPage, CrawlResult } from '@/types';
+import { shouldExcludeByDefault } from './page-filter';
 
 export class WebCrawler {
   private browser: Browser | null = null;
@@ -12,6 +13,7 @@ export class WebCrawler {
   private crawledPages: CrawledPage[] = [];
   private config: CrawlConfig;
   private onProgress?: (current: number, total: number, url: string) => void;
+  private skippedUrls: Set<string> = new Set(); // 스마트 모드에서 제외된 URL 추적
 
   constructor(config: CrawlConfig, onProgress?: (current: number, total: number, url: string) => void) {
     this.config = config;
@@ -35,6 +37,11 @@ export class WebCrawler {
       await this.crawlPage(this.config.url, 0);
 
       const endTime = new Date();
+
+      // 스마트 모드 통계 출력
+      if (this.config.crawlMode === 'smart' && this.skippedUrls.size > 0) {
+        console.log(`[Crawler] 🎯 Smart Mode: Skipped ${this.skippedUrls.size} filtered URLs, Crawled ${this.crawledPages.length} important pages`);
+      }
 
       return {
         pages: this.crawledPages,
@@ -89,6 +96,13 @@ export class WebCrawler {
 
     // 같은 도메인만 크롤링
     if (this.config.sameDomainOnly && !this.isSameDomain(url)) {
+      return;
+    }
+
+    // 스마트 모드: URL 패턴 기반 필터링 (크롤링 전에 제외)
+    if (this.config.crawlMode === 'smart' && shouldExcludeByDefault(url)) {
+      this.skippedUrls.add(normalizedUrl);
+      console.log(`[Crawler] 🚫 Skipped (Smart Mode): ${url}`);
       return;
     }
 

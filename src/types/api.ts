@@ -8,6 +8,7 @@ import type { AISummary } from './index';
 export interface CrawlAPIRequest {
   url: string;
   maxPages?: number;
+  crawlMode?: 'full' | 'smart'; // 크롤링 모드
 }
 
 // POST /api/crawl 응답 (크롤링만)
@@ -41,6 +42,7 @@ export interface GeneratePDFRequest {
     pageSummary?: string; // 페이지별 AI 요약
   }>;
   detailLevel: 'basic' | 'detailed' | 'comprehensive';
+  crawlMode?: 'full' | 'smart'; // 크롤링 모드
 }
 
 // POST /api/generate-pdf 응답

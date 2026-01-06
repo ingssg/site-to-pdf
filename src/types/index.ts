@@ -3,12 +3,15 @@
  */
 
 // 크롤링 관련 타입
+export type CrawlMode = 'full' | 'smart';
+
 export interface CrawlConfig {
   url: string;
   maxPages: number;
   maxDepth?: number;
   sameDomainOnly: boolean;
   excludePatterns?: string[];
+  crawlMode?: CrawlMode; // 'full': 전체 크롤링 (법적 증거), 'smart': 스마트 모드 (비즈니스 분석)
 }
 
 export interface CrawledPage {
@@ -19,6 +22,11 @@ export interface CrawledPage {
   pageSummary?: string; // 페이지별 AI 요약 (3-4줄)
   timestamp: Date;
   depth: number;
+  // 필터링 관련 필드
+  defaultChecked?: boolean; // 기본 체크 상태 (true = 추천, false = 선택사항)
+  importance?: number; // 중요도 점수 (0-100)
+  exclusionReason?: string; // 체크 해제 이유 (예: "로그인 페이지", "약관 페이지")
+  pageType?: string; // 페이지 타입 (예: "Homepage", "Product", "Contact")
 }
 
 export interface CrawlResult {
@@ -36,6 +44,7 @@ export interface PDFGenerationOptions {
   orientation?: 'portrait' | 'landscape';
   quality?: 'low' | 'medium' | 'high';
   detailLevel?: 'basic' | 'detailed' | 'comprehensive';
+  crawlMode?: CrawlMode; // 크롤링 모드 (스크린샷 PDF 생성에 영향)
 }
 
 export interface PDFResult {
