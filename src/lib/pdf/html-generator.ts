@@ -359,7 +359,8 @@ export class HTMLPDFGenerator {
    */
   async generatePDFs(
     pages: CrawledPage[],
-    aiSummary?: AISummary | null
+    aiSummary?: AISummary | null,
+    crawlMode?: 'full' | 'smart'
   ): Promise<PDFResult> {
     try {
       await this.initBrowser();
@@ -431,9 +432,10 @@ export class HTMLPDFGenerator {
       // 스크린샷 PDF 생성
       console.log("[PDF] 스크린샷 PDF 생성 시작...");
       const screenshotPdf = await this.generateScreenshotPDF(
-        pagesWithScreenshots,
+        pages, // 모든 페이지 전달 (필터링은 generateScreenshotPDF에서 수행)
         domain,
-        generatedDate
+        generatedDate,
+        crawlMode // 크롤링 모드 전달
       );
       console.log("[PDF] 스크린샷 PDF 생성 완료");
 
@@ -531,6 +533,76 @@ export class HTMLPDFGenerator {
   }
 
   /**
+   * URL에서 페이지 타입 감지
+   */
+  private detectPageType(url: string): { type: string; color: string } {
+    try {
+      const urlObj = new URL(url);
+      const pathname = urlObj.pathname.toLowerCase();
+
+      // Homepage detection
+      if (pathname === '/' || pathname === '/index' || pathname === '/home' || pathname === '/index.html') {
+        return { type: 'Homepage', color: '#eff6ff' };
+      }
+
+      // Product pages
+      if (pathname.includes('/product') || pathname.includes('/shop') || pathname.includes('/buy') || pathname.includes('/store')) {
+        return { type: 'Product', color: '#f0fdf4' };
+      }
+
+      // Contact pages
+      if (pathname.includes('/contact') || pathname.includes('/support') || pathname.includes('/help')) {
+        return { type: 'Contact', color: '#fef3c7' };
+      }
+
+      // About pages
+      if (pathname.includes('/about') || pathname.includes('/team') || pathname.includes('/company')) {
+        return { type: 'About', color: '#fce7f3' };
+      }
+
+      // Blog/News pages
+      if (pathname.includes('/blog') || pathname.includes('/news') || pathname.includes('/article') || pathname.includes('/post')) {
+        return { type: 'Blog/News', color: '#f3e8ff' };
+      }
+
+      // Pricing pages
+      if (pathname.includes('/pricing') || pathname.includes('/plans') || pathname.includes('/price')) {
+        return { type: 'Pricing', color: '#dbeafe' };
+      }
+
+      // Documentation pages
+      if (pathname.includes('/docs') || pathname.includes('/documentation') || pathname.includes('/guide')) {
+        return { type: 'Documentation', color: '#e0f2fe' };
+      }
+
+      // Default
+      return { type: 'General', color: '#f1f5f9' };
+    } catch {
+      return { type: 'General', color: '#f1f5f9' };
+    }
+  }
+
+  /**
+   * 퀵 인사이트 생성 (AI 요약의 핵심 1-2문장)
+   */
+  private generateQuickInsight(aiSummary: string): string {
+    // AI 요약의 첫 2문장을 추출
+    const sentences = aiSummary.split(/[.!?]\s+/);
+    const insight = sentences.slice(0, 2).join('. ');
+    return insight.length > 150 ? insight.substring(0, 150) + '...' : insight + '.';
+  }
+
+  /**
+   * 컨텐츠 길이를 읽기 쉬운 형태로 변환
+   */
+  private formatContentLength(content: string): string {
+    const length = content.length;
+    if (length < 1000) return `${length} chars`;
+    if (length < 10000) return `${(length / 1000).toFixed(1)}k chars`;
+    return `${(length / 1000).toFixed(0)}k chars`;
+  }
+
+  /**
    * Page Sections HTML 생성 (각 페이지별 썸네일 + AI 요약)
    */
   private buildPageSections(
@@ -556,6 +628,25 @@ export class HTMLPDFGenerator {
       // AI 요약 (없으면 기본 메시지)
       const aiSummary = page.pageSummary || "No AI summary available for this page.";
 
+      // 페이지 타입 감지
+      const pageType = this.detectPageType(page.url);
+
+      // 퀵 인사이트 생성
+      const quickInsight = this.generateQuickInsight(aiSummary);
+
+      // 메타데이터 추출
+      const crawlTime = page.timestamp
+        ? new Date(page.timestamp).toLocaleString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+        : 'Unknown';
+      const depth = page.depth || 0;
+      const contentLength = this.formatContentLength(page.content || '');
+
       sections.push(`
         <div class="page page-section">
           <div class="page-section-header">
@@ -574,9 +665,58 @@ export class HTMLPDFGenerator {
               <h2>${this.escapeHtml(page.title || "Untitled")}</h2>
               <div class="page-url">${this.escapeHtml(page.url)}</div>
             </div>
-            <div class="screenshot-thumbnail">
-              <img src="${screenshotBase64}" alt="${this.escapeHtml(page.title || "Screenshot")}">
+
+            <!-- 그리드 레이아웃: 썸네일 + 메타데이터 -->
+            <div class="page-overview-grid">
+              <!-- 왼쪽: 썸네일 -->
+              <div class="screenshot-thumbnail">
+                <img src="${screenshotBase64}" alt="${this.escapeHtml(page.title || "Screenshot")}">
+              </div>
+
+              <!-- 오른쪽: 메타데이터 -->
+              <div class="page-metadata">
+                <div>
+                  <span class="page-type-badge" style="background: ${pageType.color};">${pageType.type}</span>
+                </div>
+                <div class="metadata-card">
+                  <div class="metadata-label">Page Information</div>
+                  <div class="metadata-items">
+                    <div class="metadata-item">
+                      <span class="metadata-icon">📅</span>
+                      <div>
+                        <div class="metadata-item-label">Crawled</div>
+                        <div class="metadata-item-value">${crawlTime}</div>
+                      </div>
+                    </div>
+                    <div class="metadata-item">
+                      <span class="metadata-icon">🔗</span>
+                      <div>
+                        <div class="metadata-item-label">Depth Level</div>
+                        <div class="metadata-item-value">Level ${depth}</div>
+                      </div>
+                    </div>
+                    <div class="metadata-item">
+                      <span class="metadata-icon">📊</span>
+                      <div>
+                        <div class="metadata-item-label">Content Size</div>
+                        <div class="metadata-item-value">${contentLength}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
+
+            <!-- 퀵 인사이트 -->
+            <div class="quick-insights">
+              <div class="quick-insights-icon">💡</div>
+              <div class="quick-insights-content">
+                <div class="quick-insights-label">Quick Insight</div>
+                <div class="quick-insights-text">${this.escapeHtml(quickInsight)}</div>
+              </div>
+            </div>
+
+            <!-- 전체 AI 요약 -->
             <div class="ai-summary-box">
               <div class="ai-summary-header">
                 <span class="material-symbols-outlined ai-icon">psychology</span>
@@ -607,16 +747,30 @@ export class HTMLPDFGenerator {
   private async generateScreenshotPDF(
     pages: CrawledPage[],
     domain: string,
-    generatedDate: string
+    generatedDate: string,
+    crawlMode?: 'full' | 'smart'
   ): Promise<Buffer> {
     if (pages.length === 0) {
+      return Buffer.alloc(0);
+    }
+
+    // 크롤링 모드에 따라 페이지 필터링
+    // Full 모드: 모든 페이지 포함 (법적 증거 보존)
+    // Smart 모드: 중요한 페이지만 포함 (defaultChecked !== false)
+    const filteredPages = crawlMode === 'full'
+      ? pages // Full 모드: 모든 페이지
+      : pages.filter(p => p.defaultChecked !== false); // Smart 모드: 중요 페이지만
+
+    console.log(`[PDF] 스크린샷 PDF 생성 (${crawlMode || 'smart'} 모드): ${filteredPages.length}/${pages.length}페이지`);
+
+    if (filteredPages.length === 0) {
       return Buffer.alloc(0);
     }
 
     const template = this.loadTemplate("screenshot-pdf");
 
     // 스크린샷 페이지들 생성
-    const screenshotPages = pages
+    const screenshotPages = filteredPages
       .map((page, index) => {
         const screenshotBase64 = page.screenshot
           ? `data:image/jpeg;base64,${page.screenshot.toString("base64")}`
@@ -627,7 +781,7 @@ export class HTMLPDFGenerator {
         return `
           <div class="page screenshot-page">
             <div class="screenshot-header">
-              <div class="screenshot-page-number">Screenshot ${index + 1} of ${pages.length}</div>
+              <div class="screenshot-page-number">Screenshot ${index + 1} of ${filteredPages.length}</div>
               <h2 class="screenshot-title">${this.escapeHtml(page.title || "Untitled")}</h2>
               <div class="screenshot-url">${this.escapeHtml(page.url)}</div>
             </div>
@@ -647,7 +801,7 @@ export class HTMLPDFGenerator {
 
     const html = this.replaceTemplateVars(template, {
       DOMAIN_NAME: domain,
-      TOTAL_PAGES: pages.length.toString(),
+      TOTAL_PAGES: filteredPages.length.toString(),
       GENERATED_DATE: generatedDate,
       SCREENSHOT_PAGES: screenshotPages,
     });

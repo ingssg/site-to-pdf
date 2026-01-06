@@ -20,12 +20,14 @@ const GeneratePDFRequestSchema = z.object({
       depth: z.number(),
       screenshot: z.any().optional(), // Buffer는 any로 처리
       pageSummary: z.string().optional(), // 페이지별 AI 요약
+      defaultChecked: z.boolean().optional(), // 필터링 체크 상태
     })
   ),
   detailLevel: z
     .enum(["basic", "detailed", "comprehensive"])
     .optional()
     .default("detailed"),
+  crawlMode: z.enum(['full', 'smart']).optional().default('smart'), // 크롤링 모드
 });
 
 export async function POST(request: NextRequest) {
@@ -34,10 +36,10 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = GeneratePDFRequestSchema.parse(body);
 
-    const { pages, detailLevel } = validatedData;
+    const { pages, detailLevel, crawlMode } = validatedData;
 
     console.log(
-      `[API] PDF 생성 시작: ${pages.length}개 페이지 (상세도: ${detailLevel})`
+      `[API] PDF 생성 시작: ${pages.length}개 페이지 (상세도: ${detailLevel}, 모드: ${crawlMode})`
     );
 
     // 2. SSE 스트림 생성
@@ -62,17 +64,24 @@ export async function POST(request: NextRequest) {
           }));
 
           // 각 페이지 AI 요약 생성 (병렬 처리)
+          // 필터링되지 않은 페이지(defaultChecked === true)만 AI 요약 생성
           sendProgress('페이지별 AI 요약 생성 중...', 20);
           console.log("[API] 페이지별 AI 요약 생성 시작...");
-          const pageSummaries = await Promise.all(
-            crawledPages.map(page => generatePageSummary(page))
+
+          await Promise.all(
+            crawledPages.map(async (page) => {
+              if (page.defaultChecked !== false) {
+                // defaultChecked가 true이거나 undefined인 경우 요약 생성
+                page.pageSummary = await generatePageSummary(page);
+              } else {
+                // 필터링된 페이지는 요약 생성 안 함
+                page.pageSummary = undefined;
+              }
+            })
           );
 
-          // 요약을 페이지에 할당
-          crawledPages.forEach((page, index) => {
-            page.pageSummary = pageSummaries[index];
-          });
-          console.log("[API] 페이지별 AI 요약 생성 완료");
+          const summaryCount = crawledPages.filter(p => p.pageSummary).length;
+          console.log(`[API] 페이지별 AI 요약 생성 완료 (${summaryCount}/${crawledPages.length}페이지)`);
 
           // 전체 사이트 AI 요약 생성
           sendProgress('전체 사이트 AI 요약 생성 중...', 40);
@@ -85,7 +94,7 @@ export async function POST(request: NextRequest) {
           console.log("[API] PDF 생성 시작...");
           const pdfResult = await generatePDFFromPages(
             crawledPages,
-            { detailLevel },
+            { detailLevel, crawlMode }, // crawlMode 전달
             aiSummary
           );
           console.log(

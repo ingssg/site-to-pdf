@@ -1613,7 +1613,7 @@ export async function generatePDFFromPages(
   });
 
   try {
-    return await generator.generatePDFs(pages, aiSummary);
+    return await generator.generatePDFs(pages, aiSummary, options?.crawlMode);
   } finally {
     await generator.close();
   }

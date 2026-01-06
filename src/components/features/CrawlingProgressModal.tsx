@@ -95,8 +95,8 @@ export default function CrawlingProgressModal({
       <div className="w-full mb-6 px-4">
         <div className="flex items-center justify-center w-full">
           <div className="flex h-11 w-full items-center justify-center gap-x-2.5 rounded-full bg-slate-100 dark:bg-slate-700/50 pl-4 pr-5 py-2 border border-slate-200 dark:border-slate-600/50">
-            <span className="material-symbols-outlined text-primary text-[18px] animate-spin">sync</span>
-            <p className="text-slate-700 dark:text-slate-200 text-sm font-medium leading-normal">
+            <span className="material-symbols-outlined text-primary text-[18px] animate-spin flex-shrink-0">sync</span>
+            <p className="text-slate-700 dark:text-slate-200 text-sm font-medium leading-normal truncate">
               Processing: {getUrlPath(progress?.url)}
             </p>
           </div>
