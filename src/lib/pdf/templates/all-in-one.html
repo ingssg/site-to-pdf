@@ -12,14 +12,15 @@
     @page {
       size: A4;
       margin: 0;
-      @bottom-center {
-        content: "Page " counter(page);
-        font-family: 'Manrope', sans-serif;
-        font-size: 9px;
-        font-weight: 700;
-        color: #9ca3af;
-        margin-bottom: 10mm;
-      }
+    }
+
+    /* Page counter for automatic numbering */
+    body {
+      counter-reset: page-number;
+    }
+
+    .page {
+      counter-increment: page-number;
     }
 
     * {
@@ -112,10 +113,19 @@
 
     .cover-footer {
       position: absolute;
-      bottom: 20mm;
+      bottom: 15mm;
       left: 0;
       right: 0;
       text-align: center;
+    }
+
+    .cover-page-number {
+      position: absolute;
+      bottom: 10mm;
+      right: 20mm;
+      font-size: 9px;
+      font-weight: 700;
+      color: #9ca3af;
     }
 
     .cover-date {
@@ -414,6 +424,12 @@
       gap: 2mm;
     }
 
+    .exec-footer-right {
+      font-size: 9px;
+      font-weight: 700;
+      color: #9ca3af;
+    }
+
     .footer-icon {
       font-size: 14px;
       color: #1337ec;
@@ -529,6 +545,12 @@
     .toc-footer-left {
       display: flex;
       flex-direction: column;
+    }
+
+    .toc-footer-right {
+      font-size: 9px;
+      font-weight: 700;
+      color: #9ca3af;
     }
 
     .report-id-label {
@@ -658,13 +680,12 @@
     }
 
     .ai-summary-text {
-      font-size: 12px;
+      font-size: 14px;
       line-height: 1.6;
       color: #374151;
-      font-weight: 500;
+      font-weight: 400;
       text-align: justify;
       font-family: 'Merriweather', serif;
-      font-style: italic;
     }
 
     .content-columns {
@@ -698,9 +719,18 @@
       margin-bottom: 3mm;
     }
 
+    .detailed-footer {
+      position: absolute;
+      bottom: 10mm;
+      right: 18mm;
+      font-size: 9px;
+      font-weight: 700;
+      color: #9ca3af;
+    }
+
     /* ==================== APPENDIX PAGE ==================== */
     .appendix-page {
-      padding: 24mm 20mm 30mm;
+      padding: 20mm 20mm 25mm;
       page-break-after: auto;
     }
 
@@ -727,7 +757,7 @@
     }
 
     .appendix-title-section {
-      margin-bottom: 6mm;
+      margin-bottom: 4mm;
     }
 
     .appendix-section-number {
@@ -764,8 +794,9 @@
     .screenshots-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 6mm 6mm;
+      gap: 3mm 4mm;
       align-content: start;
+      margin-bottom: 3mm;
     }
 
     .screenshot-item {
@@ -777,10 +808,10 @@
     .screenshot-header {
       display: flex;
       flex-direction: column;
-      gap: 1mm;
-      margin-bottom: 2mm;
+      gap: 0.5mm;
+      margin-bottom: 1.5mm;
       border-bottom: 1px solid #f3f4f6;
-      padding-bottom: 1mm;
+      padding-bottom: 0.5mm;
     }
 
     .screenshot-title {
@@ -814,7 +845,7 @@
     .screenshot-image {
       position: relative;
       width: 100%;
-      aspect-ratio: 16 / 10;
+      aspect-ratio: 16 / 9;
       overflow: hidden;
       background: #ffffff;
     }
@@ -837,6 +868,206 @@
       color: #9ca3af;
       font-weight: 500;
     }
+
+    .appendix-footer-right {
+      font-size: 9px;
+      font-weight: 700;
+      color: #9ca3af;
+    }
+
+    /* ==================== PAGE SECTION STYLES ==================== */
+    .page-section {
+      padding: 20mm 18mm 25mm;
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
+    }
+
+    .page-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+    }
+
+    .page-section-article {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .page-title-section {
+      margin-bottom: 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .page-number-label {
+      font-size: 9px;
+      font-weight: 800;
+      color: #1337ec;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .page-type-badge {
+      display: inline-block;
+      font-size: 8px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 4px 8px;
+      border-radius: 3px;
+      background: #eff6ff;
+      color: #1e40af;
+      border: 1px solid #bfdbfe;
+    }
+
+    .page-title-content {
+      flex: 1;
+    }
+
+    .page-title-section h2 {
+      font-family: 'Merriweather', serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+      line-height: 1.3;
+      margin-bottom: 4px;
+    }
+
+    .page-url {
+      font-size: 8px;
+      color: #64748b;
+      font-family: monospace;
+      word-break: break-all;
+    }
+
+    .page-overview-grid {
+      display: grid;
+      grid-template-columns: 60mm 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .screenshot-thumbnail {
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      background: #f9fafb;
+      padding: 4px;
+      height: fit-content;
+    }
+
+    .screenshot-thumbnail img {
+      width: 100%;
+      height: auto;
+      display: block;
+      max-height: 55mm;
+      object-fit: contain;
+      object-position: top;
+    }
+
+    .page-metadata {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .metadata-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      padding: 12px;
+    }
+
+    .metadata-title {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+
+    .metadata-items {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .metadata-item {
+      font-size: 8px;
+      color: #475569;
+    }
+
+    .metadata-label {
+      font-weight: 600;
+      color: #334155;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    .metadata-value {
+      font-weight: 400;
+      color: #64748b;
+    }
+
+    .quick-insights {
+      background: #fef3c7;
+      border-left: 3px solid #f59e0b;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+    }
+
+    .quick-insights-title {
+      font-size: 8px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #92400e;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .quick-insights-text {
+      font-size: 11px;
+      line-height: 1.5;
+      color: #78350f;
+      font-weight: 500;
+      font-family: 'Merriweather', serif;
+    }
+
+    .page-section-footer {
+      margin-top: auto;
+      padding: 16px 0;
+      border-top: 1px solid #e5e7eb;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 9px;
+      color: #9ca3af;
+      font-family: 'Manrope', sans-serif;
+      font-weight: 500;
+    }
+
+    .page-section-footer .lock-icon {
+      font-size: 14px;
+      color: #1337ec;
+    }
+
+    .page-section-footer .page-number {
+      font-size: 9px;
+      font-weight: 700;
+      color: #9ca3af;
+    }
   </style>
 </head>
 <body>
@@ -854,6 +1085,27 @@
     <div class="cover-footer">
       <div class="cover-date">Generated on {{GENERATED_DATE}}</div>
       <div class="cover-powered">Powered by <strong>SiteToPDF</strong></div>
+    </div>
+  </div>
+
+  <!-- TABLE OF CONTENTS PAGE -->
+  <div class="page toc-page">
+    <div class="toc-header">
+      <div class="toc-header-left">
+        <span class="source-label">Source Website</span>
+        <span class="domain-name">{{DOMAIN_NAME}}</span>
+      </div>
+      <div class="toc-header-right">
+        <span class="source-label">Generated</span>
+        <span class="domain-name">{{GENERATED_DATE}}</span>
+      </div>
+    </div>
+    <div class="toc-title-section">
+      <h2>Table of Contents</h2>
+      <p class="toc-subtitle">Comprehensive business analysis & website report.</p>
+    </div>
+    <div class="toc-list">
+      {{TOC_ITEMS}}
     </div>
   </div>
 
@@ -927,40 +1179,11 @@
         <span class="material-symbols-outlined footer-icon">picture_as_pdf</span>
         <span>SiteToPDF AI Analysis • Private & Confidential</span>
       </div>
+      <div class="exec-footer-right">Page 1</div>
     </div>
   </div>
 
-  <!-- TABLE OF CONTENTS PAGE -->
-  <div class="page toc-page">
-    <div class="toc-header">
-      <div class="toc-header-left">
-        <span class="source-label">Source Website</span>
-        <span class="domain-name">{{DOMAIN_NAME}}</span>
-      </div>
-      <div class="toc-header-right">
-        <span class="source-label">Generated</span>
-        <span class="domain-name">{{GENERATED_DATE}}</span>
-      </div>
-    </div>
-    <div class="toc-title-section">
-      <h2>Table of Contents</h2>
-      <p class="toc-subtitle">Comprehensive business analysis & website report.</p>
-    </div>
-    <div class="toc-list">
-      {{TOC_ITEMS}}
-    </div>
-    <div class="toc-footer">
-      <div class="toc-footer-left">
-        <span class="report-id-label">Report ID</span>
-        <span class="report-id">{{REPORT_ID}}</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- DETAILED SECTIONS -->
-  {{DETAILED_SECTIONS}}
-
-  <!-- APPENDIX (SCREENSHOTS) -->
-  {{APPENDIX_SECTION}}
+  <!-- PAGE SECTIONS (THUMBNAIL + AI SUMMARY) -->
+  {{PAGE_SECTIONS}}
 </body>
 </html>

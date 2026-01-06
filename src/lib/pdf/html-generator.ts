@@ -377,28 +377,23 @@ export class HTMLPDFGenerator {
       const pagesWithScreenshots = pages.filter((page) => page.screenshot);
 
       // TOC 항목 생성
-      const tocItems: TableOfContentsItem[] = [
-        { title: `${domain} - Website Analysis`, url: firstPageUrl, pageNumber: 1 },
-      ];
+      const tocItems: TableOfContentsItem[] = [];
 
+      // Executive Summary는 page 1
       if (aiSummary) {
-        tocItems.push({ title: "Executive Summary", url: "AI Summary", pageNumber: 2 });
+        tocItems.push({ title: "Executive Summary", url: "AI Summary", pageNumber: 1 });
       }
 
-      tocItems.push({ title: "Table of Contents", url: "TOC", pageNumber: 3 });
-
-      let sectionNumber = 4;
-      if (aiSummary?.mainServices && aiSummary.mainServices.length > 0) {
-        tocItems.push({ title: "Products & Services", url: "Products", pageNumber: sectionNumber });
-        sectionNumber++;
-      }
-      if (aiSummary?.keyStrengths && aiSummary.keyStrengths.length > 0) {
-        tocItems.push({ title: "Key Strengths", url: "Strengths", pageNumber: sectionNumber });
-        sectionNumber++;
-      }
-      if (pagesWithScreenshots.length > 0) {
-        tocItems.push({ title: "Appendix: Website Evidence", url: "Appendix", pageNumber: sectionNumber });
-      }
+      // 각 크롤링된 페이지를 목차에 추가 (page 2부터 시작)
+      let pageNumber = 2;
+      pagesWithScreenshots.forEach((page, index) => {
+        tocItems.push({
+          title: page.title || page.url,
+          url: page.url,
+          pageNumber: pageNumber,
+        });
+        pageNumber++;
+      });
 
       // all-in-one.html 템플릿 로드
       const template = this.loadTemplate("all-in-one");
@@ -423,8 +418,7 @@ export class HTMLPDFGenerator {
         STAT_LABEL: "Time Reduction",
         STAT_DESC: "Average savings in report generation time per analyst.",
         TOC_ITEMS: this.buildTocItems(tocItems),
-        DETAILED_SECTIONS: this.buildDetailedSections(aiSummary, domain, generatedDate),
-        APPENDIX_SECTION: this.buildAppendixSection(pagesWithScreenshots, domain, generatedDate, reportId),
+        PAGE_SECTIONS: this.buildPageSections(pagesWithScreenshots, domain, generatedDate),
       };
 
       // 템플릿 변수 치환
@@ -433,6 +427,15 @@ export class HTMLPDFGenerator {
       // 단일 PDF 생성
       const pdfBuffer = await this.htmlToPDF(html);
       const totalSize = pdfBuffer.length;
+
+      // 스크린샷 PDF 생성
+      console.log("[PDF] 스크린샷 PDF 생성 시작...");
+      const screenshotPdf = await this.generateScreenshotPDF(
+        pagesWithScreenshots,
+        domain,
+        generatedDate
+      );
+      console.log("[PDF] 스크린샷 PDF 생성 완료");
 
       // 개별 PDF 생성 (전체 PDF를 각 섹션으로 분리)
       const individualPdfs: Buffer[] = [pdfBuffer]; // 현재는 전체 PDF만 반환
@@ -444,6 +447,7 @@ export class HTMLPDFGenerator {
         tableOfContents: tocItems,
         totalSize,
         warnings: [],
+        screenshotPdf, // 스크린샷 PDF 추가
       };
     } finally {
       if (this.browser) {
@@ -513,81 +517,142 @@ export class HTMLPDFGenerator {
    */
   private buildTocItems(tocItems: TableOfContentsItem[]): string {
     return tocItems
-      .filter((item) => item.title !== "Table of Contents")
       .map((item, index) => {
-        const isMainItem = !item.title.includes(".");
-        const number = isMainItem ? String(index + 1).padStart(2, "0") : item.title.split(".")[0];
-
-        if (isMainItem) {
-          return `
-            <div class="toc-item">
-              <span class="toc-number">${number}</span>
-              <span class="toc-title">${this.escapeHtml(item.title)}</span>
-              <div class="toc-leader"></div>
-              <span class="toc-page">${item.pageNumber}</span>
-            </div>
-          `;
-        } else {
-          return `
-            <div class="toc-subitem">
-              <span class="toc-subnumber">${number}</span>
-              <span class="toc-subtitle">${this.escapeHtml(item.title.replace(/^\d+\.\d+\s*/, ""))}</span>
-              <div class="toc-subleader"></div>
-              <span class="toc-subpage">${item.pageNumber}</span>
-            </div>
-          `;
-        }
+        return `
+          <div class="toc-item">
+            <span class="toc-number">-</span>
+            <span class="toc-title">${this.escapeHtml(item.title)}</span>
+            <div class="toc-leader"></div>
+            <span class="toc-page">page ${item.pageNumber}</span>
+          </div>
+        `;
       })
       .join("");
   }
 
   /**
-   * Detailed Sections HTML 생성
+   * Page Sections HTML 생성 (각 페이지별 썸네일 + AI 요약)
    */
-  private buildDetailedSections(
-    aiSummary?: AISummary | null,
-    domain?: string,
-    generatedDate?: string
+  private buildPageSections(
+    pages: CrawledPage[],
+    domain: string,
+    generatedDate: string
   ): string {
-    if (!aiSummary) {
+    if (pages.length === 0) {
       return "";
     }
 
+    let pageNumber = 2; // Page sections start from page 2 (after Executive Summary = page 1)
     const sections: string[] = [];
 
-    // Products & Services 섹션
-    if (aiSummary.mainServices && aiSummary.mainServices.length > 0) {
-      const productsContent = this.formatDetailedContent(aiSummary.mainServices);
-      const productsSummary = aiSummary.mainServices[0]
-        ? `The platform offers ${aiSummary.mainServices.length} core services: ${aiSummary.mainServices
-            .slice(0, 3)
-            .join(", ")}.`
-        : undefined;
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
 
-      sections.push(this.buildDetailedSection(
-        "Products & Services",
-        "Section 01",
-        productsContent,
-        productsSummary,
-        domain,
-        generatedDate
-      ));
-    }
+      // 스크린샷을 base64로 인코딩
+      const screenshotBase64 = page.screenshot
+        ? `data:image/jpeg;base64,${page.screenshot.toString("base64")}`
+        : "";
 
-    // Key Strengths 섹션
-    if (aiSummary.keyStrengths && aiSummary.keyStrengths.length > 0) {
-      const strengthsContent = this.formatDetailedContent(aiSummary.keyStrengths);
-      sections.push(this.buildDetailedSection(
-        "Key Strengths",
-        "Section 02",
-        strengthsContent,
-        undefined,
-        domain,
-        generatedDate
-      ));
+      // AI 요약 (없으면 기본 메시지)
+      const aiSummary = page.pageSummary || "No AI summary available for this page.";
+
+      sections.push(`
+        <div class="page page-section">
+          <div class="page-section-header">
+            <div class="header-left">
+              <div class="analysis-for-label">Analysis For</div>
+              <div class="analysis-domain">${domain}</div>
+            </div>
+            <div class="header-right">
+              <div class="date-label">Date Generated</div>
+              <div class="date-value">${generatedDate}</div>
+            </div>
+          </div>
+          <article class="page-section-article">
+            <div class="page-title-section">
+              <span class="page-number-label">Page ${i + 1}</span>
+              <h2>${this.escapeHtml(page.title || "Untitled")}</h2>
+              <div class="page-url">${this.escapeHtml(page.url)}</div>
+            </div>
+            <div class="screenshot-thumbnail">
+              <img src="${screenshotBase64}" alt="${this.escapeHtml(page.title || "Screenshot")}">
+            </div>
+            <div class="ai-summary-box">
+              <div class="ai-summary-header">
+                <span class="material-symbols-outlined ai-icon">psychology</span>
+                <span class="ai-summary-title">AI Page Summary</span>
+              </div>
+              <div class="ai-summary-text">${this.escapeHtml(aiSummary)}</div>
+            </div>
+          </article>
+          <div class="page-section-footer">
+            <div class="footer-left">
+              <span class="material-symbols-outlined lock-icon">lock</span>
+              <span>CONFIDENTIAL - SiteToPDF Analysis Report</span>
+            </div>
+            <div class="page-number">Page ${pageNumber}</div>
+          </div>
+        </div>
+      `);
+
+      pageNumber++;
     }
 
     return sections.join("\n");
+  }
+
+  /**
+   * 스크린샷 PDF 생성 (별도 PDF)
+   */
+  private async generateScreenshotPDF(
+    pages: CrawledPage[],
+    domain: string,
+    generatedDate: string
+  ): Promise<Buffer> {
+    if (pages.length === 0) {
+      return Buffer.alloc(0);
+    }
+
+    const template = this.loadTemplate("screenshot-pdf");
+
+    // 스크린샷 페이지들 생성
+    const screenshotPages = pages
+      .map((page, index) => {
+        const screenshotBase64 = page.screenshot
+          ? `data:image/jpeg;base64,${page.screenshot.toString("base64")}`
+          : "";
+
+        const pageNumber = index + 2; // Cover is page 1
+
+        return `
+          <div class="page screenshot-page">
+            <div class="screenshot-header">
+              <div class="screenshot-page-number">Screenshot ${index + 1} of ${pages.length}</div>
+              <h2 class="screenshot-title">${this.escapeHtml(page.title || "Untitled")}</h2>
+              <div class="screenshot-url">${this.escapeHtml(page.url)}</div>
+            </div>
+            <div class="screenshot-container">
+              <img src="${screenshotBase64}" alt="${this.escapeHtml(page.title || "Screenshot")}" class="screenshot-image">
+            </div>
+            <div class="screenshot-footer">
+              <div class="screenshot-footer-left">
+                <span class="screenshot-timestamp">Captured on ${generatedDate}</span>
+              </div>
+              <div class="screenshot-footer-right">Page ${pageNumber}</div>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+
+    const html = this.replaceTemplateVars(template, {
+      DOMAIN_NAME: domain,
+      TOTAL_PAGES: pages.length.toString(),
+      GENERATED_DATE: generatedDate,
+      SCREENSHOT_PAGES: screenshotPages,
+    });
+
+    return await this.htmlToPDF(html);
   }
 
   /**
@@ -599,7 +664,8 @@ export class HTMLPDFGenerator {
     content: string,
     aiSummaryText?: string,
     domain?: string,
-    generatedDate?: string
+    generatedDate?: string,
+    pageNumber?: number
   ): string {
     const aiSummaryBox = aiSummaryText
       ? `
@@ -635,6 +701,7 @@ export class HTMLPDFGenerator {
             ${content}
           </div>
         </article>
+        <div class="detailed-footer">Page ${pageNumber || 4}</div>
       </div>
     `;
   }
@@ -646,7 +713,8 @@ export class HTMLPDFGenerator {
     pages: CrawledPage[],
     domain: string,
     generatedDate: string,
-    reportId: string
+    reportId: string,
+    pageNumber?: number
   ): string {
     if (pages.length === 0) {
       return "";
@@ -698,7 +766,7 @@ export class HTMLPDFGenerator {
           <div class="footer-left">
             <span>Generated ${generatedDate}</span>
           </div>
-          <span class="footer-right">SiteToPDF Confidential</span>
+          <div class="appendix-footer-right">Page ${pageNumber || 6}</div>
         </div>
       </div>
     `;
