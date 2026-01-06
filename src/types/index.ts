@@ -44,6 +44,7 @@ export interface PDFResult {
   tableOfContents: TableOfContentsItem[];
   totalSize: number;
   warnings?: string[]; // 경고 메시지 (예: 폰트 파일 없음)
+  screenshotPdf?: Buffer; // 스크린샷 전용 PDF
 }
 
 export interface TableOfContentsItem {
