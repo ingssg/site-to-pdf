@@ -24,6 +24,7 @@ interface ResultDisplayProps {
       mergedPdfTooLarge?: boolean;
       individualPdfsZip: string;
       zipDownloadUrl?: string;
+      screenshotPdf?: string | null;
       warnings?: string[];
     };
     summary: any;
@@ -148,6 +149,45 @@ export default function ResultDisplay({
     } catch (error) {
       console.error("ZIP 다운로드 실패:", error);
       alert("ZIP 다운로드 중 오류가 발생했습니다.");
+    }
+  };
+
+  const handleDownloadScreenshotPDF = async () => {
+    if (!pdf.screenshotPdf) {
+      alert("스크린샷 PDF 데이터가 없습니다");
+      return;
+    }
+
+    try {
+      const domain = getDomain().replace(/\./g, "_");
+      const date = new Date().toISOString().split("T")[0];
+      const filename = `${domain}_screenshots_${date}.pdf`;
+
+      const response = await fetch("/api/download", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          pdfBase64: pdf.screenshotPdf,
+          filename: filename,
+        }),
+      });
+
+      if (!response.ok) throw new Error("다운로드 실패");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("스크린샷 PDF 다운로드 실패:", error);
+      alert("스크린샷 PDF 다운로드 중 오류가 발생했습니다.");
     }
   };
 
@@ -959,6 +999,62 @@ export default function ResultDisplay({
                 </svg>
               </button>
             </div>
+
+            {/* Screenshot PDF Card */}
+            {pdf.screenshotPdf && (
+              <div
+                onClick={handleDownloadScreenshotPDF}
+                className="bg-white dark:bg-[#1a1d2d] p-4 rounded-xl shadow-sm border border-[#cfd3e7] dark:border-white/10 flex items-center justify-between group cursor-pointer hover:border-primary/50 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-900/30">
+                    <svg
+                      className="w-7 h-7 text-blue-600 dark:text-blue-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                  </div>
+                  <div className="flex flex-col">
+                    <p className="font-bold text-base text-[#0d101b] dark:text-[#f8f9fc]">
+                      원본 스크린샷 PDF
+                    </p>
+                    <p className="text-xs text-[#4c599a] dark:text-[#94a3b8] mt-0.5 font-medium">
+                      법적 증거용 • 원본 품질 • {pdf.pageCount}개 스크린샷
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDownloadScreenshotPDF();
+                  }}
+                  className="w-9 h-9 rounded-full bg-[#f8f9fc] dark:bg-[#101322] border border-[#cfd3e7] dark:border-white/10 text-[#0d101b] dark:text-white hover:bg-primary hover:text-white hover:border-primary flex items-center justify-center transition-all"
+                  aria-label="스크린샷 PDF 다운로드"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                    />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
         </section>
 
