@@ -149,6 +149,12 @@ export async function POST(request: NextRequest) {
 
           // 완료
           sendProgress('완료!', 100);
+
+          // 스크린샷 PDF base64 인코딩
+          const screenshotPdfBase64 = pdfResult.screenshotPdf
+            ? pdfResult.screenshotPdf.toString("base64")
+            : null;
+
           const completeData = {
             type: 'complete',
             success: true,
@@ -165,6 +171,7 @@ export async function POST(request: NextRequest) {
                 mergedPdfTooLarge: pdfResult.totalSize >= 50 * 1024 * 1024,
                 individualPdfsZip: individualPdfsZipBase64,
                 zipDownloadUrl: zipDownloadUrl, // 큰 ZIP은 URL로 제공
+                screenshotPdf: screenshotPdfBase64, // 스크린샷 PDF 추가
               },
               summary: aiSummary,
             },
