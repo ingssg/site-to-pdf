@@ -47,8 +47,21 @@ body {
   }
 }
 
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 .animate-slide {
   animation: slide 1.5s ease-in-out infinite;
+}
+
+.animate-shimmer {
+  animation: shimmer 1.5s linear infinite;
 }
 
 /* Custom checkbox styles */
