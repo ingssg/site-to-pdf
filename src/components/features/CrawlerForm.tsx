@@ -50,6 +50,7 @@ export default function CrawlerForm({
 }: CrawlerFormProps = {}) {
   const [url, setUrl] = useState("");
   const [maxPages, setMaxPages] = useState(30);
+  const [crawlMode, setCrawlMode] = useState<'full' | 'smart'>('smart');
 
   const [loading, setLoading] = useState(false);
   const [crawlResult, setCrawlResult] = useState<CrawlAPIResponse | null>(null);
@@ -82,6 +83,7 @@ export default function CrawlerForm({
       const requestBody: CrawlAPIRequest = {
         url,
         maxPages,
+        crawlMode, // 크롤링 모드 전달
       };
 
       const response = await fetch("/api/crawl", {
@@ -183,6 +185,7 @@ export default function CrawlerForm({
           pages={crawlResult.data.crawl.pages}
           onComplete={handlePDFComplete}
           onClose={onClose || (() => {})}
+          crawlMode={crawlMode} // 크롤링 모드 전달
         />
       </Modal>
     );
@@ -237,6 +240,77 @@ export default function CrawlerForm({
             </div>
             <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
               💡 크롤링 후 PDF에 포함할 페이지를 직접 선택할 수 있습니다
+            </p>
+          </div>
+
+          {/* Crawl Mode Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">
+              크롤링 모드
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Smart Mode */}
+              <button
+                type="button"
+                onClick={() => setCrawlMode('smart')}
+                className={`relative p-4 border-2 rounded-lg transition-all text-left ${
+                  crawlMode === 'smart'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                    : 'border-gray-300 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🎯</span>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">
+                      스마트 모드
+                    </h3>
+                  </div>
+                  {crawlMode === 'smart' && (
+                    <span className="text-blue-500">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed">
+                  비즈니스 분석용. 중요한 페이지만 포함하여 핵심 내용에 집중
+                </p>
+              </button>
+
+              {/* Full Mode */}
+              <button
+                type="button"
+                onClick={() => setCrawlMode('full')}
+                className={`relative p-4 border-2 rounded-lg transition-all text-left ${
+                  crawlMode === 'full'
+                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                    : 'border-gray-300 dark:border-slate-600 hover:border-gray-400 dark:hover:border-slate-500'
+                }`}
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📁</span>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">
+                      전체 아카이브
+                    </h3>
+                  </div>
+                  {crawlMode === 'full' && (
+                    <span className="text-blue-500">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed">
+                  법적 증거 보존용. 모든 페이지를 스크린샷 PDF에 완전 보존
+                </p>
+              </button>
+            </div>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
+              💡 {crawlMode === 'smart' ? '영업팀/투자심사역에게 추천' : '법무팀/로펌에게 추천'}
             </p>
           </div>
 
