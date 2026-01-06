@@ -16,19 +16,25 @@ interface PageSelectorProps {
     content: string;
     depth: number;
     screenshot?: any;
+    defaultChecked?: boolean;
+    importance?: number;
+    exclusionReason?: string;
+    pageType?: string;
   }>;
   onComplete: (result: GeneratePDFResponse) => void;
   onClose?: () => void;
+  crawlMode?: 'full' | 'smart'; // 크롤링 모드
 }
 
 export default function PageSelector({
   pages,
   onComplete,
   onClose,
+  crawlMode = 'smart', // 기본값: smart 모드
 }: PageSelectorProps) {
-  // 기본값: 모든 페이지 선택됨
+  // 기본값: defaultChecked가 true인 페이지만 선택됨 (스마트 필터링)
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(
-    new Set(pages.map((p) => p.url))
+    new Set(pages.filter((p) => p.defaultChecked !== false).map((p) => p.url))
   );
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +93,25 @@ export default function PageSelector({
     }
   };
 
+  // 필터 프리셋 적용
+  const applyPreset = (preset: 'all' | 'recommended' | 'core') => {
+    let selected: string[] = [];
+
+    switch (preset) {
+      case 'all':
+        selected = pages.map((p) => p.url);
+        break;
+      case 'recommended':
+        selected = pages.filter((p) => (p.importance || 0) > 50).map((p) => p.url);
+        break;
+      case 'core':
+        selected = pages.filter((p) => (p.importance || 0) > 70).map((p) => p.url);
+        break;
+    }
+
+    setSelectedUrls(new Set(selected));
+  };
+
   const handleGeneratePDF = async () => {
     if (selectedUrls.size === 0) {
       alert("최소 1개 이상의 페이지를 선택해주세요");
@@ -103,6 +128,7 @@ export default function PageSelector({
       const requestBody: GeneratePDFRequest = {
         pages: selectedPages,
         detailLevel: "detailed", // MVP: detailed 분석 (비즈니스 모델, 강점, 개선점 포함)
+        crawlMode, // 크롤링 모드 전달
       };
 
       const response = await fetch("/api/generate-pdf", {
@@ -306,7 +332,7 @@ export default function PageSelector({
       {/* 스크롤 가능한 콘텐츠 영역 */}
       <main className="flex-1 overflow-y-auto px-4 pb-32 no-scrollbar">
         {/* 전체 선택 컨트롤 (Sticky) */}
-        <div className="sticky top-0 z-10 pt-2 pb-4 bg-white dark:bg-slate-800">
+        <div className="sticky top-0 z-10 pt-2 pb-4 bg-white dark:bg-slate-800 space-y-3">
           <label className="flex items-center justify-between p-4 rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-800 cursor-pointer active:scale-[0.99] transition-transform">
             <div className="flex items-center gap-3">
               <input
@@ -332,6 +358,28 @@ export default function PageSelector({
               {pages.length} Total
             </span>
           </label>
+
+          {/* 필터 프리셋 버튼 */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => applyPreset('all')}
+              className="flex-1 px-3 py-2 text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors border border-slate-200 dark:border-slate-600"
+            >
+              전체 ({pages.length})
+            </button>
+            <button
+              onClick={() => applyPreset('recommended')}
+              className="flex-1 px-3 py-2 text-xs font-semibold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors border border-blue-200 dark:border-blue-800"
+            >
+              ✓ 추천 ({pages.filter((p) => (p.importance || 0) > 50).length})
+            </button>
+            <button
+              onClick={() => applyPreset('core')}
+              className="flex-1 px-3 py-2 text-xs font-semibold bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors border border-purple-200 dark:border-purple-800"
+            >
+              핵심만 ({pages.filter((p) => (p.importance || 0) > 70).length})
+            </button>
+          </div>
         </div>
 
         {/* 페이지 리스트 */}
@@ -362,11 +410,37 @@ export default function PageSelector({
                   />
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col gap-1">
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-start gap-2">
                     <h3 className="font-bold text-[#0d101b] dark:text-white truncate text-base">
                       {page.title || "제목 없음"}
                     </h3>
+                    {/* 페이지 타입 배지 */}
+                    {page.pageType && page.pageType !== 'General' && (
+                      <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                        {page.pageType}
+                      </span>
+                    )}
                   </div>
+
+                  {/* 상태 배지 & 제외 이유 */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {page.defaultChecked === true && (page.importance || 0) > 70 && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
+                        ✓ 핵심
+                      </span>
+                    )}
+                    {page.defaultChecked === true && (page.importance || 0) > 50 && (page.importance || 0) <= 70 && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                        ✓ 추천
+                      </span>
+                    )}
+                    {page.defaultChecked === false && page.exclusionReason && (
+                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                        선택사항: {page.exclusionReason}
+                      </span>
+                    )}
+                  </div>
+
                   <p className="text-xs text-primary font-medium truncate bg-primary/5 dark:bg-primary/20 w-fit px-1.5 py-0.5 rounded">
                     {page.url}
                   </p>
