@@ -31,9 +31,9 @@ export default function Modal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-gray-900/40 backdrop-blur-sm overflow-y-auto">
       <div
-        className={`w-full max-w-[340px] sm:max-w-md max-h-[calc(100vh-2rem)] bg-white dark:bg-slate-800 rounded-2xl shadow-2xl flex flex-col relative border border-white/20 dark:border-slate-700/50 overflow-hidden ${className}`}
+        className={`w-full max-w-[340px] sm:max-w-md max-h-[calc(100vh-1rem)] sm:max-h-[calc(100vh-2rem)] bg-white dark:bg-slate-800 rounded-xl sm:rounded-2xl shadow-2xl flex flex-col relative border border-white/20 dark:border-slate-700/50 overflow-hidden ${className}`}
       >
         {showCloseButton && (
           <button

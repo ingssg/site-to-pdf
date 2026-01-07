@@ -36,84 +36,84 @@ export default function PDFGenerationProgressModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose || (() => {})} showCloseButton={false}>
-      <div className="w-full px-6 pt-2 pb-8 flex flex-col items-center relative">
+      <div className="w-full px-4 sm:px-6 pt-2 pb-4 sm:pb-6 md:pb-8 flex flex-col items-center relative">
         {/* Step Indicator */}
-        <p className="text-primary text-sm font-bold tracking-wide leading-normal text-center uppercase mb-1">
+        <p className="text-primary text-xs sm:text-sm font-bold tracking-wide leading-normal text-center uppercase mb-1">
           Step 3 of 3
         </p>
 
         {/* Hero Image / Visual Interest */}
-        <div className="flex justify-center my-6">
-          <div className="relative w-32 h-32 rounded-full bg-[#f6f6f8] dark:bg-[#1a1d2d] flex items-center justify-center shadow-inner">
-            <div className="absolute inset-0 rounded-full border-4 border-primary/10 border-t-primary animate-spin" style={{ animationDuration: "3s" }}></div>
+        <div className="flex justify-center my-4 sm:my-5 md:my-6">
+          <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full bg-[#f6f6f8] dark:bg-[#1a1d2d] flex items-center justify-center shadow-inner">
+            <div className="absolute inset-0 rounded-full border-2 sm:border-3 md:border-4 border-primary/10 border-t-primary animate-spin" style={{ animationDuration: "3s" }}></div>
             <span 
-              className="material-symbols-outlined text-5xl text-primary"
+              className="material-symbols-outlined text-3xl sm:text-4xl md:text-5xl text-primary"
               style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 48" }}
             >
               description
             </span>
             {/* Floating Badge */}
-            <div className="absolute -bottom-1 -right-1 bg-white dark:bg-[#101322] p-1.5 rounded-full shadow-lg">
-              <div className="bg-primary text-white rounded-full p-1.5 flex items-center justify-center">
-                <span className="material-symbols-outlined text-lg">auto_awesome</span>
+            <div className="absolute -bottom-0.5 sm:-bottom-1 -right-0.5 sm:-right-1 bg-white dark:bg-[#101322] p-1 sm:p-1.5 rounded-full shadow-lg">
+              <div className="bg-primary text-white rounded-full p-1 sm:p-1.5 flex items-center justify-center">
+                <span className="material-symbols-outlined text-sm sm:text-base md:text-lg">auto_awesome</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* Headline */}
-        <h2 className="text-slate-900 dark:text-white text-[24px] font-bold leading-tight text-center mb-2">
+        <h2 className="text-slate-900 dark:text-white text-lg sm:text-xl md:text-[24px] font-bold leading-tight text-center mb-1.5 sm:mb-2">
           PDF 생성 중
         </h2>
 
         {/* Sub-headline */}
-        <p className="text-slate-500 dark:text-slate-400 text-base font-medium leading-relaxed text-center mb-8 px-2">
+        <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm md:text-base font-medium leading-relaxed text-center mb-4 sm:mb-6 md:mb-8 px-2">
           요청을 처리하는 동안 이 화면을 열어두세요.
         </p>
 
         {/* Progress Section Container */}
-        <div className="flex flex-col gap-6 w-full">
+        <div className="flex flex-col gap-4 sm:gap-5 md:gap-6 w-full">
           {/* Task 1: PDF Generation */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-semibold">
-                <span className="material-symbols-outlined text-slate-400 text-[20px]">picture_as_pdf</span>
+          <div className="flex flex-col gap-1.5 sm:gap-2">
+            <div className="flex items-center justify-between text-xs sm:text-sm">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-slate-800 dark:text-slate-200 font-semibold">
+                <span className="material-symbols-outlined text-slate-400 text-[16px] sm:text-[18px] md:text-[20px]">picture_as_pdf</span>
                 PDF 컴파일
               </div>
-              <span className="text-primary font-bold tabular-nums">
+              <span className="text-primary font-bold tabular-nums text-xs sm:text-sm">
                 {pdfProgress}%
               </span>
             </div>
-            <div className="h-2 w-full bg-[#f6f6f8] dark:bg-gray-700 rounded-full overflow-hidden">
+            <div className="h-1.5 sm:h-2 w-full bg-[#f6f6f8] dark:bg-gray-700 rounded-full overflow-hidden">
               <div
                 className="h-full bg-primary rounded-full shadow-[0_0_10px_rgba(19,55,236,0.5)] transition-all duration-300"
                 style={{ width: `${pdfProgress}%` }}
               ></div>
             </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500 font-medium pl-7">
+            <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 font-medium pl-5 sm:pl-7">
               벡터 에셋 렌더링 중...
             </p>
           </div>
 
           {/* Task 2: AI Summarization */}
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-slate-800 dark:text-slate-200 font-semibold">
-                <span className={`material-symbols-outlined text-primary text-[20px] ${isAIGenerating ? "animate-pulse" : ""}`}>
+          <div className="flex flex-col gap-1.5 sm:gap-2">
+            <div className="flex items-center justify-between text-xs sm:text-sm">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-slate-800 dark:text-slate-200 font-semibold">
+                <span className={`material-symbols-outlined text-primary text-[16px] sm:text-[18px] md:text-[20px] ${isAIGenerating ? "animate-pulse" : ""}`}>
                   auto_awesome
                 </span>
                 AI 요약
               </div>
               {isAIGenerating ? (
-                <div className="h-4 w-4 border-2 border-slate-200 dark:border-slate-600 border-t-primary rounded-full animate-spin"></div>
+                <div className="h-3 w-3 sm:h-4 sm:w-4 border-2 border-slate-200 dark:border-slate-600 border-t-primary rounded-full animate-spin"></div>
               ) : (
-                <span className="text-primary font-bold tabular-nums">
+                <span className="text-primary font-bold tabular-nums text-xs sm:text-sm">
                   {aiProgress}%
                 </span>
               )}
             </div>
             {/* Indeterminate Progress Bar with Shimmer */}
-            <div className="h-2 w-full bg-[#f6f6f8] dark:bg-gray-700 rounded-full overflow-hidden relative">
+            <div className="h-1.5 sm:h-2 w-full bg-[#f6f6f8] dark:bg-gray-700 rounded-full overflow-hidden relative">
               {isAIGenerating ? (
                 <div 
                   className="absolute top-0 left-0 h-full w-full bg-gradient-to-r from-transparent via-primary to-transparent opacity-90 drop-shadow-[0_0_6px_rgba(19,55,236,0.5)]"
@@ -128,7 +128,7 @@ export default function PDFGenerationProgressModal({
                 ></div>
               )}
             </div>
-            <p className="text-xs text-slate-400 dark:text-slate-500 font-medium pl-7 flex items-center gap-1">
+            <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 font-medium pl-5 sm:pl-7 flex items-center gap-1">
               핵심 인사이트 추출 중
               {isAIGenerating && <span className="animate-pulse">...</span>}
             </p>
@@ -136,12 +136,12 @@ export default function PDFGenerationProgressModal({
         </div>
 
         {/* Spacer */}
-        <div className="h-8"></div>
+        <div className="h-4 sm:h-6 md:h-8"></div>
 
         {/* Footer Status */}
-        <div className="bg-[#f6f6f8] dark:bg-[#1a1d2d] rounded-xl p-3 flex items-center justify-center gap-2 w-full">
-          <span className="material-symbols-outlined text-slate-400 text-sm">timer</span>
-          <p className="text-slate-500 dark:text-slate-400 text-xs font-semibold">
+        <div className="bg-[#f6f6f8] dark:bg-[#1a1d2d] rounded-lg sm:rounded-xl p-2 sm:p-3 flex items-center justify-center gap-1.5 sm:gap-2 w-full">
+          <span className="material-symbols-outlined text-slate-400 text-xs sm:text-sm">timer</span>
+          <p className="text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs font-semibold">
             예상 남은 시간:{" "}
             <span className="text-slate-800 dark:text-slate-200">~{estimatedTime}초</span>
           </p>

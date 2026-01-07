@@ -19,13 +19,13 @@ export default function PDFCompletionModal({
 }: PDFCompletionModalProps) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} showCloseButton={true}>
-      <div className="w-full p-6 sm:p-8 flex flex-col items-center text-center">
+      <div className="w-full p-4 sm:p-6 md:p-8 flex flex-col items-center text-center">
         {/* Success Icon with Pulse Effect */}
-        <div className="relative mb-6 mt-2 flex items-center justify-center">
-          <div className="absolute animate-ping rounded-full bg-primary/20 h-20 w-20"></div>
-          <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-primary/10 dark:bg-primary/20">
+        <div className="relative mb-4 sm:mb-5 md:mb-6 mt-1 sm:mt-2 flex items-center justify-center">
+          <div className="absolute animate-ping rounded-full bg-primary/20 h-16 w-16 sm:h-18 sm:w-18 md:h-20 md:w-20"></div>
+          <div className="relative flex h-16 w-16 sm:h-18 sm:w-18 md:h-20 md:w-20 items-center justify-center rounded-full bg-primary/10 dark:bg-primary/20">
             <svg
-              className="w-12 h-12 text-primary"
+              className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-primary"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -41,18 +41,18 @@ export default function PDFCompletionModal({
         </div>
 
         {/* Text Content */}
-        <h3 className="text-2xl font-bold leading-tight text-slate-900 dark:text-white mb-2">
+        <h3 className="text-lg sm:text-xl md:text-2xl font-bold leading-tight text-slate-900 dark:text-white mb-1.5 sm:mb-2">
           분석 완료!
         </h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-8 max-w-[260px]">
+        <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mb-4 sm:mb-6 md:mb-8 max-w-[260px] px-2">
           비즈니스 인텔리전스 리포트와 AI 분석이 준비되었습니다.
         </p>
 
         {/* Document Preview Card */}
-        <div className="w-full mb-8 bg-slate-50 dark:bg-slate-800/50 rounded-xl p-3 border border-slate-100 dark:border-slate-700 flex items-center gap-3">
-          <div className="h-12 w-10 shrink-0 rounded bg-primary/10 flex items-center justify-center">
+        <div className="w-full mb-4 sm:mb-6 md:mb-8 bg-slate-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 border border-slate-100 dark:border-slate-700 flex items-center gap-2 sm:gap-3">
+          <div className="h-10 w-8 sm:h-12 sm:w-10 shrink-0 rounded bg-primary/10 flex items-center justify-center">
             <svg
-              className="w-6 h-6 text-primary"
+              className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6 text-primary"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -66,16 +66,16 @@ export default function PDFCompletionModal({
             </svg>
           </div>
           <div className="flex flex-col items-start overflow-hidden flex-1 min-w-0">
-            <p className="text-sm font-semibold text-slate-900 dark:text-white truncate w-full text-left">
+            <p className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white truncate w-full text-left">
               {fileName}
             </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 text-left">
+            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 text-left">
               {fileSize} • 방금 전
             </p>
           </div>
           <div className="ml-auto shrink-0">
             <svg
-              className="w-5 h-5 text-green-500"
+              className="w-4 h-4 sm:w-5 sm:h-5 text-green-500"
               fill="currentColor"
               viewBox="0 0 20 20"
             >
@@ -92,7 +92,7 @@ export default function PDFCompletionModal({
         <div className="flex flex-col w-full">
           <button
             onClick={onViewResults}
-            className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-3.5 text-sm font-bold text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all"
+            className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-3 sm:px-4 py-2.5 sm:py-3 md:py-3.5 text-xs sm:text-sm font-bold text-white shadow-sm hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all"
             type="button"
           >
             결과 보기
