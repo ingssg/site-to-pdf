@@ -59,16 +59,8 @@ export async function POST(request: NextRequest) {
           console.log(`[API] 크롤링 완료: ${crawlResult.totalPages}페이지 수집됨`);
 
           // 페이지에 필터 메타데이터 추가
-          // 스마트 모드: 이미 크롤링 단계에서 필터링했으므로 모든 페이지가 중요 페이지
-          // 전체 모드: 크롤링 후 필터 메타데이터 추가 (사용자가 선택할 수 있도록)
-          const enrichedPages = crawlMode === 'smart'
-            ? crawlResult.pages.map(page => ({
-                ...page,
-                defaultChecked: true, // 스마트 모드: 모든 크롤링된 페이지는 중요
-                importance: 100,
-                pageType: 'Important',
-              }))
-            : enrichPagesWithFilterMetadata(crawlResult.pages); // 전체 모드: 필터 메타데이터 추가
+          // 전체 모드와 스마트 모드 모두 동일하게 점수 기반 필터링 적용
+          const enrichedPages = enrichPagesWithFilterMetadata(crawlResult.pages);
 
           console.log(`[API] 필터링 완료 (${crawlMode} 모드): ${enrichedPages.filter(p => p.defaultChecked).length}/${enrichedPages.length}페이지 추천`);
 

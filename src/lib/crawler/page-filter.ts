@@ -127,15 +127,97 @@ function isHardExcluded(url: string): boolean {
 }
 
 /**
+ * URL 기반 중요도 계산 (크롤링 전 사전 필터링용)
+ * 콘텐츠 길이를 제외하고 URL만으로 판단
+ */
+export function calculateUrlBasedImportance(url: string): number {
+  let score = 50; // 기본 점수
+
+  // 페이지 타입별 가점
+  const pageType = detectPageType(url);
+  switch (pageType) {
+    case 'Homepage':
+      score += 30; // 80점
+      break;
+    case 'About':
+    case 'Contact':
+    case 'Product':
+    case 'Pricing':
+      score += 20; // 70점
+      break;
+    case 'Features':
+    case 'Documentation':
+      score += 10; // 60점
+      break;
+    case 'Blog/News':
+      score -= 10; // 40점
+      break;
+  }
+
+  // URL 깊이 계산
+  const depth = url.split("/").length - 3;
+  score -= depth * 3;
+
+  // 핵심 키워드 포함 시 가점
+  const urlLower = url.toLowerCase();
+  if (CORE_KEYWORDS.some((kw) => urlLower.includes(kw))) {
+    score += 15;
+  }
+
+  // 소프트 제외 키워드 포함 시 감점
+  if (SOFT_EXCLUDE_KEYWORDS.some((kw) => urlLower.includes(kw))) {
+    score -= 15;
+  }
+
+  // 하드 제외 패턴 매칭 시 크게 감점
+  if (isHardExcluded(url)) {
+    score -= 50;
+  }
+
+  return Math.max(0, Math.min(100, score));
+}
+
+/**
+ * 스마트 모드: URL 기반으로 크롤링 여부 판단
+ * 55점 이하면 크롤링하지 않음
+ */
+export function shouldCrawlInSmartMode(url: string): boolean {
+  const importance = calculateUrlBasedImportance(url);
+  return importance > 55;
+}
+
+/**
  * 페이지 중요도 점수 계산 (0-100)
  * 문서 기준: docs/crawling-filters.md
  */
 export function calculateImportance(page: CrawledPage): number {
-  let score = 70; // 기본 점수
+  let score = 50; // 기본 점수 (70 → 50으로 낮춤)
+
+  // 페이지 타입별 가점 (차등 적용)
+  const pageType = detectPageType(page.url);
+  switch (pageType) {
+    case 'Homepage':
+      score += 30; // 홈페이지는 항상 중요 (80점)
+      break;
+    case 'About':
+    case 'Contact':
+    case 'Product':
+    case 'Pricing':
+      score += 20; // 핵심 비즈니스 페이지 (70점)
+      break;
+    case 'Features':
+    case 'Documentation':
+      score += 10; // 중요도 중간 (60점)
+      break;
+    case 'Blog/News':
+      score -= 10; // 블로그는 일반적으로 덜 중요 (40점)
+      break;
+    // General: 0 (기본 50점 유지)
+  }
 
   // URL 깊이 계산: page.url.split("/").length - 3
   const depth = page.url.split("/").length - 3;
-  score -= depth * 2; // 깊이당 -2점
+  score -= depth * 3; // 깊이당 -3점 (2 → 3으로 증가)
 
   // 핵심 키워드 포함 시 가점
   const urlLower = page.url.toLowerCase();
@@ -145,13 +227,13 @@ export function calculateImportance(page: CrawledPage): number {
 
   // 소프트 제외 키워드 포함 시 감점
   if (SOFT_EXCLUDE_KEYWORDS.some((kw) => urlLower.includes(kw))) {
-    score -= 10;
+    score -= 15; // 10 → 15로 증가
   }
 
   // 콘텐츠 길이가 짧으면 감점
   const contentLength = page.content?.length || 0;
   if (contentLength < 300) {
-    score -= 5;
+    score -= 10; // 5 → 10으로 증가
   }
 
   // 하드 제외 패턴 매칭 시 크게 감점
@@ -259,7 +341,7 @@ export function enrichPageWithFilterMetadata(page: CrawledPage): CrawledPage {
   return {
     ...page,
     importance,
-    defaultChecked: importance > 50, // 50점 초과면 기본 체크
+    defaultChecked: !exclusionReason, // exclusionReason 없으면 체크
     exclusionReason,
     pageType,
   };
@@ -291,7 +373,7 @@ export function applyFilterPreset(
         checked = true; // 모든 페이지 선택
         break;
       case "recommended":
-        checked = (page.importance || 0) > 50; // 중요도 50 초과만
+        checked = (page.importance || 0) > 60; // 중요도 60 초과만 (55 → 60으로 상향)
         break;
       case "core":
         checked = (page.importance || 0) > 70; // 중요도 70 초과만 (핵심 페이지)

@@ -99,7 +99,7 @@ export class WebCrawler {
       return;
     }
 
-    // 스마트 모드: URL 패턴 기반 필터링 (크롤링 전에 제외)
+    // 스마트 모드: 명백히 불필요한 페이지만 제외 (보수적 접근)
     if (this.config.crawlMode === 'smart' && shouldExcludeByDefault(url)) {
       this.skippedUrls.add(normalizedUrl);
       console.log(`[Crawler] 🚫 Skipped (Smart Mode): ${url}`);
