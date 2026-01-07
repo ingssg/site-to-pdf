@@ -23,14 +23,14 @@ interface PageSelectorProps {
   }>;
   onComplete: (result: GeneratePDFResponse) => void;
   onClose?: () => void;
-  crawlMode?: 'full' | 'smart'; // 크롤링 모드
+  crawlMode?: "full" | "smart"; // 크롤링 모드
 }
 
 export default function PageSelector({
   pages,
   onComplete,
   onClose,
-  crawlMode = 'smart', // 기본값: smart 모드
+  crawlMode = "smart", // 기본값: smart 모드
 }: PageSelectorProps) {
   // 기본값: defaultChecked가 true인 페이지만 선택됨 (스마트 필터링)
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(
@@ -41,6 +41,9 @@ export default function PageSelector({
   const [completed, setCompleted] = useState(false);
   const [pdfResult, setPdfResult] = useState<GeneratePDFResponse | null>(null);
   const [showUsageGuide, setShowUsageGuide] = useState(false);
+  const [activeTab, setActiveTab] = useState<"quick" | "exclude" | "include">(
+    "quick"
+  );
   const usageGuideRef = useRef<HTMLDivElement>(null);
   const usageGuideButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -94,18 +97,22 @@ export default function PageSelector({
   };
 
   // 필터 프리셋 적용
-  const applyPreset = (preset: 'all' | 'recommended' | 'core') => {
+  const applyPreset = (preset: "all" | "recommended" | "core") => {
     let selected: string[] = [];
 
     switch (preset) {
-      case 'all':
+      case "all":
         selected = pages.map((p) => p.url);
         break;
-      case 'recommended':
-        selected = pages.filter((p) => (p.importance || 0) > 50).map((p) => p.url);
+      case "recommended":
+        selected = pages
+          .filter((p) => (p.importance || 0) > 60)
+          .map((p) => p.url);
         break;
-      case 'core':
-        selected = pages.filter((p) => (p.importance || 0) > 70).map((p) => p.url);
+      case "core":
+        selected = pages
+          .filter((p) => (p.importance || 0) > 70)
+          .map((p) => p.url);
         break;
     }
 
@@ -213,16 +220,16 @@ export default function PageSelector({
   return (
     <div className="flex flex-col h-full max-h-[calc(100vh-2rem)] relative overflow-visible">
       {/* 헤더 섹션 */}
-      <header className="px-6 pt-8 pb-2 flex flex-col shrink-0 z-20 relative">
+      <header className="px-4 sm:px-6 pt-6 sm:pt-8 pb-2 flex flex-col shrink-0 z-20 relative">
         {/* X 버튼 */}
         {onClose && (
           <button
             onClick={onClose}
-            className="absolute top-0 right-0 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 z-10"
+            className="absolute top-2 sm:top-0 right-2 sm:right-0 p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 z-10"
             aria-label="닫기"
           >
             <svg
-              className="w-5 h-5"
+              className="w-4 h-4 sm:w-5 sm:h-5"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -238,10 +245,10 @@ export default function PageSelector({
         )}
 
         {/* Step Indicator */}
-        <div className="flex justify-between items-center mb-6 pr-10">
-          <div className="flex items-center gap-2 text-primary font-bold text-sm bg-primary/10 pl-2 pr-3 py-1.5 rounded-full">
+        <div className="flex justify-between items-center mb-4 sm:mb-6 pr-8 sm:pr-10">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-primary font-bold text-xs sm:text-sm bg-primary/10 pl-1.5 sm:pl-2 pr-2 sm:pr-3 py-1 sm:py-1.5 rounded-full">
             <svg
-              className="w-[18px] h-[18px] text-primary"
+              className="w-4 h-4 sm:w-[18px] sm:h-[18px] text-primary"
               fill="currentColor"
               viewBox="0 0 20 20"
             >
@@ -253,93 +260,282 @@ export default function PageSelector({
             </svg>
             <span>Step 2 of 3</span>
           </div>
-          <div className="flex gap-2">
-            <div className="h-2 w-2 rounded-full bg-primary/30"></div>
-            <div className="h-2 w-2 rounded-full bg-primary"></div>
-            <div className="h-2 w-2 rounded-full bg-slate-200 dark:bg-slate-700"></div>
+          <div className="flex gap-1.5 sm:gap-2">
+            <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-primary/30"></div>
+            <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-primary"></div>
+            <div className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-slate-200 dark:bg-slate-700"></div>
           </div>
         </div>
 
         {/* Title Area */}
-        <div className="flex flex-col gap-1 mb-4">
-          <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-1 mb-3 sm:mb-4">
+          <div className="flex items-center justify-between relative">
             <div className="flex-1">
-              <h1 className="text-2xl font-extrabold text-[#0d101b] dark:text-white leading-tight">
+              <h1 className="text-xl sm:text-2xl font-extrabold text-[#0d101b] dark:text-white leading-tight">
                 페이지 선택
               </h1>
-              <p className="text-sm text-[#4c599a] dark:text-slate-400 font-medium">
+              <p className="text-xs sm:text-sm text-[#4c599a] dark:text-slate-400 font-medium">
                 {pages.length}개 페이지 수집 완료
                 <br />
                 리포트에 포함할 페이지를 선택하세요
               </p>
             </div>
-            {/* 사용 방법 버튼 */}
-            <button
-              ref={usageGuideButtonRef}
-              onClick={() => setShowUsageGuide(!showUsageGuide)}
-              className="ml-4 flex-shrink-0 px-3 py-1.5 text-xs font-medium text-[#4c599a] dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700"
-              aria-label="사용 방법"
-            >
-              💡 사용 방법
-            </button>
-          </div>
-        </div>
+            {/* 사용 방법 버튼 및 팝업 컨테이너 */}
+            <div className="relative ml-2 sm:ml-4 flex-shrink-0">
+              <button
+                ref={usageGuideButtonRef}
+                onClick={() => setShowUsageGuide(!showUsageGuide)}
+                className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium text-[#4c599a] dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700"
+                aria-label="사용 방법"
+              >
+                💡 사용 방법
+              </button>
 
-        {/* 사용 방법 팝업 */}
-        {showUsageGuide && (
-          <div
-            ref={usageGuideRef}
-            className="absolute top-full right-0 mt-2 z-50 w-72 max-w-[calc(100vw-3rem)] bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 p-4"
-          >
-            <div className="space-y-2">
-              <h4 className="text-sm font-semibold text-[#0d101b] dark:text-white mb-2">
-                사용 방법
-              </h4>
-              <ul className="text-xs text-[#4c599a] dark:text-slate-400 space-y-1.5">
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold shrink-0">•</span>
-                  <span>
-                    <strong>기본 설정:</strong> 모든 페이지가 선택되어 있습니다
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold shrink-0">•</span>
-                  <span>
-                    <strong>제외하려면:</strong> 불필요한 페이지의 체크박스를
-                    클릭해서 해제하세요
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold shrink-0">•</span>
-                  <span>
-                    <strong>법적 증거/완전 보존:</strong> 그대로 두고 PDF 생성
-                    버튼을 누르세요
-                  </span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-primary font-bold shrink-0">•</span>
-                  <span>
-                    <strong>맞춤형:</strong> 개인정보처리방침, 이용약관 등은
-                    제외해도 좋습니다
-                  </span>
-                </li>
-              </ul>
+              {/* 사용 방법 팝업 */}
+              {showUsageGuide && (
+                <div
+                  ref={usageGuideRef}
+                  className="absolute top-full right-0 mt-2 z-50 w-[calc(100vw-2rem)] sm:w-96 max-w-[calc(100vw-1rem)] bg-white dark:bg-slate-800 rounded-lg sm:rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden"
+                >
+                  {/* 탭 헤더 */}
+                  <div className="flex border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                    <button
+                      onClick={() => setActiveTab("quick")}
+                      className={`flex-1 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold transition-colors ${
+                        activeTab === "quick"
+                          ? "text-primary border-b-2 border-primary bg-white dark:bg-slate-800"
+                          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                      }`}
+                    >
+                      📌 빠른 가이드
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("exclude")}
+                      className={`flex-1 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold transition-colors ${
+                        activeTab === "exclude"
+                          ? "text-primary border-b-2 border-primary bg-white dark:bg-slate-800"
+                          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                      }`}
+                    >
+                      ✂️ 제외 추천
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("include")}
+                      className={`flex-1 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold transition-colors ${
+                        activeTab === "include"
+                          ? "text-primary border-b-2 border-primary bg-white dark:bg-slate-800"
+                          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
+                      }`}
+                    >
+                      ✅ 포함 권장
+                    </button>
+                  </div>
+
+                  {/* 탭 콘텐츠 */}
+                  <div className="p-3 sm:p-5 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto">
+                    {activeTab === "quick" && (
+                      <div className="space-y-3 sm:space-y-4">
+                        <h4 className="text-sm sm:text-base font-bold text-[#0d101b] dark:text-white mb-2 sm:mb-3">
+                          💡 빠른 가이드
+                        </h4>
+
+                        {/* 중요 알림 */}
+                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2 sm:p-3">
+                          <p className="text-[10px] sm:text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
+                            ⚠️ 자동 선택이 완벽하지 않을 수 있습니다. 각
+                            페이지의 제목과 URL을 확인하고, 불필요한 페이지는
+                            체크 해제해주세요.
+                          </p>
+                        </div>
+
+                        {/* 빠른 선택 */}
+                        <div>
+                          <h5 className="text-xs sm:text-sm font-semibold text-[#0d101b] dark:text-white mb-1.5 sm:mb-2">
+                            선택 방법
+                          </h5>
+                          <ul className="text-[10px] sm:text-xs text-[#4c599a] dark:text-slate-400 space-y-1 sm:space-y-1.5 ml-3 sm:ml-5">
+                            <li className="leading-relaxed">
+                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
+                                전체 선택:
+                              </strong>{" "}
+                              완전한 웹사이트 아카이브용 (법적 증거, 백업)
+                            </li>
+                            <li className="leading-relaxed">
+                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
+                                권장 선택:
+                              </strong>{" "}
+                              비즈니스 분석에 필요한 핵심 페이지만
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === "exclude" && (
+                      <div className="space-y-2 sm:space-y-3">
+                        <h4 className="text-sm sm:text-base font-bold text-[#0d101b] dark:text-white mb-2 sm:mb-3">
+                          ✂️ 제외 추천 페이지
+                        </h4>
+                        <p className="text-[10px] sm:text-xs text-[#4c599a] dark:text-slate-400 mb-2 sm:mb-3">
+                          다음 페이지들은 체크 해제해도 좋습니다:
+                        </p>
+                        <ul className="text-[10px] sm:text-xs text-[#4c599a] dark:text-slate-400 space-y-1.5 sm:space-y-2">
+                          <li className="flex gap-1.5 sm:gap-2">
+                            <span className="shrink-0 text-xs sm:text-sm">
+                              📄
+                            </span>
+                            <span>
+                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
+                                약관/정책:
+                              </strong>{" "}
+                              개인정보처리방침, 이용약관
+                            </span>
+                          </li>
+                          <li className="flex gap-1.5 sm:gap-2">
+                            <span className="shrink-0 text-xs sm:text-sm">
+                              📰
+                            </span>
+                            <span>
+                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
+                                보도자료/언론:
+                              </strong>{" "}
+                              단순 뉴스 링크나 언론 보도
+                            </span>
+                          </li>
+                          <li className="flex gap-1.5 sm:gap-2">
+                            <span className="shrink-0 text-xs sm:text-sm">
+                              👥
+                            </span>
+                            <span>
+                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
+                                채용 공고:
+                              </strong>{" "}
+                              인재 채용, 채용 공고 목록
+                            </span>
+                          </li>
+                          <li className="flex gap-1.5 sm:gap-2">
+                            <span className="shrink-0 text-xs sm:text-sm">
+                              🎯
+                            </span>
+                            <span>
+                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
+                                이벤트:
+                              </strong>{" "}
+                              일시적 이벤트, 경품 페이지
+                            </span>
+                          </li>
+                          <li className="flex gap-1.5 sm:gap-2">
+                            <span className="shrink-0 text-xs sm:text-sm">
+                              📱
+                            </span>
+                            <span>
+                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
+                                SNS:
+                              </strong>{" "}
+                              인스타그램, 페이스북 피드
+                            </span>
+                          </li>
+                          <li className="flex gap-1.5 sm:gap-2">
+                            <span className="shrink-0 text-xs sm:text-sm">
+                              📋
+                            </span>
+                            <span>
+                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
+                                단순 폼:
+                              </strong>{" "}
+                              문의하기만 있는 페이지
+                            </span>
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+
+                    {activeTab === "include" && (
+                      <div className="space-y-2 sm:space-y-3">
+                        <h4 className="text-sm sm:text-base font-bold text-[#0d101b] dark:text-white mb-2 sm:mb-3">
+                          ✅ 포함 권장 페이지
+                        </h4>
+                        <p className="text-[10px] sm:text-xs text-[#4c599a] dark:text-slate-400 mb-2 sm:mb-3">
+                          비즈니스 분석에 유용한 페이지:
+                        </p>
+                        <ul className="text-[10px] sm:text-xs text-[#4c599a] dark:text-slate-400 space-y-1.5 sm:space-y-2">
+                          <li className="flex gap-1.5 sm:gap-2">
+                            <span className="shrink-0 text-xs sm:text-sm">
+                              🏠
+                            </span>
+                            <span>
+                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
+                                메인:
+                              </strong>{" "}
+                              회사 소개, 비전, 핵심 가치
+                            </span>
+                          </li>
+                          <li className="flex gap-1.5 sm:gap-2">
+                            <span className="shrink-0 text-xs sm:text-sm">
+                              💼
+                            </span>
+                            <span>
+                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
+                                제품/서비스:
+                              </strong>{" "}
+                              제품 설명, 가격, 기능
+                            </span>
+                          </li>
+                          <li className="flex gap-1.5 sm:gap-2">
+                            <span className="shrink-0 text-xs sm:text-sm">
+                              📊
+                            </span>
+                            <span>
+                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
+                                케이스 스터디:
+                              </strong>{" "}
+                              고객 성공 사례
+                            </span>
+                          </li>
+                          <li className="flex gap-1.5 sm:gap-2">
+                            <span className="shrink-0 text-xs sm:text-sm">
+                              🔍
+                            </span>
+                            <span>
+                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
+                                기술 문서:
+                              </strong>{" "}
+                              제품 동작 원리
+                            </span>
+                          </li>
+                          <li className="flex gap-1.5 sm:gap-2">
+                            <span className="shrink-0 text-xs sm:text-sm">
+                              📈
+                            </span>
+                            <span>
+                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
+                                회사 정보:
+                              </strong>{" "}
+                              연혁, 투자 유치
+                            </span>
+                          </li>
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        )}
+        </div>
       </header>
 
       {/* 스크롤 가능한 콘텐츠 영역 */}
-      <main className="flex-1 overflow-y-auto px-4 pb-32 no-scrollbar">
+      <main className="flex-1 overflow-y-auto px-3 sm:px-4 pb-32 no-scrollbar">
         {/* 전체 선택 컨트롤 (Sticky) */}
-        <div className="sticky top-0 z-10 pt-2 pb-4 bg-white dark:bg-slate-800 space-y-3">
-          <label className="flex items-center justify-between p-4 rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-800 cursor-pointer active:scale-[0.99] transition-transform">
-            <div className="flex items-center gap-3">
+        <div className="sticky top-0 z-10 pt-2 pb-3 sm:pb-4 bg-white dark:bg-slate-800 space-y-2 sm:space-y-3">
+          <label className="flex items-center justify-between p-3 sm:p-4 rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-800 cursor-pointer active:scale-[0.99] transition-transform">
+            <div className="flex items-center gap-2 sm:gap-3">
               <input
                 type="checkbox"
                 checked={selectedUrls.size === pages.length}
                 onChange={toggleAll}
-                className="custom-checkbox h-6 w-6 appearance-none rounded border-2 border-[#cfd3e7] dark:border-slate-600 bg-transparent text-primary checked:bg-primary checked:border-primary focus:ring-0 focus:ring-offset-0 transition-all"
+                className="custom-checkbox h-5 w-5 sm:h-6 sm:w-6 appearance-none rounded border-2 border-[#cfd3e7] dark:border-slate-600 bg-transparent text-primary checked:bg-primary checked:border-primary focus:ring-0 focus:ring-offset-0 transition-all"
                 style={{
                   backgroundImage:
                     selectedUrls.size === pages.length
@@ -350,32 +546,32 @@ export default function PageSelector({
                   backgroundSize: "70%",
                 }}
               />
-              <span className="font-bold text-[#0d101b] dark:text-white text-base">
+              <span className="font-bold text-[#0d101b] dark:text-white text-sm sm:text-base">
                 전체 페이지 선택
               </span>
             </div>
-            <span className="text-xs font-bold uppercase tracking-wider text-[#4c599a] dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
+            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#4c599a] dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded">
               {pages.length} Total
             </span>
           </label>
 
           {/* 필터 프리셋 버튼 */}
-          <div className="flex gap-2">
+          <div className="flex gap-1.5 sm:gap-2">
             <button
-              onClick={() => applyPreset('all')}
-              className="flex-1 px-3 py-2 text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors border border-slate-200 dark:border-slate-600"
+              onClick={() => applyPreset("all")}
+              className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors border border-slate-200 dark:border-slate-600"
             >
               전체 ({pages.length})
             </button>
             <button
-              onClick={() => applyPreset('recommended')}
-              className="flex-1 px-3 py-2 text-xs font-semibold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors border border-blue-200 dark:border-blue-800"
+              onClick={() => applyPreset("recommended")}
+              className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors border border-blue-200 dark:border-blue-800"
             >
-              ✓ 추천 ({pages.filter((p) => (p.importance || 0) > 50).length})
+              ✓ 추천 ({pages.filter((p) => (p.importance || 0) > 60).length})
             </button>
             <button
-              onClick={() => applyPreset('core')}
-              className="flex-1 px-3 py-2 text-xs font-semibold bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors border border-purple-200 dark:border-purple-800"
+              onClick={() => applyPreset("core")}
+              className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors border border-purple-200 dark:border-purple-800"
             >
               핵심만 ({pages.filter((p) => (p.importance || 0) > 70).length})
             </button>
@@ -383,22 +579,22 @@ export default function PageSelector({
         </div>
 
         {/* 페이지 리스트 */}
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2 sm:gap-3">
           {pages.map((page, idx) => {
             const isSelected = selectedUrls.has(page.url);
             return (
               <label
                 key={page.url}
-                className={`group relative flex items-start gap-4 p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer transition-all hover:border-primary/40 ${
+                className={`group relative flex items-start gap-2 sm:gap-3 md:gap-4 p-3 sm:p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer transition-all hover:border-primary/40 ${
                   !isSelected ? "opacity-70 hover:opacity-100" : ""
                 }`}
               >
-                <div className="pt-1 shrink-0">
+                <div className="pt-0.5 sm:pt-1 shrink-0">
                   <input
                     type="checkbox"
                     checked={isSelected}
                     onChange={() => togglePage(page.url)}
-                    className="custom-checkbox h-6 w-6 appearance-none rounded border-2 border-[#cfd3e7] dark:border-slate-600 bg-transparent text-primary checked:bg-primary checked:border-primary focus:ring-0 focus:ring-offset-0 transition-all"
+                    className="custom-checkbox h-5 w-5 sm:h-6 sm:w-6 appearance-none rounded border-2 border-[#cfd3e7] dark:border-slate-600 bg-transparent text-primary checked:bg-primary checked:border-primary focus:ring-0 focus:ring-offset-0 transition-all"
                     style={{
                       backgroundImage: isSelected
                         ? "url(\"data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3e%3c/svg%3e\")"
@@ -409,42 +605,45 @@ export default function PageSelector({
                     }}
                   />
                 </div>
-                <div className="flex-1 min-w-0 flex flex-col gap-1">
-                  <div className="flex justify-between items-start gap-2">
-                    <h3 className="font-bold text-[#0d101b] dark:text-white truncate text-base">
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5 sm:gap-1">
+                  <div className="flex justify-between items-start gap-1.5 sm:gap-2">
+                    <h3 className="font-bold text-[#0d101b] dark:text-white truncate text-sm sm:text-base">
                       {page.title || "제목 없음"}
                     </h3>
                     {/* 페이지 타입 배지 */}
-                    {page.pageType && page.pageType !== 'General' && (
-                      <span className="shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                    {page.pageType && page.pageType !== "General" && (
+                      <span className="shrink-0 text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
                         {page.pageType}
                       </span>
                     )}
                   </div>
 
                   {/* 상태 배지 & 제외 이유 */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {page.defaultChecked === true && (page.importance || 0) > 70 && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
-                        ✓ 핵심
-                      </span>
-                    )}
-                    {page.defaultChecked === true && (page.importance || 0) > 50 && (page.importance || 0) <= 70 && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                        ✓ 추천
-                      </span>
-                    )}
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    {page.defaultChecked === true &&
+                      (page.importance || 0) > 70 && (
+                        <span className="text-[9px] sm:text-[10px] font-bold px-1 sm:px-1.5 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
+                          ✓ 핵심
+                        </span>
+                      )}
+                    {page.defaultChecked === true &&
+                      (page.importance || 0) > 60 &&
+                      (page.importance || 0) <= 70 && (
+                        <span className="text-[9px] sm:text-[10px] font-bold px-1 sm:px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                          ✓ 추천
+                        </span>
+                      )}
                     {page.defaultChecked === false && page.exclusionReason && (
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                      <span className="text-[9px] sm:text-[10px] font-medium px-1 sm:px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                         선택사항: {page.exclusionReason}
                       </span>
                     )}
                   </div>
 
-                  <p className="text-xs text-primary font-medium truncate bg-primary/5 dark:bg-primary/20 w-fit px-1.5 py-0.5 rounded">
+                  <p className="text-[10px] sm:text-xs text-primary font-medium truncate bg-primary/5 dark:bg-primary/20 px-1 sm:px-1.5 py-0.5 rounded max-w-full">
                     {page.url}
                   </p>
-                  <p className="text-sm text-[#4c599a] dark:text-slate-400 leading-snug line-clamp-2 mt-1">
+                  <p className="text-xs sm:text-sm text-[#4c599a] dark:text-slate-400 leading-snug line-clamp-2 mt-0.5 sm:mt-1">
                     {page.content.slice(0, 150)}...
                   </p>
                 </div>
@@ -514,23 +713,23 @@ export default function PageSelector({
       {/* 하단 고정 영역 (팝업창 하단에 붙임) */}
       <div className="absolute bottom-0 left-0 w-full z-30">
         {/* Gradient fade */}
-        <div className="h-8 w-full bg-gradient-to-b from-transparent to-white dark:to-slate-800"></div>
-        <div className="bg-white dark:bg-slate-800 px-6 pb-8 pt-2">
+        <div className="h-6 sm:h-8 w-full bg-gradient-to-b from-transparent to-white dark:to-slate-800"></div>
+        <div className="bg-white dark:bg-slate-800 px-4 sm:px-6 pb-6 sm:pb-8 pt-2">
           {/* 에러 표시 */}
           {error && (
-            <div className="mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-              <div className="flex items-start gap-3">
-                <span className="text-red-600 dark:text-red-400 text-xl">
+            <div className="mb-3 sm:mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 sm:p-4">
+              <div className="flex items-start gap-2 sm:gap-3">
+                <span className="text-red-600 dark:text-red-400 text-lg sm:text-xl">
                   ❌
                 </span>
                 <div className="flex-1">
-                  <h4 className="font-semibold text-red-900 dark:text-red-200">
+                  <h4 className="font-semibold text-red-900 dark:text-red-200 text-sm sm:text-base">
                     PDF 생성 실패
                   </h4>
-                  <p className="text-red-700 dark:text-red-300 text-sm mt-1">
+                  <p className="text-red-700 dark:text-red-300 text-xs sm:text-sm mt-1">
                     {error}
                   </p>
-                  <p className="text-gray-600 dark:text-slate-400 text-xs mt-2">
+                  <p className="text-gray-600 dark:text-slate-400 text-[10px] sm:text-xs mt-1.5 sm:mt-2">
                     💡 크롤링한 데이터는 보존되어 있습니다. 아래 버튼을 눌러 PDF
                     생성을 다시 시도하세요.
                   </p>
@@ -539,7 +738,7 @@ export default function PageSelector({
               <button
                 onClick={handleGeneratePDF}
                 disabled={generating}
-                className="mt-4 w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors"
+                className="mt-3 sm:mt-4 w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-semibold py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg transition-colors text-xs sm:text-sm"
               >
                 🔄 PDF 생성 재시도 (크롤링 없이)
               </button>
@@ -551,11 +750,11 @@ export default function PageSelector({
             <button
               onClick={handleGeneratePDF}
               disabled={selectedUrls.size === 0}
-              className="w-full bg-primary hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold text-lg py-4 rounded-xl shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all flex items-center justify-between px-6 group"
+              className="w-full bg-primary hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold text-base sm:text-lg py-3 sm:py-4 rounded-xl shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all flex items-center justify-between px-4 sm:px-6 group"
             >
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5 sm:gap-2">
                 <svg
-                  className="w-6 h-6"
+                  className="w-5 h-5 sm:w-6 sm:h-6"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -569,12 +768,12 @@ export default function PageSelector({
                 </svg>
                 PDF 생성
               </span>
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold bg-white/20 px-2 py-0.5 rounded text-white">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <span className="text-xs sm:text-sm font-semibold bg-white/20 px-1.5 sm:px-2 py-0.5 rounded text-white">
                   {selectedUrls.size} selected
                 </span>
                 <svg
-                  className="w-5 h-5 group-hover:translate-x-1 transition-transform"
+                  className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -590,8 +789,8 @@ export default function PageSelector({
             </button>
           )}
 
-          <div className="text-center mt-3">
-            <p className="text-xs text-[#4c599a] dark:text-slate-500 font-medium">
+          <div className="text-center mt-2 sm:mt-3">
+            <p className="text-[10px] sm:text-xs text-[#4c599a] dark:text-slate-500 font-medium">
               예상 생성 시간: ~30초
             </p>
           </div>
