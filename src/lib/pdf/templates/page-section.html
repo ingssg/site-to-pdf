@@ -116,16 +116,16 @@
       word-break: break-all;
     }
 
-    .screenshot-thumbnail {
+    .screenshot-container {
       width: 100%;
       border: 1px solid #e5e7eb;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      margin-bottom: 20px;
+      margin-bottom: 12px;
       background: #f9fafb;
       padding: 4px;
     }
 
-    .screenshot-thumbnail img {
+    .screenshot-container img {
       width: 100%;
       height: auto;
       display: block;
@@ -134,7 +134,22 @@
       object-position: top;
     }
 
-    .ai-summary-box {
+    .page-type-container {
+      margin-bottom: 12px;
+    }
+
+    .page-type-badge {
+      display: inline-block;
+      font-size: 8px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 3px 10px;
+      border-radius: 3px;
+      color: #ffffff;
+    }
+
+    .business-insights-box {
       background: #f8fafc;
       border-top: 2px solid #e2e8f0;
       border-bottom: 2px solid #e2e8f0;
@@ -142,7 +157,7 @@
       margin-bottom: 16px;
     }
 
-    .ai-summary-header {
+    .business-insights-header {
       display: flex;
       align-items: center;
       gap: 6px;
@@ -154,7 +169,7 @@
       font-size: 16px;
     }
 
-    .ai-summary-title {
+    .business-insights-title {
       font-size: 9px;
       font-weight: 700;
       text-transform: uppercase;
@@ -162,13 +177,13 @@
       color: #0f172a;
     }
 
-    .ai-summary-text {
-      font-size: 14px;
-      line-height: 1.6;
+    .business-insights-text {
+      font-size: 11px;
+      line-height: 1.7;
       color: #374151;
       font-weight: 400;
-      text-align: justify;
-      font-family: 'Merriweather', serif;
+      font-family: 'Manrope', sans-serif;
+      white-space: pre-wrap;
     }
 
     .footer {
@@ -219,15 +234,18 @@
       <h2>{{PAGE_TITLE}}</h2>
       <div class="page-url">{{PAGE_URL}}</div>
     </div>
-    <div class="screenshot-thumbnail">
+    <div class="screenshot-container">
       <img src="{{SCREENSHOT_DATA_URL}}" alt="{{PAGE_TITLE}}">
     </div>
-    <div class="ai-summary-box">
-      <div class="ai-summary-header">
-        <span class="material-symbols-outlined ai-icon">psychology</span>
-        <span class="ai-summary-title">AI Page Summary</span>
+    <div class="page-type-container">
+      <span class="page-type-badge" style="background: {{PAGE_TYPE_COLOR}};">{{PAGE_TYPE}}</span>
+    </div>
+    <div class="business-insights-box">
+      <div class="business-insights-header">
+        <span class="material-symbols-outlined ai-icon">insights</span>
+        <span class="business-insights-title">Business Insights</span>
       </div>
-      <div class="ai-summary-text">{{AI_SUMMARY}}</div>
+      <div class="business-insights-text">{{AI_SUMMARY}}</div>
     </div>
   </article>
   <div class="footer">

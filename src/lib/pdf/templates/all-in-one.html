@@ -489,13 +489,14 @@
     .toc-list {
       display: flex;
       flex-direction: column;
-      gap: 3mm;
+      gap: 1.5mm;
     }
 
     .toc-item {
       display: flex;
       align-items: baseline;
       width: 100%;
+      line-height: 1.2;
     }
 
     .toc-number {
@@ -949,99 +950,70 @@
       word-break: break-all;
     }
 
-    .page-overview-grid {
-      display: grid;
-      grid-template-columns: 60mm 1fr;
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-
-    .screenshot-thumbnail {
+    .screenshot-container {
+      width: 100%;
       border: 1px solid #e5e7eb;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      margin-bottom: 12px;
       background: #f9fafb;
       padding: 4px;
-      height: fit-content;
     }
 
-    .screenshot-thumbnail img {
+    .screenshot-container img {
       width: 100%;
-      height: 55mm;
+      height: auto;
       display: block;
-      object-fit: cover;
+      max-height: 120mm;
+      object-fit: contain;
       object-position: top;
     }
 
-    .page-metadata {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
+    .page-type-container {
+      margin-bottom: 12px;
     }
 
-    .metadata-card {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      padding: 12px;
-    }
-
-    .metadata-title {
-      font-size: 9px;
+    .page-type-badge {
+      display: inline-block;
+      font-size: 8px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.05em;
-      color: #64748b;
-      margin-bottom: 8px;
+      padding: 3px 10px;
+      border-radius: 3px;
+      color: #ffffff;
     }
 
-    .metadata-items {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-
-    .metadata-item {
-      font-size: 8px;
-      color: #475569;
-    }
-
-    .metadata-label {
-      font-weight: 600;
-      color: #334155;
-      display: block;
-      margin-bottom: 2px;
-    }
-
-    .metadata-value {
-      font-weight: 400;
-      color: #64748b;
-    }
-
-    .quick-insights {
-      background: #fef3c7;
-      border-left: 3px solid #f59e0b;
-      padding: 12px 14px;
+    .business-insights-box {
+      background: #f8fafc;
+      border-top: 2px solid #e2e8f0;
+      border-bottom: 2px solid #e2e8f0;
+      padding: 16px;
       margin-bottom: 16px;
     }
 
-    .quick-insights-title {
-      font-size: 8px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: #92400e;
-      margin-bottom: 6px;
+    .business-insights-header {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
+      margin-bottom: 8px;
+      color: #1337ec;
     }
 
-    .quick-insights-text {
+    .business-insights-title {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #0f172a;
+    }
+
+    .business-insights-text {
       font-size: 11px;
-      line-height: 1.5;
-      color: #78350f;
-      font-weight: 500;
-      font-family: 'Merriweather', serif;
+      line-height: 1.7;
+      color: #374151;
+      font-weight: 400;
+      font-family: 'Manrope', sans-serif;
+      white-space: pre-wrap;
     }
 
     .page-section-footer {
@@ -1123,22 +1095,22 @@
     </div>
     <div class="exec-content">
       <div class="exec-title-section">
-        <h1>Executive Summary</h1>
-        <p class="exec-subtitle">A high-level overview of business performance and market positioning.</p>
+        <h1>종합 분석 요약</h1>
+        <p class="exec-subtitle">비즈니스 성과 및 시장 포지셔닝에 대한 종합적인 분석</p>
       </div>
       <div class="exec-main-grid">
         <div class="exec-left-column">
           <div class="exec-section">
             <div class="section-header">
               <div class="section-indicator"></div>
-              <h3 class="section-title">Company Overview</h3>
+              <h3 class="section-title">회사 개요</h3>
             </div>
             <p class="section-content">{{COMPANY_OVERVIEW}}</p>
           </div>
           <div class="exec-section">
             <div class="section-header">
               <div class="section-indicator"></div>
-              <h3 class="section-title">Problem Solved</h3>
+              <h3 class="section-title">해결하는 문제</h3>
             </div>
             <div class="problem-solved-box">
               <ul class="problem-solved-list">
@@ -1149,26 +1121,27 @@
           <div class="exec-section">
             <div class="section-header">
               <div class="section-indicator"></div>
-              <h3 class="section-title">Key Differentiators</h3>
+              <h3 class="section-title">핵심 차별화 요소</h3>
             </div>
             <p class="section-content">{{KEY_DIFFERENTIATORS}}</p>
           </div>
         </div>
         <div class="exec-right-column">
           <div class="products-services">
-            <h3 class="products-title">Products & Services</h3>
+            <h3 class="products-title">주요 제품/서비스</h3>
             {{PRODUCTS_SERVICES}}
           </div>
           <div class="target-customers">
-            <h3 class="products-title">Target Customers</h3>
+            <h3 class="products-title">타겟 고객</h3>
             <div class="customer-tags">
               {{TARGET_CUSTOMERS}}
             </div>
           </div>
-          <div class="stat-box">
-            <div class="stat-value">{{STAT_VALUE}}</div>
-            <div class="stat-label">{{STAT_LABEL}}</div>
-            <p class="stat-desc">{{STAT_DESC}}</p>
+          <div class="growth-opportunities-box">
+            <h3 class="products-title">성장 가능성</h3>
+            <div class="growth-list">
+              {{GROWTH_OPPORTUNITIES}}
+            </div>
           </div>
         </div>
       </div>

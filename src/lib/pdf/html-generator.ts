@@ -380,9 +380,9 @@ export class HTMLPDFGenerator {
       // TOC 항목 생성
       const tocItems: TableOfContentsItem[] = [];
 
-      // Executive Summary는 page 1
+      // 종합 분석 요약은 page 1
       if (aiSummary) {
-        tocItems.push({ title: "Executive Summary", url: "AI Summary", pageNumber: 1 });
+        tocItems.push({ title: "종합 분석 요약", url: "AI Summary", pageNumber: 1 });
       }
 
       // 각 크롤링된 페이지를 목차에 추가 (page 2부터 시작)
@@ -415,9 +415,7 @@ export class HTMLPDFGenerator {
         ),
         PRODUCTS_SERVICES: this.buildProductsServices(aiSummary),
         TARGET_CUSTOMERS: this.buildTargetCustomers(aiSummary),
-        STAT_VALUE: "80%",
-        STAT_LABEL: "Time Reduction",
-        STAT_DESC: "Average savings in report generation time per analyst.",
+        GROWTH_OPPORTUNITIES: this.buildGrowthOpportunities(aiSummary),
         TOC_ITEMS: this.buildTocItems(tocItems),
         PAGE_SECTIONS: this.buildPageSections(pagesWithScreenshots, domain, generatedDate),
       };
@@ -439,8 +437,14 @@ export class HTMLPDFGenerator {
       );
       console.log("[PDF] 스크린샷 PDF 생성 완료");
 
-      // 개별 PDF 생성 (전체 PDF를 각 섹션으로 분리)
-      const individualPdfs: Buffer[] = [pdfBuffer]; // 현재는 전체 PDF만 반환
+      // 개별 페이지별 PDF 생성
+      console.log("[PDF] 개별 페이지 PDF 생성 시작...");
+      const individualPdfs: Buffer[] = await this.generateIndividualPagePDFs(
+        pagesWithScreenshots,
+        domain,
+        generatedDate
+      );
+      console.log(`[PDF] ${individualPdfs.length}개 개별 페이지 PDF 생성 완료`);
 
       // PDFResult 타입에 맞춰 반환
       return {
@@ -515,6 +519,30 @@ export class HTMLPDFGenerator {
   }
 
   /**
+   * Growth Opportunities HTML 생성
+   */
+  private buildGrowthOpportunities(aiSummary?: AISummary | null): string {
+    if (!aiSummary?.growthOpportunities || aiSummary.growthOpportunities.length === 0) {
+      return '<p style="color: #64748b; font-size: 12px;">정보 없음</p>';
+    }
+
+    return `
+      <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;">
+        ${aiSummary.growthOpportunities
+          .map(
+            (opportunity) => `
+          <li style="display: flex; align-items: start; gap: 8px; font-size: 11px; line-height: 1.6; color: #334155;">
+            <span style="color: #10b981; margin-top: 2px;">📈</span>
+            <span>${this.escapeHtml(opportunity)}</span>
+          </li>
+        `
+          )
+          .join("")}
+      </ul>
+    `;
+  }
+
+  /**
    * TOC Items HTML 생성
    */
   private buildTocItems(tocItems: TableOfContentsItem[]): string {
@@ -582,25 +610,6 @@ export class HTMLPDFGenerator {
     }
   }
 
-  /**
-   * 퀵 인사이트 생성 (AI 요약의 핵심 1-2문장)
-   */
-  private generateQuickInsight(aiSummary: string): string {
-    // AI 요약의 첫 2문장을 추출
-    const sentences = aiSummary.split(/[.!?]\s+/);
-    const insight = sentences.slice(0, 2).join('. ');
-    return insight.length > 150 ? insight.substring(0, 150) + '...' : insight + '.';
-  }
-
-  /**
-   * 컨텐츠 길이를 읽기 쉬운 형태로 변환
-   */
-  private formatContentLength(content: string): string {
-    const length = content.length;
-    if (length < 1000) return `${length} chars`;
-    if (length < 10000) return `${(length / 1000).toFixed(1)}k chars`;
-    return `${(length / 1000).toFixed(0)}k chars`;
-  }
 
   /**
    * Page Sections HTML 생성 (각 페이지별 썸네일 + AI 요약)
@@ -625,27 +634,11 @@ export class HTMLPDFGenerator {
         ? `data:image/jpeg;base64,${page.screenshot.toString("base64")}`
         : "";
 
-      // AI 요약 (없으면 기본 메시지)
-      const aiSummary = page.pageSummary || "No AI summary available for this page.";
+      // AI 비즈니스 인사이트 (없으면 기본 메시지)
+      const aiInsight = page.pageSummary || "비즈니스 인사이트를 생성할 수 없습니다.";
 
       // 페이지 타입 감지
       const pageType = this.detectPageType(page.url);
-
-      // 퀵 인사이트 생성
-      const quickInsight = this.generateQuickInsight(aiSummary);
-
-      // 메타데이터 추출
-      const crawlTime = page.timestamp
-        ? new Date(page.timestamp).toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })
-        : 'Unknown';
-      const depth = page.depth || 0;
-      const contentLength = this.formatContentLength(page.content || '');
 
       sections.push(`
         <div class="page page-section">
@@ -666,63 +659,23 @@ export class HTMLPDFGenerator {
               <div class="page-url">${this.escapeHtml(page.url)}</div>
             </div>
 
-            <!-- 그리드 레이아웃: 썸네일 + 메타데이터 -->
-            <div class="page-overview-grid">
-              <!-- 왼쪽: 썸네일 -->
-              <div class="screenshot-thumbnail">
-                <img src="${screenshotBase64}" alt="${this.escapeHtml(page.title || "Screenshot")}">
-              </div>
-
-              <!-- 오른쪽: 메타데이터 -->
-              <div class="page-metadata">
-                <div>
-                  <span class="page-type-badge" style="background: ${pageType.color};">${pageType.type}</span>
-                </div>
-                <div class="metadata-card">
-                  <div class="metadata-label">Page Information</div>
-                  <div class="metadata-items">
-                    <div class="metadata-item">
-                      <span class="metadata-icon">📅</span>
-                      <div>
-                        <div class="metadata-item-label">Crawled</div>
-                        <div class="metadata-item-value">${crawlTime}</div>
-                      </div>
-                    </div>
-                    <div class="metadata-item">
-                      <span class="metadata-icon">🔗</span>
-                      <div>
-                        <div class="metadata-item-label">Depth Level</div>
-                        <div class="metadata-item-value">Level ${depth}</div>
-                      </div>
-                    </div>
-                    <div class="metadata-item">
-                      <span class="metadata-icon">📊</span>
-                      <div>
-                        <div class="metadata-item-label">Content Size</div>
-                        <div class="metadata-item-value">${contentLength}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+            <!-- 스크린샷 -->
+            <div class="screenshot-container">
+              <img src="${screenshotBase64}" alt="${this.escapeHtml(page.title || "Screenshot")}">
             </div>
 
-            <!-- 퀵 인사이트 -->
-            <div class="quick-insights">
-              <div class="quick-insights-icon">💡</div>
-              <div class="quick-insights-content">
-                <div class="quick-insights-label">Quick Insight</div>
-                <div class="quick-insights-text">${this.escapeHtml(quickInsight)}</div>
-              </div>
+            <!-- 페이지 타입 배지 -->
+            <div class="page-type-container">
+              <span class="page-type-badge" style="background: ${pageType.color};">${pageType.type}</span>
             </div>
 
-            <!-- 전체 AI 요약 -->
-            <div class="ai-summary-box">
-              <div class="ai-summary-header">
-                <span class="material-symbols-outlined ai-icon">psychology</span>
-                <span class="ai-summary-title">AI Page Summary</span>
+            <!-- AI 비즈니스 인사이트 -->
+            <div class="business-insights-box">
+              <div class="business-insights-header">
+                <span class="material-symbols-outlined ai-icon">insights</span>
+                <span class="business-insights-title">Business Insights</span>
               </div>
-              <div class="ai-summary-text">${this.escapeHtml(aiSummary)}</div>
+              <div class="business-insights-text">${aiInsight}</div>
             </div>
           </article>
           <div class="page-section-footer">
@@ -807,6 +760,54 @@ export class HTMLPDFGenerator {
     });
 
     return await this.htmlToPDF(html);
+  }
+
+  /**
+   * 개별 페이지별 PDF 생성 (page-section.html 템플릿 사용)
+   */
+  private async generateIndividualPagePDFs(
+    pages: CrawledPage[],
+    domain: string,
+    generatedDate: string
+  ): Promise<Buffer[]> {
+    const individualPdfs: Buffer[] = [];
+    const template = this.loadTemplate("page-section");
+
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      const pageType = this.detectPageType(page.url);
+
+      // 스크린샷을 base64로 인코딩
+      const screenshotBase64 = page.screenshot
+        ? `data:image/jpeg;base64,${page.screenshot.toString("base64")}`
+        : "";
+
+      // AI 비즈니스 인사이트
+      const aiInsight = page.pageSummary || "비즈니스 인사이트를 생성할 수 없습니다.";
+
+      // 변수 맵 구성
+      const vars: Record<string, string> = {
+        DOMAIN_NAME: domain,
+        GENERATED_DATE: generatedDate,
+        PAGE_INDEX: (i + 1).toString(),
+        PAGE_TITLE: this.escapeHtml(page.title || "Untitled"),
+        PAGE_URL: this.escapeHtml(page.url),
+        SCREENSHOT_DATA_URL: screenshotBase64,
+        PAGE_TYPE: pageType.type,
+        PAGE_TYPE_COLOR: pageType.color,
+        AI_SUMMARY: aiInsight, // pre-wrap이 적용되어 마크다운 포맷 유지
+        PDF_PAGE_NUMBER: (i + 1).toString(),
+      };
+
+      // 템플릿 변수 치환
+      const html = this.replaceTemplateVars(template, vars);
+
+      // PDF 생성
+      const pdfBuffer = await this.htmlToPDF(html);
+      individualPdfs.push(pdfBuffer);
+    }
+
+    return individualPdfs;
   }
 
   /**
