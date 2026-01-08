@@ -10,26 +10,39 @@ const openai = new OpenAI({
 });
 
 /**
- * 개별 페이지의 간단한 요약 생성 (3-4줄)
+ * 개별 페이지의 비즈니스 인사이트 생성 (투자자/파트너 관점)
  */
 export async function generatePageSummary(
   page: CrawledPage
 ): Promise<string> {
-  const prompt = `다음 웹페이지의 핵심 내용을 3-4문장으로 요약해주세요.
+  const prompt = `당신은 투자자, 파트너, 구직자 등 외부 분석가를 위한 웹페이지 분석 전문가입니다.
+다음 웹페이지를 분석하여 비즈니스 의사결정에 필요한 핵심 정보를 제공해주세요.
 
 URL: ${page.url}
 제목: ${page.title}
 
 내용:
-${page.content.substring(0, 2000)}
+${page.content.substring(0, 2500)}
 
-요구사항:
-- 핵심 정보만 간결하게 (3-4문장)
-- 불필요한 인사말, 전치사 제거
-- 구체적이고 실용적인 정보 위주
+다음 형식으로 분석해주세요:
+
+**페이지 역할:** [이 페이지의 비즈니스 목적을 1문장으로 설명]
+
+**핵심 인사이트:**
+• [구체적 수치/데이터가 있는 핵심 정보 1]
+• [핵심 정보 2]
+• [핵심 정보 3]
+• [핵심 정보 4]
+
+분석 원칙:
+- 페이지에서 실제 확인된 정보만 사용 (추측 금지)
+- 가능하면 구체적 수치 포함 (가격, 고객 수, 성장률, 인증, 파트너십 등)
+- 투자자/파트너 관점에서 중요한 비즈니스 정보 우선
+- 회사 개선점이 아닌 외부 분석자에게 유용한 정보
+- 각 인사이트는 1줄로 간결하게
 - 한국어로 작성
 
-출력 형식: 요약문만 출력 (추가 설명 없이)`;
+출력: 위 형식 그대로 출력 (추가 설명 없이)`;
 
   try {
     const completion = await openai.chat.completions.create({
@@ -37,7 +50,7 @@ ${page.content.substring(0, 2000)}
       messages: [
         {
           role: 'system',
-          content: '당신은 웹페이지 내용을 핵심만 간결하게 요약하는 전문가입니다.',
+          content: '당신은 비즈니스 분석 전문가로, 투자자와 파트너에게 유용한 인사이트를 제공합니다.',
         },
         {
           role: 'user',
@@ -45,13 +58,13 @@ ${page.content.substring(0, 2000)}
         },
       ],
       temperature: 0.3, // 일관성 있는 요약을 위해 낮게 설정
-      max_tokens: 200, // 짧은 요약
+      max_tokens: 300, // 조금 더 긴 분석
     });
 
-    return completion.choices[0].message.content?.trim() || '요약을 생성할 수 없습니다.';
+    return completion.choices[0].message.content?.trim() || '분석을 생성할 수 없습니다.';
   } catch (error) {
     console.error('[AI] Page summary generation failed:', error);
-    return '페이지 요약 생성 실패';
+    return '페이지 분석 실패';
   }
 }
 
@@ -167,15 +180,16 @@ ${content}
     "강점 2: 구체적인 설명과 근거",
     "강점 3: 구체적인 설명과 근거"
   ],
-  "improvementAreas": [
-    "개선점 1: 구체적인 이유와 제안",
-    "개선점 2: 구체적인 이유와 제안",
-    "개선점 3: 구체적인 이유와 제안"
+  "growthOpportunities": [
+    "성장 기회 1: 확장 가능한 영역과 시장 잠재력 (예: 신규 고객층, 새로운 시장, 추가 서비스)",
+    "성장 기회 2: 미개척 영역과 예상 성장 가능성",
+    "성장 기회 3: 투자/협업 기회 및 스케일업 방향"
   ]
 }
 
 중요:
-- 강점과 개선점은 웹사이트에서 실제로 관찰된 내용을 바탕으로 작성하세요
+- 강점과 성장 기회는 웹사이트에서 실제로 관찰된 내용을 바탕으로 작성하세요
+- 투자자/파트너 관점에서 이 회사의 성장 가능성과 확장 영역을 분석하세요
 - 추측이나 일반론이 아닌 구체적이고 실행 가능한 인사이트를 제공하세요`
     );
   }
@@ -214,10 +228,10 @@ ${content}
     "강점 2: 구체적 근거와 데이터, 왜 강점인지 분석",
     "강점 3: 구체적 근거와 데이터, 왜 강점인지 분석"
   ],
-  "improvementAreas": [
-    "개선점 1: 현재 상태, 문제점, 개선 방향 제시",
-    "개선점 2: 현재 상태, 문제점, 개선 방향 제시",
-    "개선점 3: 현재 상태, 문제점, 개선 방향 제시"
+  "growthOpportunities": [
+    "성장 기회 1: 미개척 시장/고객층, 확장 가능성, 예상 임팩트 (투자자 관점)",
+    "성장 기회 2: 신규 서비스 영역, 수익 다각화 기회, 시장 규모 추정",
+    "성장 기회 3: 파트너십/인수합병 기회, 글로벌 확장 가능성"
   ],
   "competitorAnalysis": "경쟁 환경 분석: 주요 경쟁사, 시장 포지셔닝, 경쟁 우위 및 열위 요소 (5-7문장)",
   "actionableInsights": [
@@ -268,7 +282,7 @@ function parseAISummary(
     if (detailLevel === 'detailed' || detailLevel === 'comprehensive') {
       summary.businessModel = parsed.businessModel;
       summary.keyStrengths = parsed.keyStrengths;
-      summary.improvementAreas = parsed.improvementAreas;
+      summary.growthOpportunities = parsed.growthOpportunities;
     }
 
     // comprehensive 레벨 전용 필드

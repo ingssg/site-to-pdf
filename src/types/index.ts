@@ -91,7 +91,7 @@ export interface AISummary {
 
   // 심화 분석 (detailed, comprehensive)
   keyStrengths?: string[]; // 강점 3가지 (구체적 근거 포함)
-  improvementAreas?: string[]; // 개선 필요 영역 3가지
+  growthOpportunities?: string[]; // 성장 가능성 3가지 (투자자/파트너 관점)
   competitorAnalysis?: string; // 경쟁사 분석 및 시장 포지셔닝
 
   // 실행 인사이트 (comprehensive)
