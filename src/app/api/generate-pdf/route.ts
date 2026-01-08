@@ -103,24 +103,19 @@ export async function POST(request: NextRequest) {
             )}MB`
           );
 
-          // ZIP 압축 (각 페이지는 스크린샷 + 요약 = 2개 PDF)
+          // ZIP 압축 (각 페이지당 1개 PDF)
           sendProgress('개별 PDF ZIP 생성 중...', 85);
           console.log("[API] 개별 PDF ZIP 생성 시작...");
           const zip = new JSZip();
           (pdfResult.individualPdfs || []).forEach((pdfBuffer, index) => {
-            // 각 크롤링 페이지는 2개의 PDF (스크린샷 + 요약)
-            const pageIndex = Math.floor(index / 2);
-            const isScreenshot = index % 2 === 0;
-
-            const page = crawledPages[pageIndex];
+            const page = crawledPages[index];
             if (!page) {
               console.warn(`[API] PDF ${index}에 해당하는 페이지를 찾을 수 없음. 스킵합니다.`);
               return;
             }
 
-            const baseName = `${pageIndex + 1}_${page.title || "page"}`;
-            const suffix = isScreenshot ? "" : "_요약";
-            const filename = `${baseName}${suffix}.pdf`
+            const baseName = `${index + 1}_${page.title || "page"}`;
+            const filename = `${baseName}.pdf`
               .replace(/[^a-zA-Z0-9가-힣._-]/g, "_")
               .slice(0, 100);
 

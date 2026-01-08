@@ -607,15 +607,45 @@ export default function PageSelector({
                 </div>
                 <div className="flex-1 min-w-0 flex flex-col gap-0.5 sm:gap-1">
                   <div className="flex justify-between items-start gap-1.5 sm:gap-2">
-                    <h3 className="font-bold text-[#0d101b] dark:text-white truncate text-sm sm:text-base">
+                    <h3 className="font-bold text-[#0d101b] dark:text-white truncate text-sm sm:text-base flex-1">
                       {page.title || "제목 없음"}
                     </h3>
-                    {/* 페이지 타입 배지 */}
-                    {page.pageType && page.pageType !== "General" && (
-                      <span className="shrink-0 text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                        {page.pageType}
-                      </span>
-                    )}
+
+                    {/* 우측 버튼 그룹 */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* 페이지 타입 배지 */}
+                      {page.pageType && page.pageType !== "General" && (
+                        <span className="text-[9px] sm:text-[10px] font-semibold px-1.5 sm:px-2 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                          {page.pageType}
+                        </span>
+                      )}
+
+                      {/* 사이트 확인 버튼 */}
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault(); // 체크박스 토글 방지
+                          e.stopPropagation();
+                          window.open(page.url, '_blank', 'noopener,noreferrer');
+                        }}
+                        className="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-semibold rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 transition-colors flex items-center gap-1"
+                        title="새 탭에서 사이트 확인"
+                      >
+                        <svg
+                          className="w-3 h-3 sm:w-3.5 sm:h-3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                          />
+                        </svg>
+                        <span className="hidden sm:inline">확인</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* 상태 배지 & 제외 이유 */}

@@ -679,9 +679,9 @@ export default function ResultDisplay({
               </details>
             )}
 
-            {/* Improvement Areas */}
-            {summary?.improvementAreas &&
-              summary.improvementAreas.length > 0 && (
+            {/* Growth Opportunities */}
+            {summary?.growthOpportunities &&
+              summary.growthOpportunities.length > 0 && (
                 <details className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
                   <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                     <div className="flex items-center gap-3">
@@ -696,12 +696,12 @@ export default function ResultDisplay({
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={2}
-                            d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                            d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
                           />
                         </svg>
                       </div>
                       <p className="text-base font-bold text-[#0d101b] dark:text-[#f8f9fc]">
-                        개선 영역
+                        성장 가능성
                       </p>
                     </div>
                     <svg
@@ -720,14 +720,14 @@ export default function ResultDisplay({
                   </summary>
                   <div className="px-5 pb-5 pt-1">
                     <ul className="space-y-3">
-                      {summary.improvementAreas.map(
-                        (area: string, idx: number) => (
+                      {summary.growthOpportunities.map(
+                        (opportunity: string, idx: number) => (
                           <li
                             key={idx}
                             className="flex items-start gap-2 text-sm text-[#4c599a] dark:text-[#b0b8d6]"
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0"></span>
-                            <span>{area}</span>
+                            <span>{opportunity}</span>
                           </li>
                         )
                       )}
