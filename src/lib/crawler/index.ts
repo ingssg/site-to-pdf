@@ -216,13 +216,16 @@ export class WebCrawler {
 
       console.log(`[Crawler] Fonts loaded and applied, taking screenshot for ${url}`);
 
-      // 최적화된 스크린샷 (JPEG, 품질 80) - PDF 크기 절감
+      // 16:9 비율 스크린샷 (모니터 크기, 상단만 캡처)
+      // 페이지 전체를 로드한 후 viewport 크기만 캡처
+      await page.setViewportSize({ width: 1920, height: 1080 });
+
       const screenshot = await page.screenshot({
-        fullPage: true,
+        fullPage: false, // viewport 크기만 캡처
         type: 'jpeg',
-        quality: 80, // 0-100 (80이면 품질과 용량의 균형)
+        quality: 80,
       });
-      console.log(`[Crawler] Screenshot captured for ${url} (${(screenshot.length / 1024).toFixed(1)}KB)`);
+      console.log(`[Crawler] Screenshot captured for ${url} (${(screenshot.length / 1024).toFixed(1)}KB, 1920x1080)`);
 
       // 크롤링된 페이지 저장
       this.crawledPages.push({
