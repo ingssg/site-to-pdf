@@ -245,6 +245,123 @@ export default function Home() {
             </div>
           </div>
         </section>
+
+        {/* Features Section */}
+        <section
+          id="features"
+          className="py-16 sm:py-20 md:py-24 lg:py-32 bg-white dark:bg-slate-900"
+        >
+          <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
+            {/* Section Header */}
+            <div className="text-center mb-12 sm:mb-16">
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white mb-4">
+                강력한 기능
+              </h2>
+              <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+                비즈니스 분석부터 법적 증거 보존까지, 필요한 모든 기능을 제공합니다
+              </p>
+            </div>
+
+            {/* Core Features Grid (3 cards) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 mb-16 sm:mb-20">
+              {/* Feature 1: AI 비즈니스 분석 */}
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 sm:p-8 hover:border-primary dark:hover:border-blue-400 transition-all">
+                <span className="material-symbols-outlined text-5xl text-primary mb-4 block">
+                  auto_awesome
+                </span>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                  AI 비즈니스 분석
+                </h3>
+                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                  Claude AI가 웹사이트를 분석하여 비즈니스 모델, 강점, 성장 가능성을 자동으로 요약합니다.
+                </p>
+              </div>
+
+              {/* Feature 2: 전체 사이트 PDF 변환 */}
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 sm:p-8 hover:border-primary dark:hover:border-blue-400 transition-all">
+                <span className="material-symbols-outlined text-5xl text-primary mb-4 block">
+                  description
+                </span>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                  전체 사이트 PDF 변환
+                </h3>
+                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                  최대 50페이지까지 자동 크롤링하여 전문적인 PDF 리포트를 생성합니다.
+                </p>
+              </div>
+
+              {/* Feature 3: 스마트 필터링 */}
+              <div className="rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 sm:p-8 hover:border-primary dark:hover:border-blue-400 transition-all">
+                <span className="material-symbols-outlined text-5xl text-primary mb-4 block">
+                  filter_list
+                </span>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-3">
+                  스마트 필터링
+                </h3>
+                <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                  AI가 중요한 페이지만 선별하여 불필요한 약관, SNS 링크 등을 자동 제외합니다.
+                </p>
+              </div>
+            </div>
+
+            {/* Use Cases Section */}
+            <div className="text-center mb-8 sm:mb-12">
+              <h3 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                누가 사용하나요?
+              </h3>
+              <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400">
+                다양한 산업 전문가들이 SiteToPDF를 활용합니다
+              </p>
+            </div>
+
+            {/* Use Cases Grid (4 cards) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Use Case 1: VC 투자심사 */}
+              <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 hover:shadow-lg transition-all">
+                <div className="text-4xl mb-3">🎯</div>
+                <h4 className="font-bold text-slate-900 dark:text-white mb-2">
+                  VC 투자심사
+                </h4>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  투자 검토 시 포트폴리오 기업 웹사이트를 빠르게 분석하고 리포트 생성
+                </p>
+              </div>
+
+              {/* Use Case 2: B2B 영업팀 */}
+              <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 hover:shadow-lg transition-all">
+                <div className="text-4xl mb-3">📊</div>
+                <h4 className="font-bold text-slate-900 dark:text-white mb-2">
+                  B2B 영업팀
+                </h4>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  영업 미팅 전 고객사 웹사이트 분석으로 맞춤형 제안서 준비
+                </p>
+              </div>
+
+              {/* Use Case 3: 컨설팅 */}
+              <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 hover:shadow-lg transition-all">
+                <div className="text-4xl mb-3">🔍</div>
+                <h4 className="font-bold text-slate-900 dark:text-white mb-2">
+                  컨설팅
+                </h4>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  클라이언트 비즈니스 모델 분석 및 경쟁사 조사 자료 수집
+                </p>
+              </div>
+
+              {/* Use Case 4: 법무팀 */}
+              <div className="rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 hover:shadow-lg transition-all">
+                <div className="text-4xl mb-3">⚖️</div>
+                <h4 className="font-bold text-slate-900 dark:text-white mb-2">
+                  법무팀
+                </h4>
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  법적 증거 보존을 위한 웹사이트 전체 아카이빙 (타임스탬프 포함)
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
 
       {/* Crawler Form - Shown in modal */}
