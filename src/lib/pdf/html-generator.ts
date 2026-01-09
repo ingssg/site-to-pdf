@@ -430,10 +430,10 @@ export class HTMLPDFGenerator {
       // 스크린샷 PDF 생성
       console.log("[PDF] 스크린샷 PDF 생성 시작...");
       const screenshotPdf = await this.generateScreenshotPDF(
-        pages, // 모든 페이지 전달 (필터링은 generateScreenshotPDF에서 수행)
+        pages, // 전달된 모든 페이지 포함 (이미 선택된 페이지만 전달됨)
         domain,
         generatedDate,
-        crawlMode // 크롤링 모드 전달
+        crawlMode
       );
       console.log("[PDF] 스크린샷 PDF 생성 완료");
 
@@ -707,14 +707,11 @@ export class HTMLPDFGenerator {
       return Buffer.alloc(0);
     }
 
-    // 크롤링 모드에 따라 페이지 필터링
-    // Full 모드: 모든 페이지 포함 (법적 증거 보존)
-    // Smart 모드: 중요한 페이지만 포함 (defaultChecked !== false)
-    const filteredPages = crawlMode === 'full'
-      ? pages // Full 모드: 모든 페이지
-      : pages.filter(p => p.defaultChecked !== false); // Smart 모드: 중요 페이지만
+    // 전달된 페이지는 이미 사용자가 선택한 페이지이므로 모두 포함
+    // (PageSelector에서 AI 또는 수동으로 선택한 페이지만 전달됨)
+    const filteredPages = pages;
 
-    console.log(`[PDF] 스크린샷 PDF 생성 (${crawlMode || 'smart'} 모드): ${filteredPages.length}/${pages.length}페이지`);
+    console.log(`[PDF] 스크린샷 PDF 생성: ${filteredPages.length}페이지`);
 
     if (filteredPages.length === 0) {
       return Buffer.alloc(0);

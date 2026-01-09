@@ -14,6 +14,7 @@ export class WebCrawler {
   private config: CrawlConfig;
   private onProgress?: (current: number, total: number, url: string) => void;
   private skippedUrls: Set<string> = new Set(); // 스마트 모드에서 제외된 URL 추적
+  private readonly CONCURRENT_LIMIT = 5; // 동시에 5개 페이지 크롤링
 
   constructor(config: CrawlConfig, onProgress?: (current: number, total: number, url: string) => void) {
     this.config = config;
@@ -112,14 +113,14 @@ export class WebCrawler {
     try {
       const page = await this.browser!.newPage();
 
-      // 페이지 로드 (네트워크 완료까지 대기 - 웹 폰트 로딩 포함)
+      // 페이지 로드 (DOM 로드만 대기 - 속도 최적화)
       await page.goto(url, {
-        waitUntil: 'networkidle',  // domcontentloaded → networkidle 변경
-        timeout: 30000,  // 15초 → 30초로 증가
+        waitUntil: 'domcontentloaded',  // networkidle → domcontentloaded (빠른 로딩)
+        timeout: 15000,  // 15초 타임아웃
       });
 
-      // 웹 폰트 완전 로딩 대기 (추가 시간)
-      await page.waitForTimeout(2000);  // 1초 → 2초로 증가
+      // 짧은 대기 (렌더링 안정화)
+      await page.waitForTimeout(500);  // 0.5초만
 
       // 페이지 정보 추출
       const title = await page.title();
@@ -211,8 +212,8 @@ export class WebCrawler {
         document.body.style.display = '';
       });
 
-      // 추가 대기 시간 (웹 폰트 렌더링 완전 적용) - 5초로 증가
-      await page.waitForTimeout(5000);
+      // 짧은 대기 시간 (폰트 렌더링 안정화 - 속도 최적화)
+      await page.waitForTimeout(1000);  // 5초 → 1초로 단축
 
       console.log(`[Crawler] Fonts loaded and applied, taking screenshot for ${url}`);
 
@@ -227,15 +228,21 @@ export class WebCrawler {
       });
       console.log(`[Crawler] Screenshot captured for ${url} (${(screenshot.length / 1024).toFixed(1)}KB, 1920x1080)`);
 
-      // 크롤링된 페이지 저장
-      this.crawledPages.push({
-        url,
-        title,
-        content: content || '',
-        screenshot,
-        timestamp: new Date(),
-        depth,
-      });
+      // 크롤링된 페이지 저장 (병렬 처리 경쟁 조건 방지)
+      if (this.crawledPages.length < this.config.maxPages) {
+        this.crawledPages.push({
+          url,
+          title,
+          content: content || '',
+          screenshot,
+          timestamp: new Date(),
+          depth,
+        });
+      } else {
+        // 최대 페이지 수 도달, 페이지 닫기
+        await page.close();
+        return;
+      }
 
       // 진행 상황 콜백 호출
       if (this.onProgress) {
@@ -254,13 +261,27 @@ export class WebCrawler {
         `[Crawler] Found ${links.length} links on ${url} (${sameDomainLinks.length} same domain)`
       );
 
-      // 재귀적으로 링크 크롤링
-      for (const link of sameDomainLinks) {
-        if (this.crawledPages.length < this.config.maxPages) {
-          await this.crawlPage(link, depth + 1);
-        } else {
+      // 병렬로 링크 크롤링 (CONCURRENT_LIMIT개씩 동시 처리)
+      for (let i = 0; i < sameDomainLinks.length; i += this.CONCURRENT_LIMIT) {
+        // 최대 페이지 수 도달 시 중단
+        if (this.crawledPages.length >= this.config.maxPages) {
           break;
         }
+
+        // 배치 단위로 링크 추출
+        const batch = sameDomainLinks.slice(i, i + this.CONCURRENT_LIMIT);
+
+        // 병렬 처리 (최대 5개 동시)
+        await Promise.all(
+          batch.map(async (link) => {
+            // 각 크롤링 시작 시점에 다시 체크
+            if (this.crawledPages.length < this.config.maxPages) {
+              await this.crawlPage(link, depth + 1);
+            }
+          })
+        );
+
+        console.log(`[Crawler] Batch completed: ${this.crawledPages.length}/${this.config.maxPages} pages`);
       }
     } catch (error) {
       console.error(`[Crawler] Failed to crawl ${url}:`, error);
@@ -295,13 +316,27 @@ export class WebCrawler {
       const baseUrl = new URL(this.config.url);
       const targetUrl = new URL(url);
 
-      // 루트 도메인 추출 (예: www.naver.com → naver.com, news.naver.com → naver.com)
+      // 2단계 TLD 리스트 (co.kr, co.uk, com.au 등)
+      const twoLevelTLDs = ['co.kr', 'co.uk', 'co.jp', 'com.au', 'com.br', 'ne.jp', 'or.kr', 're.kr', 'go.kr'];
+
+      // 루트 도메인 추출 (2단계 TLD 고려)
       const getRootDomain = (hostname: string): string => {
         const parts = hostname.split('.');
+
+        // 2단계 TLD 확인 (예: co.kr)
+        if (parts.length >= 3) {
+          const possibleTLD = parts.slice(-2).join('.');
+          if (twoLevelTLDs.includes(possibleTLD)) {
+            // 2단계 TLD인 경우: 마지막 3개 (예: mangocreative.co.kr)
+            return parts.slice(-3).join('.');
+          }
+        }
+
+        // 일반 TLD인 경우: 마지막 2개 (예: naver.com)
         if (parts.length >= 2) {
-          // 마지막 2개 부분만 (domain.com)
           return parts.slice(-2).join('.');
         }
+
         return hostname;
       };
 
