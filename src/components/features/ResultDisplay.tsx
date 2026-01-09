@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import type { GeneratePDFResponse } from "@/types/api";
+import type { AppError } from '@/types/errors';
+import ErrorDisplay from "@/components/ui/ErrorDisplay";
+import { ErrorCode, getErrorInfo } from '@/constants/errorMessages';
 
 interface ResultDisplayProps {
   crawlResult: {
@@ -38,6 +41,7 @@ export default function ResultDisplay({
   const { pdf, summary } = pdfResult;
   const crawl = crawlResult;
   const [showPagesList, setShowPagesList] = useState(false);
+  const [downloadError, setDownloadError] = useState<AppError | null>(null);
 
   // 도메인 추출
   const getDomain = () => {
@@ -68,14 +72,15 @@ export default function ResultDisplay({
 
   const handleDownloadPDF = async () => {
     if (pdf.mergedPdfTooLarge) {
-      alert(
-        `통합 PDF가 너무 큽니다 (${pdf.totalSizeMB}MB).\n대신 개별 PDF ZIP 파일을 다운로드해주세요.`
-      );
+      setDownloadError(getErrorInfo(ErrorCode.PDF_SIZE_TOO_LARGE));
       return;
     }
 
     if (!pdf.mergedPdf) {
-      alert("PDF 데이터가 없습니다");
+      setDownloadError(getErrorInfo(
+        ErrorCode.DOWNLOAD_FAILED,
+        'PDF data is missing'
+      ));
       return;
     }
 
@@ -105,7 +110,10 @@ export default function ResultDisplay({
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("PDF 다운로드 실패:", error);
-      alert("PDF 다운로드 중 오류가 발생했습니다.");
+      setDownloadError(getErrorInfo(
+        ErrorCode.DOWNLOAD_FAILED,
+        error instanceof Error ? error.message : undefined
+      ));
     }
   };
 
@@ -148,13 +156,19 @@ export default function ResultDisplay({
       }
     } catch (error) {
       console.error("ZIP 다운로드 실패:", error);
-      alert("ZIP 다운로드 중 오류가 발생했습니다.");
+      setDownloadError(getErrorInfo(
+        ErrorCode.DOWNLOAD_FAILED,
+        error instanceof Error ? error.message : undefined
+      ));
     }
   };
 
   const handleDownloadScreenshotPDF = async () => {
     if (!pdf.screenshotPdf) {
-      alert("스크린샷 PDF 데이터가 없습니다");
+      setDownloadError(getErrorInfo(
+        ErrorCode.DOWNLOAD_FAILED,
+        'Screenshot PDF data is missing'
+      ));
       return;
     }
 
@@ -187,7 +201,10 @@ export default function ResultDisplay({
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("스크린샷 PDF 다운로드 실패:", error);
-      alert("스크린샷 PDF 다운로드 중 오류가 발생했습니다.");
+      setDownloadError(getErrorInfo(
+        ErrorCode.DOWNLOAD_FAILED,
+        error instanceof Error ? error.message : undefined
+      ));
     }
   };
 
@@ -220,54 +237,57 @@ export default function ResultDisplay({
   const hasMorePages = crawl.pages.length > (showPagesList ? 5 : 3);
 
   return (
-    <div className="min-h-screen bg-[#f6f6f8] dark:bg-[#101322] text-[#0d101b] dark:text-[#f8f9fc] font-display antialiased pb-24">
-      {/* Top App Bar */}
-      <header className="sticky top-0 z-50 bg-[#f6f6f8]/95 dark:bg-[#101322]/95 backdrop-blur-sm border-b border-[#cfd3e7]/50 dark:border-white/10">
-        <div className="flex items-center justify-between px-4 h-[60px] max-w-3xl mx-auto w-full">
+    <div className="min-h-screen bg-[#f8f9fc] dark:bg-[#0f172a] text-[#0d101b] dark:text-[#f8f9fc] font-display antialiased pb-24">
+      {/* Header - Same as Landing Page */}
+      <header className="fixed top-0 z-50 w-full backdrop-blur-xl bg-white/70 dark:bg-[#0f172a]/80 border-b border-slate-200/60 dark:border-slate-800/60">
+        <div className="flex items-center h-14 sm:h-16 px-3 sm:px-4 md:px-6 lg:px-8 max-w-7xl mx-auto justify-between">
           <button
             onClick={() => window.location.reload()}
-            className="flex items-center justify-center w-10 h-10 -ml-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-            aria-label="뒤로가기"
+            className="flex items-center gap-2 sm:gap-2.5 hover:opacity-80 transition-opacity"
           >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
+            <img
+              src="/logo.png"
+              alt="SiteToPDF"
+              className="w-8 h-8 sm:w-10 sm:h-10 object-contain"
+            />
+            <span className="text-slate-900 dark:text-white text-base sm:text-lg font-bold tracking-tight">
+              SiteToPDF
+            </span>
           </button>
-          <h1 className="text-lg font-bold leading-tight tracking-tight flex-1 text-center truncate px-2">
-            SiteToPDF Results
-          </h1>
-          <button
-            className="flex items-center justify-center w-10 h-10 -mr-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-            aria-label="공유"
-          >
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"
-              />
-            </svg>
-          </button>
+          <div className="flex items-center gap-3 sm:gap-4 md:gap-6">
+            <nav className="hidden md:flex gap-6 text-sm font-semibold text-slate-600 dark:text-slate-300">
+              <a
+                className="hover:text-primary dark:hover:text-blue-400 transition-colors"
+                href="#features"
+              >
+                기능
+              </a>
+              <a
+                className="hover:text-primary dark:hover:text-blue-400 transition-colors"
+                href="#pricing"
+              >
+                가격
+              </a>
+              <a
+                className="hover:text-primary dark:hover:text-blue-400 transition-colors"
+                href="#enterprise"
+              >
+                기업용
+              </a>
+            </nav>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <a
+                className="hidden sm:block text-slate-600 dark:text-slate-300 hover:text-primary dark:hover:text-primary transition-colors text-xs sm:text-sm font-bold"
+                href="#"
+              >
+                로그인
+              </a>
+            </div>
+          </div>
         </div>
       </header>
 
-      <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6 space-y-6">
+      <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6 space-y-6 pt-20 sm:pt-24">
         {/* ActionPanel / Status Indicator */}
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
           <div className="flex items-start gap-3">
@@ -311,7 +331,7 @@ export default function ResultDisplay({
                 d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
               />
             </svg>
-            <h2 className="text-xl font-bold tracking-tight">AI 경영진 요약</h2>
+            <h2 className="text-xl font-bold tracking-tight">AI 비즈니스 분석</h2>
           </div>
 
           {/* Main Overview Card */}
@@ -347,7 +367,7 @@ export default function ResultDisplay({
           <div className="flex flex-col gap-3">
             {/* Key Products / Main Services */}
             {(summary?.products || summary?.mainServices) && (
-              <details className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -403,7 +423,7 @@ export default function ResultDisplay({
 
             {/* Target Customers */}
             {summary?.targetCustomers && summary.targetCustomers.length > 0 && (
-              <details className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -449,7 +469,7 @@ export default function ResultDisplay({
 
             {/* Value Propositions / Unique Features */}
             {(summary?.valueProps || summary?.uniqueFeatures) && (
-              <details className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -512,7 +532,7 @@ export default function ResultDisplay({
 
             {/* Problem Solved */}
             {summary?.problemSolved && (
-              <details className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -556,7 +576,7 @@ export default function ResultDisplay({
 
             {/* Business Model */}
             {summary?.businessModel && (
-              <details className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -625,7 +645,7 @@ export default function ResultDisplay({
 
             {/* Key Strengths */}
             {summary?.keyStrengths && summary.keyStrengths.length > 0 && (
-              <details className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -682,7 +702,7 @@ export default function ResultDisplay({
             {/* Growth Opportunities */}
             {summary?.growthOpportunities &&
               summary.growthOpportunities.length > 0 && (
-                <details className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+                <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
                   <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -738,7 +758,7 @@ export default function ResultDisplay({
 
             {/* Competitor Analysis */}
             {summary?.competitorAnalysis && (
-              <details className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -783,7 +803,7 @@ export default function ResultDisplay({
             {/* Actionable Insights */}
             {summary?.actionableInsights &&
               summary.actionableInsights.length > 0 && (
-                <details className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+                <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
                   <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -839,7 +859,7 @@ export default function ResultDisplay({
 
             {/* Market Opportunity */}
             {summary?.marketOpportunity && (
-              <details className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -882,6 +902,15 @@ export default function ResultDisplay({
             )}
           </div>
         </section>
+
+        {/* Error Display */}
+        {downloadError && (
+          <ErrorDisplay
+            error={downloadError}
+            onDismiss={() => setDownloadError(null)}
+            className="mb-4"
+          />
+        )}
 
         {/* Download Section */}
         <section className="space-y-4 pt-2">

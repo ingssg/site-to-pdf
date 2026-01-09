@@ -7,10 +7,14 @@ import type {
   APIErrorResponse,
   GeneratePDFResponse,
 } from "@/types/api";
+import type { AppError } from '@/types/errors';
 import Modal from "@/components/ui/modal";
+import GuideModal from "@/components/ui/GuideModal";
 import CrawlingProgressModal from "./CrawlingProgressModal";
 import PageSelector from "./PageSelector";
 import ResultDisplay from "./ResultDisplay";
+import ErrorDisplay from "@/components/ui/ErrorDisplay";
+import { inferErrorCode, getErrorInfo } from '@/constants/errorMessages';
 
 interface CrawlerFormProps {
   onClose?: () => void;
@@ -55,7 +59,8 @@ export default function CrawlerForm({
   const [loading, setLoading] = useState(false);
   const [crawlResult, setCrawlResult] = useState<CrawlAPIResponse | null>(null);
   const [pdfResult, setPdfResult] = useState<GeneratePDFResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<AppError | null>(null);
+  const [showGuide, setShowGuide] = useState(false);
 
   // 진행률 상태
   const [progress, setProgress] = useState<{
@@ -141,7 +146,12 @@ export default function CrawlerForm({
                 setCrawlResult(data as CrawlAPIResponse);
                 setProgress(null);
               } else if (data.type === "error") {
-                throw new Error(data.error);
+                // data.error가 AppError 객체인 경우와 문자열인 경우 모두 처리
+                const errorData = typeof data.error === 'string'
+                  ? getErrorInfo(inferErrorCode(data.error), data.error)
+                  : data.error;
+                setError(errorData);
+                throw new Error(errorData.userMessage);
               }
             } catch (parseError) {
               console.error("[SSE Parse Error]", parseError, "Line:", line);
@@ -151,9 +161,9 @@ export default function CrawlerForm({
         }
       }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "알 수 없는 에러가 발생했습니다"
-      );
+      const errorMessage = err instanceof Error ? err.message : "알 수 없는 에러가 발생했습니다";
+      const errorData = getErrorInfo(inferErrorCode(errorMessage), errorMessage);
+      setError(errorData);
     } finally {
       setLoading(false);
     }
@@ -195,9 +205,37 @@ export default function CrawlerForm({
 
   // 초기 폼 (URL 입력)
   return (
-    <Modal isOpen={true} onClose={onClose || (() => {})} showCloseButton={true}>
-      <div className="w-full p-6 sm:p-8">
-        <form onSubmit={handleSubmit} className="space-y-6">
+    <>
+      <Modal isOpen={true} onClose={onClose || (() => {})} showCloseButton={true}>
+        <div className="w-full p-6 sm:p-8">
+          {/* Header with Guide Button */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              웹사이트 크롤링
+            </h2>
+            <button
+              type="button"
+              onClick={() => setShowGuide(true)}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+            >
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              사용방법
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
           {/* URL Input */}
           <div>
             <label
@@ -324,52 +362,23 @@ export default function CrawlerForm({
           </button>
         </form>
 
-        {/* Error Display */}
-        {error && (
-          <div className="mt-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
-            <div className="flex items-start gap-3">
-              <span className="text-red-600 dark:text-red-400 text-2xl">
-                ⚠️
-              </span>
-              <div className="flex-1">
-                <h4 className="font-semibold text-red-900 dark:text-red-200 text-lg mb-2">
-                  크롤링 실패
-                </h4>
-                <p className="text-red-700 dark:text-red-300 text-sm mb-3">
-                  {error}
-                </p>
+          {/* Error Display */}
+          {error && (
+            <ErrorDisplay
+              error={error}
+              onRetry={() => {
+                setError(null);
+                setCrawlResult(null);
+                setPdfResult(null);
+              }}
+              className="mt-6"
+            />
+          )}
+        </div>
+      </Modal>
 
-                {/* 도움말 */}
-                <div className="bg-white dark:bg-slate-800 rounded p-3 mb-3">
-                  <p className="text-xs text-gray-700 dark:text-slate-300 font-medium mb-2">
-                    💡 문제 해결 방법:
-                  </p>
-                  <ul className="text-xs text-gray-600 dark:text-slate-400 space-y-1 ml-4">
-                    <li>• URL이 올바른지 확인해주세요 (https:// 포함)</li>
-                    <li>
-                      • 웹사이트가 robots.txt로 크롤링을 차단하지 않는지 확인
-                    </li>
-                    <li>• 페이지 수를 줄여보세요 (10-20페이지 권장)</li>
-                    <li>• 잠시 후 다시 시도해주세요</li>
-                  </ul>
-                </div>
-
-                {/* 재시도 버튼 */}
-                <button
-                  onClick={() => {
-                    setError(null);
-                    setCrawlResult(null);
-                    setPdfResult(null);
-                  }}
-                  className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium py-2 px-4 rounded transition-colors"
-                >
-                  다시 시도하기
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </Modal>
+      {/* Guide Modal */}
+      <GuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
+    </>
   );
 }
