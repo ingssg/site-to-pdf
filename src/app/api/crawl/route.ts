@@ -7,6 +7,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { crawlWebsite } from "@/lib/crawler";
 import { enrichPagesWithFilterMetadata } from "@/lib/crawler/page-filter";
+import { getErrorInfo, inferErrorCode } from '@/constants/errorMessages';
+import { ErrorCode } from '@/types/errors';
 
 // 요청 스키마 정의
 const CrawlRequestSchema = z.object({
@@ -97,9 +99,19 @@ export async function POST(request: NextRequest) {
           );
           controller.close();
         } catch (error) {
+          const errorCode = error instanceof Error
+            ? inferErrorCode(error.message)
+            : ErrorCode.UNKNOWN_ERROR;
+
+          const errorInfo = getErrorInfo(
+            errorCode,
+            error instanceof Error ? error.message : undefined
+          );
+
           const errorData = {
             type: 'error',
-            error: error instanceof Error ? error.message : '크롤링 실패',
+            error: errorInfo,
+            timestamp: new Date().toISOString(),
           };
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify(errorData)}\n\n`)
@@ -122,24 +134,32 @@ export async function POST(request: NextRequest) {
 
     // Zod 검증 에러
     if (error instanceof z.ZodError) {
+      const errorInfo = getErrorInfo(ErrorCode.INVALID_URL);
       return NextResponse.json(
         {
           success: false,
-          error: "잘못된 요청입니다",
-          details: error.issues,
+          error: errorInfo,
+          timestamp: new Date().toISOString(),
         },
         { status: 400 }
       );
     }
 
     // 일반 에러
+    const errorCode = error instanceof Error
+      ? inferErrorCode(error.message)
+      : ErrorCode.UNKNOWN_ERROR;
+
+    const errorInfo = getErrorInfo(
+      errorCode,
+      error instanceof Error ? error.message : undefined
+    );
+
     return NextResponse.json(
       {
         success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "알 수 없는 에러가 발생했습니다",
+        error: errorInfo,
+        timestamp: new Date().toISOString(),
       },
       { status: 500 }
     );

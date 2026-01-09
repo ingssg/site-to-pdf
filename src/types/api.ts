@@ -3,6 +3,7 @@
  */
 
 import type { AISummary } from './index';
+import type { AppError } from './errors';
 
 // POST /api/crawl 요청
 export interface CrawlAPIRequest {
@@ -65,12 +66,33 @@ export interface GeneratePDFResponse {
 // API 에러 응답
 export interface APIErrorResponse {
   success: false;
-  error: string;
-  details?: unknown;
+  error: AppError;
+  timestamp: string;
 }
 
 // POST /api/download 요청
 export interface DownloadAPIRequest {
   pdfBase64: string;
   filename?: string;
+}
+
+// POST /api/ai-filter 요청
+export interface AIFilterRequest {
+  pages: Array<{
+    url: string;
+    title: string;
+    content: string;
+    pageType?: string;
+    importance?: number;
+  }>;
+}
+
+// POST /api/ai-filter 응답
+export interface AIFilterResponse {
+  success: true;
+  data: {
+    selectedUrls: string[];
+    reasoning: string;
+    processedCount: number;
+  };
 }

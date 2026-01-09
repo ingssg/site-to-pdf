@@ -9,6 +9,8 @@ import JSZip from "jszip";
 import { generatePDFFromPages } from "@/lib/pdf";
 import { generateAISummary, generatePageSummary } from "@/lib/ai";
 import type { CrawledPage } from "@/types";
+import { getErrorInfo, inferErrorCode } from '@/constants/errorMessages';
+import { ErrorCode } from '@/types/errors';
 
 // 요청 스키마 정의
 const GeneratePDFRequestSchema = z.object({
@@ -185,9 +187,19 @@ export async function POST(request: NextRequest) {
           );
           controller.close();
         } catch (error) {
+          const errorCode = error instanceof Error
+            ? inferErrorCode(error.message)
+            : ErrorCode.PDF_GENERATION_FAILED;
+
+          const errorInfo = getErrorInfo(
+            errorCode,
+            error instanceof Error ? error.message : undefined
+          );
+
           const errorData = {
             type: 'error',
-            error: error instanceof Error ? error.message : 'PDF 생성 실패',
+            error: errorInfo,
+            timestamp: new Date().toISOString(),
           };
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify(errorData)}\n\n`)
@@ -210,24 +222,32 @@ export async function POST(request: NextRequest) {
 
     // Zod 검증 에러
     if (error instanceof z.ZodError) {
+      const errorInfo = getErrorInfo(ErrorCode.INVALID_PAGE_COUNT);
       return NextResponse.json(
         {
           success: false,
-          error: "잘못된 요청입니다",
-          details: error.issues,
+          error: errorInfo,
+          timestamp: new Date().toISOString(),
         },
         { status: 400 }
       );
     }
 
     // 일반 에러
+    const errorCode = error instanceof Error
+      ? inferErrorCode(error.message)
+      : ErrorCode.PDF_GENERATION_FAILED;
+
+    const errorInfo = getErrorInfo(
+      errorCode,
+      error instanceof Error ? error.message : undefined
+    );
+
     return NextResponse.json(
       {
         success: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "알 수 없는 에러가 발생했습니다",
+        error: errorInfo,
+        timestamp: new Date().toISOString(),
       },
       { status: 500 }
     );
