@@ -6,8 +6,11 @@ import type {
   GeneratePDFResponse,
   APIErrorResponse,
 } from "@/types/api";
+import type { AppError } from '@/types/errors';
 import PDFGenerationProgressModal from "./PDFGenerationProgressModal";
 import PDFCompletionModal from "./PDFCompletionModal";
+import ErrorDisplay from "@/components/ui/ErrorDisplay";
+import { ErrorCode, getErrorInfo, inferErrorCode } from '@/constants/errorMessages';
 
 interface PageSelectorProps {
   pages: Array<{
@@ -37,7 +40,10 @@ export default function PageSelector({
     new Set(pages.filter((p) => p.defaultChecked !== false).map((p) => p.url))
   );
   const [generating, setGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [aiFiltering, setAiFiltering] = useState(false);
+  const [aiReasoning, setAiReasoning] = useState<string | null>(null);
+  const [showReasoning, setShowReasoning] = useState(false);
+  const [error, setError] = useState<AppError | null>(null);
   const [completed, setCompleted] = useState(false);
   const [pdfResult, setPdfResult] = useState<GeneratePDFResponse | null>(null);
   const [showUsageGuide, setShowUsageGuide] = useState(false);
@@ -119,9 +125,64 @@ export default function PageSelector({
     setSelectedUrls(new Set(selected));
   };
 
+  // AI 자동 선택
+  const handleAIFilter = async () => {
+    setAiFiltering(true);
+    setError(null);
+
+    try {
+      console.log('[PageSelector] AI 필터링 시작...');
+
+      // API 호출용 데이터 준비 (콘텐츠 500자로 제한)
+      const requestData = {
+        pages: pages.map(page => ({
+          url: page.url,
+          title: page.title,
+          content: page.content.substring(0, 500),
+          pageType: page.pageType,
+          importance: page.importance,
+        })),
+      };
+
+      const response = await fetch('/api/ai-filter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData),
+      });
+
+      if (!response.ok) {
+        throw new Error('AI 필터링 API 호출 실패');
+      }
+
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error?.userMessage || 'AI 필터링 실패');
+      }
+
+      // 선택된 URL들로 상태 업데이트
+      setSelectedUrls(new Set(result.data.selectedUrls));
+
+      // AI 선택 이유 저장 및 자동으로 펼침
+      setAiReasoning(result.data.reasoning);
+      setShowReasoning(true);
+
+      console.log(`[AI Filter] ${result.data.selectedUrls.length}개 선택`);
+      console.log(`[AI Filter] 이유: ${result.data.reasoning}`);
+
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'AI 자동 선택 실패';
+      const errorData = getErrorInfo(inferErrorCode(errorMessage), errorMessage);
+      setError(errorData);
+      console.error('[PageSelector] AI 필터링 에러:', err);
+    } finally {
+      setAiFiltering(false);
+    }
+  };
+
   const handleGeneratePDF = async () => {
     if (selectedUrls.size === 0) {
-      alert("최소 1개 이상의 페이지를 선택해주세요");
+      setError(getErrorInfo(ErrorCode.NO_PAGES_SELECTED));
       return;
     }
 
@@ -199,7 +260,12 @@ export default function PageSelector({
                 setCompleted(true);
                 setPdfResult(data as GeneratePDFResponse);
               } else if (data.type === "error") {
-                throw new Error(data.error);
+                // data.error가 AppError 객체인 경우와 문자열인 경우 모두 처리
+                const errorData = typeof data.error === 'string'
+                  ? getErrorInfo(inferErrorCode(data.error), data.error)
+                  : data.error;
+                setError(errorData);
+                throw new Error(errorData.userMessage);
               }
             } catch (parseError) {
               console.error("[SSE Parse Error]", parseError, "Line:", line);
@@ -209,9 +275,9 @@ export default function PageSelector({
         }
       }
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "알 수 없는 에러가 발생했습니다"
-      );
+      const errorMessage = err instanceof Error ? err.message : "알 수 없는 에러가 발생했습니다";
+      const errorData = getErrorInfo(inferErrorCode(errorMessage), errorMessage);
+      setError(errorData);
     } finally {
       setGenerating(false);
     }
@@ -527,15 +593,15 @@ export default function PageSelector({
 
       {/* 스크롤 가능한 콘텐츠 영역 */}
       <main className="flex-1 overflow-y-auto px-3 sm:px-4 pb-32 no-scrollbar">
-        {/* 전체 선택 컨트롤 (Sticky) */}
-        <div className="sticky top-0 z-10 pt-2 pb-3 sm:pb-4 bg-white dark:bg-slate-800 space-y-2 sm:space-y-3">
-          <label className="flex items-center justify-between p-3 sm:p-4 rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-800 cursor-pointer active:scale-[0.99] transition-transform">
-            <div className="flex items-center gap-2 sm:gap-3">
+        {/* 전체 선택 컨트롤 (Sticky) - 컴팩트 버전 */}
+        <div className="sticky top-0 z-10 pt-1 pb-2 bg-white dark:bg-slate-800 space-y-2">
+          <label className="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-md transition-all">
+            <div className="flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={selectedUrls.size === pages.length}
                 onChange={toggleAll}
-                className="custom-checkbox h-5 w-5 sm:h-6 sm:w-6 appearance-none rounded border-2 border-[#cfd3e7] dark:border-slate-600 bg-transparent text-primary checked:bg-primary checked:border-primary focus:ring-0 focus:ring-offset-0 transition-all"
+                className="custom-checkbox h-4 w-4 appearance-none rounded border-2 border-[#cfd3e7] dark:border-slate-600 bg-transparent text-primary checked:bg-primary checked:border-primary focus:ring-0 focus:ring-offset-0 transition-all"
                 style={{
                   backgroundImage:
                     selectedUrls.size === pages.length
@@ -546,36 +612,70 @@ export default function PageSelector({
                   backgroundSize: "70%",
                 }}
               />
-              <span className="font-bold text-[#0d101b] dark:text-white text-sm sm:text-base">
-                전체 페이지 선택
+              <span className="font-semibold text-[#0d101b] dark:text-white text-xs sm:text-sm">
+                전체 선택
               </span>
             </div>
-            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[#4c599a] dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded">
-              {pages.length} Total
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#4c599a] dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+              {pages.length}
             </span>
           </label>
 
-          {/* 필터 프리셋 버튼 */}
-          <div className="flex gap-1.5 sm:gap-2">
-            <button
-              onClick={() => applyPreset("all")}
-              className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors border border-slate-200 dark:border-slate-600"
-            >
-              전체 ({pages.length})
-            </button>
-            <button
-              onClick={() => applyPreset("recommended")}
-              className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors border border-blue-200 dark:border-blue-800"
-            >
-              ✓ 추천 ({pages.filter((p) => (p.importance || 0) > 60).length})
-            </button>
-            <button
-              onClick={() => applyPreset("core")}
-              className="flex-1 px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-semibold bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors border border-purple-200 dark:border-purple-800"
-            >
-              핵심만 ({pages.filter((p) => (p.importance || 0) > 70).length})
-            </button>
-          </div>
+          {/* AI 자동 선택 버튼 - 컴팩트 */}
+          <button
+            onClick={handleAIFilter}
+            disabled={aiFiltering || pages.length === 0}
+            className="w-full px-3 py-1.5 text-xs font-semibold bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 rounded-lg hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 transition-colors border border-purple-200 dark:border-purple-800 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {aiFiltering ? (
+              <>
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                AI 분석 중...
+              </>
+            ) : (
+              <>
+                🤖 AI 자동 선택
+              </>
+            )}
+          </button>
+
+          {/* AI 선택 이유 박스 - 컴팩트 */}
+          {aiReasoning && (
+            <div className="rounded-lg bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 border border-purple-200 dark:border-purple-800 overflow-hidden">
+              <button
+                onClick={() => setShowReasoning(!showReasoning)}
+                className="w-full px-3 py-2 flex items-center justify-between text-left hover:bg-purple-100/50 dark:hover:bg-purple-900/30 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🤖</span>
+                  <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
+                    AI가 {selectedUrls.size}개 페이지를 선택했습니다
+                  </span>
+                </div>
+                <svg
+                  className={`w-4 h-4 text-purple-700 dark:text-purple-300 transition-transform ${
+                    showReasoning ? 'rotate-180' : ''
+                  }`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+
+              {showReasoning && (
+                <div className="px-3 pb-3 pt-1 border-t border-purple-200 dark:border-purple-800">
+                  <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                    {aiReasoning}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* 페이지 리스트 */}
@@ -747,32 +847,12 @@ export default function PageSelector({
         <div className="bg-white dark:bg-slate-800 px-4 sm:px-6 pb-6 sm:pb-8 pt-2">
           {/* 에러 표시 */}
           {error && (
-            <div className="mb-3 sm:mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3 sm:p-4">
-              <div className="flex items-start gap-2 sm:gap-3">
-                <span className="text-red-600 dark:text-red-400 text-lg sm:text-xl">
-                  ❌
-                </span>
-                <div className="flex-1">
-                  <h4 className="font-semibold text-red-900 dark:text-red-200 text-sm sm:text-base">
-                    PDF 생성 실패
-                  </h4>
-                  <p className="text-red-700 dark:text-red-300 text-xs sm:text-sm mt-1">
-                    {error}
-                  </p>
-                  <p className="text-gray-600 dark:text-slate-400 text-[10px] sm:text-xs mt-1.5 sm:mt-2">
-                    💡 크롤링한 데이터는 보존되어 있습니다. 아래 버튼을 눌러 PDF
-                    생성을 다시 시도하세요.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleGeneratePDF}
-                disabled={generating}
-                className="mt-3 sm:mt-4 w-full bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-semibold py-2.5 sm:py-3 px-3 sm:px-4 rounded-lg transition-colors text-xs sm:text-sm"
-              >
-                🔄 PDF 생성 재시도 (크롤링 없이)
-              </button>
-            </div>
+            <ErrorDisplay
+              error={error}
+              onRetry={handleGeneratePDF}
+              onDismiss={() => setError(null)}
+              className="mb-3 sm:mb-4"
+            />
           )}
 
           {/* PDF 생성 버튼 */}
