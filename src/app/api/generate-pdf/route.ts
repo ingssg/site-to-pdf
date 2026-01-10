@@ -110,18 +110,31 @@ export async function POST(request: NextRequest) {
           console.log("[API] 개별 PDF ZIP 생성 시작...");
           const zip = new JSZip();
           (pdfResult.individualPdfs || []).forEach((pdfBuffer, index) => {
-            const page = crawledPages[index];
-            if (!page) {
-              console.warn(`[API] PDF ${index}에 해당하는 페이지를 찾을 수 없음. 스킵합니다.`);
+            // 첫 번째 PDF (index = 0)는 전체 요약 PDF (AI 분석 + 목차)
+            if (index === 0) {
+              const filename = "00_전체_요약.pdf";
+              zip.file(filename, pdfBuffer);
+              console.log(`[API] ZIP에 추가: ${filename}`);
               return;
             }
 
-            const baseName = `${index + 1}_${page.title || "page"}`;
+            // 나머지는 실제 페이지 PDF (index-1로 매핑)
+            const pageIndex = index - 1;
+            const page = crawledPages[pageIndex];
+
+            if (!page) {
+              console.warn(`[API] PDF ${index}에 해당하는 페이지를 찾을 수 없음 (pageIndex: ${pageIndex}). 스킵합니다.`);
+              return;
+            }
+
+            // 페이지 번호는 index를 그대로 사용 (01, 02, 03, ...)
+            const baseName = `${String(index).padStart(2, '0')}_${page.title || "page"}`;
             const filename = `${baseName}.pdf`
               .replace(/[^a-zA-Z0-9가-힣._-]/g, "_")
               .slice(0, 100);
 
             zip.file(filename, pdfBuffer);
+            console.log(`[API] ZIP에 추가: ${filename}`);
           });
           const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
 

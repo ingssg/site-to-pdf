@@ -719,11 +719,13 @@ export class HTMLPDFGenerator {
 
     const template = this.loadTemplate("screenshot-pdf");
 
-    // 스크린샷 페이지들 생성
+    // 스크린샷 페이지들 생성 (전체 페이지 스크린샷 사용 - 법적 증거용)
     const screenshotPages = filteredPages
       .map((page, index) => {
-        const screenshotBase64 = page.screenshot
-          ? `data:image/jpeg;base64,${page.screenshot.toString("base64")}`
+        // fullPageScreenshot 우선 사용, 없으면 일반 screenshot 사용
+        const screenshotBuffer = page.fullPageScreenshot || page.screenshot;
+        const screenshotBase64 = screenshotBuffer
+          ? `data:image/jpeg;base64,${screenshotBuffer.toString("base64")}`
           : "";
 
         const pageNumber = index + 2; // Cover is page 1

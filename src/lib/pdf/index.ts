@@ -170,11 +170,11 @@ export class PDFGenerator {
     );
 
     // 개별 PDF 추출 (통합 PDF에서 페이지별로 분리)
-    const skipPages = 1 + (aiSummary ? 1 : 0) + tocPageCount; // 표지 + AI분석 + 목차
+    const aiSummaryPageCount = aiSummary ? 1 : 0; // AI 분석 페이지 수
     const individualPdfs = await this.extractIndividualPDFs(
       pdfDoc,
-      skipPages,
-      0 // tocPageCount는 위에서 이미 포함됨
+      aiSummaryPageCount, // AI 분석 페이지만
+      tocPageCount        // 목차 페이지
     );
 
     return {
@@ -539,15 +539,36 @@ export class PDFGenerator {
   ): Promise<Buffer[]> {
     const individualPdfs: Buffer[] = [];
     const totalPages = sourcePdf.getPageCount();
-    const startPage = aiSummaryPages + tocPages;
+    const startPage = 1 + aiSummaryPages + tocPages; // 표지(1) + AI 분석 + 목차
 
     console.log(
-      `[PDF] 개별 PDF 추출 시작 (${
+      `[PDF] 개별 PDF 추출 시작 (전체 요약 + ${
         startPage + 1
       }페이지부터 ${totalPages}페이지까지)`
     );
 
-    // AI 요약과 목차를 제외한 각 페이지를 개별 PDF로 추출
+    // 1. 전체 요약 PDF 생성 (표지 제외, AI 분석 + 목차만)
+    if (aiSummaryPages > 0 || tocPages > 0) {
+      const summaryPdf = await PDFDocument.create();
+      const fontkitToRegister = (fontkit as any).default || fontkit;
+      summaryPdf.registerFontkit(fontkitToRegister);
+
+      // AI 분석 + 목차 페이지 복사 (표지 1페이지 건너뛰고, aiSummaryPages + tocPages만큼 복사)
+      const summaryPageIndexes = Array.from(
+        { length: aiSummaryPages + tocPages },
+        (_, i) => i + 1 // 1페이지부터 (표지 제외)
+      );
+
+      const summaryPages = await summaryPdf.copyPages(sourcePdf, summaryPageIndexes);
+      summaryPages.forEach((page) => summaryPdf.addPage(page));
+
+      const summaryPdfBytes = await summaryPdf.save();
+      individualPdfs.push(Buffer.from(summaryPdfBytes));
+
+      console.log(`[PDF] 전체 요약 PDF 생성 완료 (${summaryPageIndexes.length}페이지)`);
+    }
+
+    // 2. AI 요약과 목차를 제외한 각 페이지를 개별 PDF로 추출
     for (let i = startPage; i < totalPages; i++) {
       const newPdf = await PDFDocument.create();
 
@@ -563,7 +584,7 @@ export class PDFGenerator {
       individualPdfs.push(Buffer.from(pdfBytes));
     }
 
-    console.log(`[PDF] ${individualPdfs.length}개 개별 PDF 추출 완료`);
+    console.log(`[PDF] 총 ${individualPdfs.length}개 개별 PDF 추출 완료 (전체 요약 1개 + 페이지별 ${individualPdfs.length - 1}개)`);
     return individualPdfs;
   }
 

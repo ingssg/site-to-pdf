@@ -18,7 +18,8 @@ export interface CrawledPage {
   url: string;
   title: string;
   content: string;
-  screenshot?: Buffer; // 페이지 스크린샷 (아카이빙용)
+  screenshot?: Buffer; // 페이지 스크린샷 1920x1080 viewport (전체 웹사이트 PDF용)
+  fullPageScreenshot?: Buffer; // 전체 페이지 스크린샷 (원본 스크린샷 PDF용 - 법적 증거)
   pageSummary?: string; // 페이지별 AI 요약 (3-4줄)
   timestamp: Date;
   depth: number;

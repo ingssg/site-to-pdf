@@ -169,11 +169,18 @@ export default function CrawlerForm({
     }
   };
 
-  const handlePDFComplete = (result: GeneratePDFResponse) => {
+  const handlePDFComplete = (result: any) => {
     setPdfResult(result);
     if (onComplete && crawlResult) {
+      // selectedPages가 있으면 그것을 사용, 없으면 전체 페이지
+      const selectedPages = result.selectedPages || crawlResult.data.crawl.pages;
+
       onComplete({
-        crawlResult: crawlResult.data.crawl,
+        crawlResult: {
+          ...crawlResult.data.crawl,
+          pages: selectedPages, // 선택된 페이지만 전달
+          totalPages: selectedPages.length, // 선택된 페이지 수로 변경
+        },
         pdfResult: {
           pdf: result.data.pdf,
           summary: result.data.summary,
@@ -209,7 +216,7 @@ export default function CrawlerForm({
       <Modal isOpen={true} onClose={onClose || (() => {})} showCloseButton={true}>
         <div className="w-full p-6 sm:p-8">
           {/* Header with Guide Button */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6 pr-10">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
               웹사이트 크롤링
             </h2>

@@ -217,8 +217,7 @@ export class WebCrawler {
 
       console.log(`[Crawler] Fonts loaded and applied, taking screenshot for ${url}`);
 
-      // 16:9 비율 스크린샷 (모니터 크기, 상단만 캡처)
-      // 페이지 전체를 로드한 후 viewport 크기만 캡처
+      // 16:9 비율 스크린샷 (모니터 크기, 상단만 캡처) - 전체 웹사이트 PDF용
       await page.setViewportSize({ width: 1920, height: 1080 });
 
       const screenshot = await page.screenshot({
@@ -226,7 +225,15 @@ export class WebCrawler {
         type: 'jpeg',
         quality: 80,
       });
-      console.log(`[Crawler] Screenshot captured for ${url} (${(screenshot.length / 1024).toFixed(1)}KB, 1920x1080)`);
+      console.log(`[Crawler] Screenshot (viewport) captured for ${url} (${(screenshot.length / 1024).toFixed(1)}KB, 1920x1080)`);
+
+      // 전체 페이지 스크린샷 (원본 스크린샷 PDF용 - 법적 증거)
+      const fullPageScreenshot = await page.screenshot({
+        fullPage: true, // 페이지 전체 캡처
+        type: 'jpeg',
+        quality: 80,
+      });
+      console.log(`[Crawler] Screenshot (fullPage) captured for ${url} (${(fullPageScreenshot.length / 1024).toFixed(1)}KB)`);
 
       // 크롤링된 페이지 저장 (병렬 처리 경쟁 조건 방지)
       if (this.crawledPages.length < this.config.maxPages) {
@@ -235,6 +242,7 @@ export class WebCrawler {
           title,
           content: content || '',
           screenshot,
+          fullPageScreenshot, // 전체 페이지 스크린샷 추가
           timestamp: new Date(),
           depth,
         });
