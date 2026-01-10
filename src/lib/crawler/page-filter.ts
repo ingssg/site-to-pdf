@@ -33,6 +33,12 @@ const EXCLUDED_PATTERNS = [
 
   // 9. 파일 다운로드 링크
   /\.(pdf|zip|doc|docx|xls|xlsx|ppt|pptx|jpg|jpeg|png|gif|svg|mp4|mp3|avi|mov)$/i,
+
+  // 10. 이벤트/프로모션 페이지
+  /\/(event|promo|promotion|campaign|contest|giveaway|discount|sale|coupon)/i,
+
+  // 11. 신청/문의 폼 페이지
+  /\/(apply|signup-form|trial|demo-request|contact-form|inquiry|consultation)/i,
 ];
 
 // 제외 이유 매핑
@@ -46,6 +52,8 @@ const EXCLUSION_REASONS: Record<string, RegExp> = {
   "장바구니/결제": /\/(cart|checkout|payment)\b/i,
   "피드/API": /\/(feed|rss|api|sitemap)\b/i,
   "파일 다운로드": /\.(pdf|zip|doc|jpg|png|mp4)$/i,
+  "이벤트/프로모션": /\/(event|promo|promotion|campaign|contest|giveaway|discount|sale)\b/i,
+  "신청/문의 폼": /\/(apply|trial|demo-request|contact-form|inquiry|consultation)\b/i,
 };
 
 // 핵심 키워드 (점수 가산)
@@ -69,7 +77,7 @@ const SOFT_EXCLUDE_KEYWORDS = [
   "press",
 ];
 
-// 제목 제외 키워드
+// 제목 제외 키워드 (강력한 제외 시그널만)
 const EXCLUDED_TITLE_KEYWORDS = [
   "login",
   "sign in",
@@ -83,6 +91,11 @@ const EXCLUDED_TITLE_KEYWORDS = [
   "페이지를 찾을 수 없습니다",
   "error",
   "에러",
+  "이벤트 참여",
+  "할인 이벤트",
+  "프로모션 안내",
+  "무료 체험 신청",
+  // 주의: "상담받기", "신청하기"는 제품 설명 페이지일 수 있어서 제외하지 않음
 ];
 
 /**
@@ -335,8 +348,13 @@ export function detectPageType(url: string): string {
  */
 export function enrichPageWithFilterMetadata(page: CrawledPage): CrawledPage {
   const importance = calculateImportance(page);
-  const exclusionReason = getExclusionReason(page.url);
+  let exclusionReason = getExclusionReason(page.url);
   const pageType = detectPageType(page.url);
+
+  // 제목 기반 제외 체크
+  if (!exclusionReason && shouldExcludeByTitle(page.title)) {
+    exclusionReason = "제목에 제외 키워드 포함";
+  }
 
   return {
     ...page,
