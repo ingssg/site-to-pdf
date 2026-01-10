@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Modal from "@/components/ui/modal";
+import GuideModal from "@/components/ui/GuideModal";
 
 interface CrawlingProgressModalProps {
   isOpen: boolean;
@@ -19,6 +20,7 @@ export default function CrawlingProgressModal({
   progress,
   onClose,
 }: CrawlingProgressModalProps) {
+  const [showGuide, setShowGuide] = useState(false);
   const percentage = progress?.percentage || 0;
 
   // URL에서 경로만 추출
@@ -36,6 +38,30 @@ export default function CrawlingProgressModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose || (() => {})}>
       <div className="w-full p-4 sm:p-6 md:p-8 flex flex-col items-center relative">
+        {/* Guide Button - Top Right */}
+        <div className="absolute top-4 right-4 sm:top-6 sm:right-6">
+          <button
+            onClick={() => setShowGuide(true)}
+            className="flex items-center gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+            aria-label="사용방법"
+          >
+            <svg
+              className="w-3.5 h-3.5 sm:w-4 sm:h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span className="hidden sm:inline">사용방법</span>
+          </button>
+        </div>
+
         {/* Step Indicator */}
         <div className="flex flex-col items-center w-full mb-4 sm:mb-6 md:mb-8">
           <span className="text-[10px] sm:text-xs font-semibold tracking-wider text-slate-500 dark:text-slate-400 uppercase mb-2 sm:mb-3">
@@ -115,6 +141,9 @@ export default function CrawlingProgressModal({
           </p>
         </div>
       </div>
+
+      {/* Guide Modal */}
+      <GuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
     </Modal>
   );
 }

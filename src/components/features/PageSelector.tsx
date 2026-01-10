@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import type {
   GeneratePDFRequest,
   GeneratePDFResponse,
@@ -10,6 +10,7 @@ import type { AppError } from '@/types/errors';
 import PDFGenerationProgressModal from "./PDFGenerationProgressModal";
 import PDFCompletionModal from "./PDFCompletionModal";
 import ErrorDisplay from "@/components/ui/ErrorDisplay";
+import GuideModal from "@/components/ui/GuideModal";
 import { ErrorCode, getErrorInfo, inferErrorCode } from '@/constants/errorMessages';
 
 interface PageSelectorProps {
@@ -46,35 +47,8 @@ export default function PageSelector({
   const [error, setError] = useState<AppError | null>(null);
   const [completed, setCompleted] = useState(false);
   const [pdfResult, setPdfResult] = useState<GeneratePDFResponse | null>(null);
-  const [showUsageGuide, setShowUsageGuide] = useState(false);
-  const [activeTab, setActiveTab] = useState<"quick" | "exclude" | "include">(
-    "quick"
-  );
-  const usageGuideRef = useRef<HTMLDivElement>(null);
-  const usageGuideButtonRef = useRef<HTMLButtonElement>(null);
-
-  // 사용 방법 팝업 외부 클릭 감지
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        showUsageGuide &&
-        usageGuideRef.current &&
-        usageGuideButtonRef.current &&
-        !usageGuideRef.current.contains(event.target as Node) &&
-        !usageGuideButtonRef.current.contains(event.target as Node)
-      ) {
-        setShowUsageGuide(false);
-      }
-    };
-
-    if (showUsageGuide) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [showUsageGuide]);
+  const [showGuide, setShowGuide] = useState(false);
+  const [selectedPagesForResult, setSelectedPagesForResult] = useState<typeof pages>([]);
 
   // PDF 생성 진행률 상태
   const [progress, setProgress] = useState<{
@@ -129,16 +103,17 @@ export default function PageSelector({
   const handleAIFilter = async () => {
     setAiFiltering(true);
     setError(null);
+    setShowReasoning(false); // 초기에 접혀있게 (명시적으로 false 설정)
 
     try {
       console.log('[PageSelector] AI 필터링 시작...');
 
-      // API 호출용 데이터 준비 (콘텐츠 500자로 제한)
+      // API 호출용 데이터 준비 (콘텐츠 1500자로 증가 - 맥락 개선)
       const requestData = {
         pages: pages.map(page => ({
           url: page.url,
           title: page.title,
-          content: page.content.substring(0, 500),
+          content: page.content.substring(0, 1500),
           pageType: page.pageType,
           importance: page.importance,
         })),
@@ -163,9 +138,9 @@ export default function PageSelector({
       // 선택된 URL들로 상태 업데이트
       setSelectedUrls(new Set(result.data.selectedUrls));
 
-      // AI 선택 이유 저장 및 자동으로 펼침
+      // AI 선택 이유 저장 (기본 접힌 상태 유지)
       setAiReasoning(result.data.reasoning);
-      setShowReasoning(true);
+      // setShowReasoning(false); // 이미 위에서 false로 설정됨
 
       console.log(`[AI Filter] ${result.data.selectedUrls.length}개 선택`);
       console.log(`[AI Filter] 이유: ${result.data.reasoning}`);
@@ -192,6 +167,9 @@ export default function PageSelector({
 
     try {
       const selectedPages = pages.filter((p) => selectedUrls.has(p.url));
+
+      // 선택된 페이지 저장 (ResultDisplay에 전달용)
+      setSelectedPagesForResult(selectedPages);
 
       const requestBody: GeneratePDFRequest = {
         pages: selectedPages,
@@ -346,250 +324,35 @@ export default function PageSelector({
                 리포트에 포함할 페이지를 선택하세요
               </p>
             </div>
-            {/* 사용 방법 버튼 및 팝업 컨테이너 */}
-            <div className="relative ml-2 sm:ml-4 flex-shrink-0">
+            {/* 사용방법 버튼 */}
+            <div className="ml-2 sm:ml-4 flex-shrink-0">
               <button
-                ref={usageGuideButtonRef}
-                onClick={() => setShowUsageGuide(!showUsageGuide)}
-                className="px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium text-[#4c599a] dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700"
-                aria-label="사용 방법"
+                onClick={() => setShowGuide(true)}
+                className="flex items-center gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                aria-label="사용방법"
               >
-                💡 사용 방법
-              </button>
-
-              {/* 사용 방법 팝업 */}
-              {showUsageGuide && (
-                <div
-                  ref={usageGuideRef}
-                  className="absolute top-full right-0 mt-2 z-50 w-[calc(100vw-2rem)] sm:w-96 max-w-[calc(100vw-1rem)] bg-white dark:bg-slate-800 rounded-lg sm:rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden"
+                <svg
+                  className="w-3.5 h-3.5 sm:w-4 sm:h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
-                  {/* 탭 헤더 */}
-                  <div className="flex border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
-                    <button
-                      onClick={() => setActiveTab("quick")}
-                      className={`flex-1 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold transition-colors ${
-                        activeTab === "quick"
-                          ? "text-primary border-b-2 border-primary bg-white dark:bg-slate-800"
-                          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
-                      }`}
-                    >
-                      📌 빠른 가이드
-                    </button>
-                    <button
-                      onClick={() => setActiveTab("exclude")}
-                      className={`flex-1 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold transition-colors ${
-                        activeTab === "exclude"
-                          ? "text-primary border-b-2 border-primary bg-white dark:bg-slate-800"
-                          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
-                      }`}
-                    >
-                      ✂️ 제외 추천
-                    </button>
-                    <button
-                      onClick={() => setActiveTab("include")}
-                      className={`flex-1 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-semibold transition-colors ${
-                        activeTab === "include"
-                          ? "text-primary border-b-2 border-primary bg-white dark:bg-slate-800"
-                          : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300"
-                      }`}
-                    >
-                      ✅ 포함 권장
-                    </button>
-                  </div>
-
-                  {/* 탭 콘텐츠 */}
-                  <div className="p-3 sm:p-5 max-h-[50vh] sm:max-h-[60vh] overflow-y-auto">
-                    {activeTab === "quick" && (
-                      <div className="space-y-3 sm:space-y-4">
-                        <h4 className="text-sm sm:text-base font-bold text-[#0d101b] dark:text-white mb-2 sm:mb-3">
-                          💡 빠른 가이드
-                        </h4>
-
-                        {/* 중요 알림 */}
-                        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2 sm:p-3">
-                          <p className="text-[10px] sm:text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
-                            ⚠️ 자동 선택이 완벽하지 않을 수 있습니다. 각
-                            페이지의 제목과 URL을 확인하고, 불필요한 페이지는
-                            체크 해제해주세요.
-                          </p>
-                        </div>
-
-                        {/* 빠른 선택 */}
-                        <div>
-                          <h5 className="text-xs sm:text-sm font-semibold text-[#0d101b] dark:text-white mb-1.5 sm:mb-2">
-                            선택 방법
-                          </h5>
-                          <ul className="text-[10px] sm:text-xs text-[#4c599a] dark:text-slate-400 space-y-1 sm:space-y-1.5 ml-3 sm:ml-5">
-                            <li className="leading-relaxed">
-                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
-                                전체 선택:
-                              </strong>{" "}
-                              완전한 웹사이트 아카이브용 (법적 증거, 백업)
-                            </li>
-                            <li className="leading-relaxed">
-                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
-                                권장 선택:
-                              </strong>{" "}
-                              비즈니스 분석에 필요한 핵심 페이지만
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                    )}
-
-                    {activeTab === "exclude" && (
-                      <div className="space-y-2 sm:space-y-3">
-                        <h4 className="text-sm sm:text-base font-bold text-[#0d101b] dark:text-white mb-2 sm:mb-3">
-                          ✂️ 제외 추천 페이지
-                        </h4>
-                        <p className="text-[10px] sm:text-xs text-[#4c599a] dark:text-slate-400 mb-2 sm:mb-3">
-                          다음 페이지들은 체크 해제해도 좋습니다:
-                        </p>
-                        <ul className="text-[10px] sm:text-xs text-[#4c599a] dark:text-slate-400 space-y-1.5 sm:space-y-2">
-                          <li className="flex gap-1.5 sm:gap-2">
-                            <span className="shrink-0 text-xs sm:text-sm">
-                              📄
-                            </span>
-                            <span>
-                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
-                                약관/정책:
-                              </strong>{" "}
-                              개인정보처리방침, 이용약관
-                            </span>
-                          </li>
-                          <li className="flex gap-1.5 sm:gap-2">
-                            <span className="shrink-0 text-xs sm:text-sm">
-                              📰
-                            </span>
-                            <span>
-                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
-                                보도자료/언론:
-                              </strong>{" "}
-                              단순 뉴스 링크나 언론 보도
-                            </span>
-                          </li>
-                          <li className="flex gap-1.5 sm:gap-2">
-                            <span className="shrink-0 text-xs sm:text-sm">
-                              👥
-                            </span>
-                            <span>
-                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
-                                채용 공고:
-                              </strong>{" "}
-                              인재 채용, 채용 공고 목록
-                            </span>
-                          </li>
-                          <li className="flex gap-1.5 sm:gap-2">
-                            <span className="shrink-0 text-xs sm:text-sm">
-                              🎯
-                            </span>
-                            <span>
-                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
-                                이벤트:
-                              </strong>{" "}
-                              일시적 이벤트, 경품 페이지
-                            </span>
-                          </li>
-                          <li className="flex gap-1.5 sm:gap-2">
-                            <span className="shrink-0 text-xs sm:text-sm">
-                              📱
-                            </span>
-                            <span>
-                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
-                                SNS:
-                              </strong>{" "}
-                              인스타그램, 페이스북 피드
-                            </span>
-                          </li>
-                          <li className="flex gap-1.5 sm:gap-2">
-                            <span className="shrink-0 text-xs sm:text-sm">
-                              📋
-                            </span>
-                            <span>
-                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
-                                단순 폼:
-                              </strong>{" "}
-                              문의하기만 있는 페이지
-                            </span>
-                          </li>
-                        </ul>
-                      </div>
-                    )}
-
-                    {activeTab === "include" && (
-                      <div className="space-y-2 sm:space-y-3">
-                        <h4 className="text-sm sm:text-base font-bold text-[#0d101b] dark:text-white mb-2 sm:mb-3">
-                          ✅ 포함 권장 페이지
-                        </h4>
-                        <p className="text-[10px] sm:text-xs text-[#4c599a] dark:text-slate-400 mb-2 sm:mb-3">
-                          비즈니스 분석에 유용한 페이지:
-                        </p>
-                        <ul className="text-[10px] sm:text-xs text-[#4c599a] dark:text-slate-400 space-y-1.5 sm:space-y-2">
-                          <li className="flex gap-1.5 sm:gap-2">
-                            <span className="shrink-0 text-xs sm:text-sm">
-                              🏠
-                            </span>
-                            <span>
-                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
-                                메인:
-                              </strong>{" "}
-                              회사 소개, 비전, 핵심 가치
-                            </span>
-                          </li>
-                          <li className="flex gap-1.5 sm:gap-2">
-                            <span className="shrink-0 text-xs sm:text-sm">
-                              💼
-                            </span>
-                            <span>
-                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
-                                제품/서비스:
-                              </strong>{" "}
-                              제품 설명, 가격, 기능
-                            </span>
-                          </li>
-                          <li className="flex gap-1.5 sm:gap-2">
-                            <span className="shrink-0 text-xs sm:text-sm">
-                              📊
-                            </span>
-                            <span>
-                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
-                                케이스 스터디:
-                              </strong>{" "}
-                              고객 성공 사례
-                            </span>
-                          </li>
-                          <li className="flex gap-1.5 sm:gap-2">
-                            <span className="shrink-0 text-xs sm:text-sm">
-                              🔍
-                            </span>
-                            <span>
-                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
-                                기술 문서:
-                              </strong>{" "}
-                              제품 동작 원리
-                            </span>
-                          </li>
-                          <li className="flex gap-1.5 sm:gap-2">
-                            <span className="shrink-0 text-xs sm:text-sm">
-                              📈
-                            </span>
-                            <span>
-                              <strong className="text-[#0d101b] dark:text-white text-[11px] sm:text-xs">
-                                회사 정보:
-                              </strong>{" "}
-                              연혁, 투자 유치
-                            </span>
-                          </li>
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span className="hidden sm:inline">사용방법</span>
+              </button>
             </div>
           </div>
         </div>
       </header>
+
+      {/* Guide Modal */}
+      <GuideModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
 
       {/* 스크롤 가능한 콘텐츠 영역 */}
       <main className="flex-1 overflow-y-auto px-3 sm:px-4 pb-32 no-scrollbar">
@@ -621,23 +384,41 @@ export default function PageSelector({
             </span>
           </label>
 
-          {/* AI 자동 선택 버튼 - 컴팩트 */}
+          {/* AI 자동 선택 버튼 - 프리미엄 */}
           <button
             onClick={handleAIFilter}
             disabled={aiFiltering || pages.length === 0}
-            className="w-full px-3 py-1.5 text-xs font-semibold bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 rounded-lg hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 transition-colors border border-purple-200 dark:border-purple-800 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full px-3 py-2 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 rounded-lg hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 transition-colors border border-purple-200 dark:border-purple-800 flex flex-col items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed relative"
           >
             {aiFiltering ? (
               <>
-                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                AI 분석 중...
+                {/* AI 분석 중 애니메이션 */}
+                <div className="flex items-center gap-2">
+                  <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  </svg>
+                  <span className="font-bold">AI가 페이지를 분석하고 있습니다</span>
+                </div>
+                <div className="flex items-center gap-1 text-[10px] opacity-75">
+                  <div className="w-1 h-1 bg-purple-600 dark:bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                  <div className="w-1 h-1 bg-purple-600 dark:bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                  <div className="w-1 h-1 bg-purple-600 dark:bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  <span className="ml-1">콘텐츠 기반 필터링 중</span>
+                </div>
               </>
             ) : (
               <>
-                🤖 AI 자동 선택
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🤖</span>
+                  <span>AI 자동 선택</span>
+                  <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider bg-gradient-to-r from-yellow-400 to-orange-400 text-white rounded shadow-sm">
+                    ✨ Premium
+                  </span>
+                </div>
+                <span className="text-[10px] font-normal opacity-75">
+                  비즈니스 분석에 중요한 10-15개 페이지 자동 선별
+                </span>
               </>
             )}
           </button>
@@ -748,27 +529,14 @@ export default function PageSelector({
                     </div>
                   </div>
 
-                  {/* 상태 배지 & 제외 이유 */}
-                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                    {page.defaultChecked === true &&
-                      (page.importance || 0) > 70 && (
-                        <span className="text-[9px] sm:text-[10px] font-bold px-1 sm:px-1.5 py-0.5 rounded bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800">
-                          ✓ 핵심
-                        </span>
-                      )}
-                    {page.defaultChecked === true &&
-                      (page.importance || 0) > 60 &&
-                      (page.importance || 0) <= 70 && (
-                        <span className="text-[9px] sm:text-[10px] font-bold px-1 sm:px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                          ✓ 추천
-                        </span>
-                      )}
-                    {page.defaultChecked === false && page.exclusionReason && (
+                  {/* 제외 이유만 표시 */}
+                  {page.defaultChecked === false && page.exclusionReason && (
+                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                       <span className="text-[9px] sm:text-[10px] font-medium px-1 sm:px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
                         선택사항: {page.exclusionReason}
                       </span>
-                    )}
-                  </div>
+                    </div>
+                  )}
 
                   <p className="text-[10px] sm:text-xs text-primary font-medium truncate bg-primary/5 dark:bg-primary/20 px-1 sm:px-1.5 py-0.5 rounded max-w-full">
                     {page.url}
@@ -832,7 +600,13 @@ export default function PageSelector({
               }}
               onViewResults={() => {
                 setCompleted(false);
-                onComplete(pdfResult);
+                // pdfResult에 selectedPages 정보 추가해서 전달
+                if (pdfResult) {
+                  onComplete({
+                    ...pdfResult,
+                    selectedPages: selectedPagesForResult,
+                  } as any);
+                }
               }}
               fileName={fileName}
               fileSize={fileSize}
