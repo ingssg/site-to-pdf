@@ -25,7 +25,8 @@ export interface CrawlAPIResponse {
         title: string;
         content: string; // 텍스트 콘텐츠
         depth: number;
-        screenshot?: Buffer; // 스크린샷 데이터
+        screenshot?: Buffer; // 스크린샷 데이터 (viewport)
+        fullPageScreenshot?: Buffer; // 전체 페이지 스크린샷 (법적 증거용)
         pageSummary?: string; // 페이지별 AI 요약
       }>;
     };
@@ -40,6 +41,7 @@ export interface GeneratePDFRequest {
     content: string;
     depth: number;
     screenshot?: Buffer;
+    fullPageScreenshot?: Buffer; // 전체 페이지 스크린샷 (법적 증거용)
     pageSummary?: string; // 페이지별 AI 요약
   }>;
   detailLevel: 'basic' | 'detailed' | 'comprehensive';
@@ -56,7 +58,8 @@ export interface GeneratePDFResponse {
       pageCount: number;
       mergedPdf: string | null; // Base64 encoded (50MB 이상일 경우 null)
       mergedPdfTooLarge?: boolean;
-      individualPdfsZip: string; // Base64 encoded ZIP file
+      zipDownloadUrl: string; // 개별 PDF ZIP 파일 다운로드 URL
+      screenshotPdfUrl?: string | null; // 스크린샷 PDF 다운로드 URL
       warnings?: string[]; // 경고 메시지 (예: 폰트 파일 없음)
     };
     summary: AISummary;

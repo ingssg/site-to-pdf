@@ -9,8 +9,13 @@ import JSZip from "jszip";
 import { generatePDFFromPages } from "@/lib/pdf";
 import { generateAISummary, generatePageSummary } from "@/lib/ai";
 import type { CrawledPage } from "@/types";
-import { getErrorInfo, inferErrorCode } from '@/constants/errorMessages';
-import { ErrorCode } from '@/types/errors';
+import { getErrorInfo, inferErrorCode } from "@/constants/errorMessages";
+import { ErrorCode } from "@/types/errors";
+
+// Vercel Hobby 플랜: 최대 10초 타임아웃
+// ⚠️ 주의: PDF 생성 작업이 10초를 초과하면 타임아웃됩니다
+// 해결 방법: 페이지 수를 줄이거나 Pro 플랜으로 업그레이드 필요
+export const maxDuration = 10;
 
 // 요청 스키마 정의
 const GeneratePDFRequestSchema = z.object({
@@ -21,6 +26,7 @@ const GeneratePDFRequestSchema = z.object({
       content: z.string(),
       depth: z.number(),
       screenshot: z.any().optional(), // Buffer는 any로 처리
+      fullPageScreenshot: z.any().optional(), // 전체 페이지 스크린샷 (법적 증거용)
       pageSummary: z.string().optional(), // 페이지별 AI 요약
       defaultChecked: z.boolean().optional(), // 필터링 체크 상태
     })
@@ -29,7 +35,7 @@ const GeneratePDFRequestSchema = z.object({
     .enum(["basic", "detailed", "comprehensive"])
     .optional()
     .default("detailed"),
-  crawlMode: z.enum(['full', 'smart']).optional().default('smart'), // 크롤링 모드
+  crawlMode: z.enum(["full", "smart"]).optional().default("smart"), // 크롤링 모드
 });
 
 export async function POST(request: NextRequest) {
@@ -40,10 +46,6 @@ export async function POST(request: NextRequest) {
 
     const { pages, detailLevel, crawlMode } = validatedData;
 
-    console.log(
-      `[API] PDF 생성 시작: ${pages.length}개 페이지 (상세도: ${detailLevel}, 모드: ${crawlMode})`
-    );
-
     // 2. SSE 스트림 생성
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
@@ -51,25 +53,37 @@ export async function POST(request: NextRequest) {
         try {
           const sendProgress = (message: string, percentage: number) => {
             controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: 'progress', message, percentage })}\n\n`)
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  type: "progress",
+                  message,
+                  percentage,
+                })}\n\n`
+              )
             );
           };
 
           // Buffer 복원
-          sendProgress('페이지 데이터 처리 중...', 10);
-          const crawledPages: CrawledPage[] = pages.map((page) => ({
-            ...page,
-            screenshot: page.screenshot
-              ? Buffer.from(page.screenshot.data || page.screenshot, "base64")
-              : undefined,
-            timestamp: new Date(),
-          }));
+          sendProgress("페이지 데이터 처리 중...", 10);
+          const crawledPages: CrawledPage[] = pages.map((page) => {
+            return {
+              ...page,
+              screenshot: page.screenshot
+                ? page.screenshot.data
+                  ? Buffer.from(page.screenshot.data) // JSON.stringify로 직렬화된 Buffer (배열)
+                  : Buffer.from(page.screenshot, "base64") // base64 문자열
+                : undefined,
+              fullPageScreenshot: page.fullPageScreenshot
+                ? page.fullPageScreenshot.data
+                  ? Buffer.from(page.fullPageScreenshot.data) // JSON.stringify로 직렬화된 Buffer (배열)
+                  : Buffer.from(page.fullPageScreenshot, "base64") // base64 문자열
+                : undefined,
+              timestamp: new Date(),
+            };
+          });
 
           // 각 페이지 AI 요약 생성 (병렬 처리)
-          // 필터링되지 않은 페이지(defaultChecked === true)만 AI 요약 생성
-          sendProgress('페이지별 AI 요약 생성 중...', 20);
-          console.log("[API] 페이지별 AI 요약 생성 시작...");
-
+          sendProgress("페이지별 AI 요약 생성 중...", 20);
           await Promise.all(
             crawledPages.map(async (page) => {
               if (page.defaultChecked !== false) {
@@ -82,100 +96,122 @@ export async function POST(request: NextRequest) {
             })
           );
 
-          const summaryCount = crawledPages.filter(p => p.pageSummary).length;
-          console.log(`[API] 페이지별 AI 요약 생성 완료 (${summaryCount}/${crawledPages.length}페이지)`);
-
           // 전체 사이트 AI 요약 생성
-          sendProgress('전체 사이트 AI 요약 생성 중...', 40);
-          console.log("[API] 전체 사이트 AI 요약 생성 시작...");
+          sendProgress("전체 사이트 AI 요약 생성 중...", 40);
           const aiSummary = await generateAISummary(crawledPages, detailLevel);
-          console.log("[API] 전체 사이트 AI 요약 생성 완료");
 
           // PDF 생성
-          sendProgress('PDF 문서 생성 중...', 60);
-          console.log("[API] PDF 생성 시작...");
+          sendProgress("PDF 문서 생성 중...", 60);
           const pdfResult = await generatePDFFromPages(
             crawledPages,
-            { detailLevel, crawlMode }, // crawlMode 전달
+            { detailLevel, crawlMode },
             aiSummary
           );
-          console.log(
-            `[API] PDF 생성 완료: ${(pdfResult.totalSize / 1024 / 1024).toFixed(
-              2
-            )}MB`
-          );
 
-          // ZIP 압축 (각 페이지당 1개 PDF)
-          sendProgress('개별 PDF ZIP 생성 중...', 85);
-          console.log("[API] 개별 PDF ZIP 생성 시작...");
+          // ZIP 압축
+          sendProgress("개별 PDF ZIP 생성 중...", 85);
           const zip = new JSZip();
           (pdfResult.individualPdfs || []).forEach((pdfBuffer, index) => {
-            // 첫 번째 PDF (index = 0)는 전체 요약 PDF (AI 분석 + 목차)
+            const pageNumber = index + 1;
+
             if (index === 0) {
-              const filename = "00_전체_요약.pdf";
+              const filename = `${String(pageNumber).padStart(
+                2,
+                "0"
+              )}_전체_요약.pdf`;
               zip.file(filename, pdfBuffer);
-              console.log(`[API] ZIP에 추가: ${filename}`);
               return;
             }
 
-            // 나머지는 실제 페이지 PDF (index-1로 매핑)
             const pageIndex = index - 1;
             const page = crawledPages[pageIndex];
+            if (!page) return;
 
-            if (!page) {
-              console.warn(`[API] PDF ${index}에 해당하는 페이지를 찾을 수 없음 (pageIndex: ${pageIndex}). 스킵합니다.`);
-              return;
-            }
-
-            // 페이지 번호는 index를 그대로 사용 (01, 02, 03, ...)
-            const baseName = `${String(index).padStart(2, '0')}_${page.title || "page"}`;
+            const baseName = `${String(pageNumber).padStart(2, "0")}_${
+              page.title || "page"
+            }`;
             const filename = `${baseName}.pdf`
               .replace(/[^a-zA-Z0-9가-힣._-]/g, "_")
               .slice(0, 100);
 
             zip.file(filename, pdfBuffer);
-            console.log(`[API] ZIP에 추가: ${filename}`);
           });
           const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
 
-          // ZIP이 50MB 이상이면 서버에 저장하고 URL 제공
-          const zipSizeMB = zipBuffer.length / 1024 / 1024;
-          console.log(`[API] ZIP 생성 완료: ${zipSizeMB.toFixed(2)}MB`);
+          // 서버리스 환경 호환: /tmp 폴더 사용
+          const fs = await import("fs");
+          const path = await import("path");
+          const crypto = await import("crypto");
+          const os = await import("os");
 
-          let individualPdfsZipBase64 = '';
-          let zipDownloadUrl = '';
+          // 서버리스 환경에서 /tmp 폴더 사용 (읽기/쓰기 가능)
+          // 로컬 개발 환경에서는 os.tmpdir() 사용
+          const tempDir = process.env.VERCEL
+            ? "/tmp" // Vercel 환경
+            : process.env.AWS_LAMBDA_FUNCTION_NAME
+            ? "/tmp" // AWS Lambda 환경
+            : path.join(os.tmpdir(), "site-to-pdf"); // 로컬 개발 환경
 
-          if (zipSizeMB > 50) {
-            // 서버에 임시 저장 (공용 폴더)
-            const fs = await import('fs');
-            const path = await import('path');
-            const crypto = await import('crypto');
-
-            const tempDir = path.join(process.cwd(), 'public', 'temp');
+          // 임시 디렉토리 생성 (로컬 환경에서만 필요)
+          if (!process.env.VERCEL && !process.env.AWS_LAMBDA_FUNCTION_NAME) {
             if (!fs.existsSync(tempDir)) {
               fs.mkdirSync(tempDir, { recursive: true });
             }
+          }
 
-            const zipFilename = `${crypto.randomUUID()}.zip`;
-            const zipPath = path.join(tempDir, zipFilename);
-            fs.writeFileSync(zipPath, zipBuffer);
+          const zipFileId = crypto.randomUUID();
+          const zipFilename = `${zipFileId}.zip`;
+          const zipPath = path.join(tempDir, zipFilename);
 
-            zipDownloadUrl = `/temp/${zipFilename}`;
-            console.log(`[API] ZIP 파일이 너무 커서 서버에 저장: ${zipDownloadUrl}`);
-          } else {
-            individualPdfsZipBase64 = zipBuffer.toString("base64");
+          // 파일 저장
+          fs.writeFileSync(zipPath, zipBuffer);
+
+          // API 엔드포인트로 파일 제공 (서버리스 환경 호환)
+          const zipDownloadUrl = `/api/download-file?fileId=${zipFileId}&type=zip&filename=${encodeURIComponent(
+            generateFilename("zip")
+          )}`;
+
+          // 스크린샷 PDF도 동일하게 처리
+          let screenshotPdfUrl = null;
+          if (pdfResult.screenshotPdf) {
+            const screenshotFileId = crypto.randomUUID();
+            const screenshotFilename = `${screenshotFileId}_screenshots.pdf`;
+            const screenshotPath = path.join(tempDir, screenshotFilename);
+            fs.writeFileSync(screenshotPath, pdfResult.screenshotPdf);
+
+            const domain = getDomain().replace(/\./g, "_");
+            const date = new Date().toISOString().split("T")[0];
+            const screenshotDownloadFilename = `${domain}_screenshots_${date}.pdf`;
+
+            screenshotPdfUrl = `/api/download-file?fileId=${screenshotFileId}&type=screenshot&filename=${encodeURIComponent(
+              screenshotDownloadFilename
+            )}`;
+          }
+
+          // 파일명 생성 헬퍼 함수
+          function generateFilename(ext: string): string {
+            const domain = getDomain().replace(/\./g, "_");
+            const date = new Date().toISOString().split("T")[0];
+            return `${domain}_individual_pdfs_${date}.${ext}`;
+          }
+
+          function getDomain(): string {
+            if (crawledPages.length > 0) {
+              try {
+                const url = new URL(crawledPages[0].url);
+                return url.hostname.replace("www.", "");
+              } catch {
+                return "website";
+              }
+            }
+            return "website";
           }
 
           // 완료
-          sendProgress('완료!', 100);
-
-          // 스크린샷 PDF base64 인코딩
-          const screenshotPdfBase64 = pdfResult.screenshotPdf
-            ? pdfResult.screenshotPdf.toString("base64")
-            : null;
+          sendProgress("완료!", 100);
 
           const completeData = {
-            type: 'complete',
+            type: "complete",
             success: true,
             data: {
               pdf: {
@@ -188,9 +224,8 @@ export async function POST(request: NextRequest) {
                     ? pdfResult.mergedPdf.toString("base64")
                     : null,
                 mergedPdfTooLarge: pdfResult.totalSize >= 50 * 1024 * 1024,
-                individualPdfsZip: individualPdfsZipBase64,
-                zipDownloadUrl: zipDownloadUrl, // 큰 ZIP은 URL로 제공
-                screenshotPdf: screenshotPdfBase64, // 스크린샷 PDF 추가
+                zipDownloadUrl: zipDownloadUrl, // ZIP 파일 다운로드 URL
+                screenshotPdfUrl: screenshotPdfUrl, // 스크린샷 PDF 다운로드 URL
               },
               summary: aiSummary,
             },
@@ -200,9 +235,10 @@ export async function POST(request: NextRequest) {
           );
           controller.close();
         } catch (error) {
-          const errorCode = error instanceof Error
-            ? inferErrorCode(error.message)
-            : ErrorCode.PDF_GENERATION_FAILED;
+          const errorCode =
+            error instanceof Error
+              ? inferErrorCode(error.message)
+              : ErrorCode.PDF_GENERATION_FAILED;
 
           const errorInfo = getErrorInfo(
             errorCode,
@@ -210,7 +246,7 @@ export async function POST(request: NextRequest) {
           );
 
           const errorData = {
-            type: 'error',
+            type: "error",
             error: errorInfo,
             timestamp: new Date().toISOString(),
           };
@@ -225,9 +261,9 @@ export async function POST(request: NextRequest) {
     // SSE 응답 반환
     return new Response(stream, {
       headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
       },
     });
   } catch (error) {
@@ -247,9 +283,10 @@ export async function POST(request: NextRequest) {
     }
 
     // 일반 에러
-    const errorCode = error instanceof Error
-      ? inferErrorCode(error.message)
-      : ErrorCode.PDF_GENERATION_FAILED;
+    const errorCode =
+      error instanceof Error
+        ? inferErrorCode(error.message)
+        : ErrorCode.PDF_GENERATION_FAILED;
 
     const errorInfo = getErrorInfo(
       errorCode,
