@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "download-fonts": "bash scripts/download-fonts.sh",
-    "postinstall": "bash scripts/download-fonts.sh"
+    "postinstall": "bash scripts/download-fonts.sh && npx playwright install chromium"
   },
   "dependencies": {
     "@fontsource/noto-sans-kr": "^5.2.8",

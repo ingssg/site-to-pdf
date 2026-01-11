@@ -1,0 +1,15 @@
+{
+  "functions": {
+    "src/app/api/crawl/route.ts": {
+      "maxDuration": 10
+    },
+    "src/app/api/generate-pdf/route.ts": {
+      "maxDuration": 10
+    },
+    "src/app/api/ai-filter/route.ts": {
+      "maxDuration": 10
+    }
+  },
+  "buildCommand": "npm run build",
+  "installCommand": "npm install && npx playwright install chromium"
+}
