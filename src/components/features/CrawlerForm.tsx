@@ -62,6 +62,7 @@ export default function CrawlerForm({
   const [pdfResult, setPdfResult] = useState<GeneratePDFResponse | null>(null);
   const [error, setError] = useState<AppError | null>(null);
   const [showGuide, setShowGuide] = useState(false);
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
 
   // 진행률 상태
   const [progress, setProgress] = useState<{
@@ -99,6 +100,7 @@ export default function CrawlerForm({
 
       const { data: { jobId } } = await createJobResponse.json();
       console.log(`[Frontend] 작업 등록 완료: ${jobId}`);
+      setCurrentJobId(jobId);
 
       // 2. 폴링 시작
       let pollInterval: NodeJS.Timeout | null = setInterval(async () => {
@@ -122,7 +124,51 @@ export default function CrawlerForm({
             });
           }
 
-          // 완료 처리
+          // 크롤링 완료 처리 (Step 1 완료 → Step 2 페이지 선택으로 이동)
+          if (status === "crawl_completed" && result) {
+            if (pollInterval) {
+              clearInterval(pollInterval);
+              pollInterval = null;
+            }
+            setProgress(null);
+            setLoading(false);
+
+            // 크롤링 결과를 기존 형식으로 변환 (PageSelector로 전달)
+            const crawlResult: CrawlAPIResponse = {
+              success: true,
+              data: {
+                crawl: {
+                  totalPages: result.crawlResult.totalPages,
+                  failedUrls: result.crawlResult.failedUrls || [],
+                  duration: "0초",
+                  crawlMode: crawlMode,
+                  pages: (result.crawlResult.pages || []).map((page: {
+                    url: string;
+                    title: string;
+                    content: string;
+                    depth: number;
+                    screenshot?: string;
+                    fullPageScreenshot?: string;
+                    pageType?: string;
+                  }) => ({
+                    url: page.url,
+                    title: page.title,
+                    content: page.content,
+                    depth: page.depth,
+                    screenshot: page.screenshot, // base64 string
+                    fullPageScreenshot: page.fullPageScreenshot,
+                    pageType: page.pageType,
+                    defaultChecked: true,
+                    importance: 50,
+                  })),
+                },
+              },
+            };
+            setCrawlResult(crawlResult);
+            // pdfResult는 아직 없음 - PageSelector에서 PDF 생성 후 설정됨
+          }
+
+          // PDF 생성 완료 처리 (Step 3 완료)
           if (status === "completed" && result) {
             if (pollInterval) {
               clearInterval(pollInterval);
@@ -132,19 +178,6 @@ export default function CrawlerForm({
             setLoading(false);
 
             // 결과를 기존 형식으로 변환
-            const crawlResult: CrawlAPIResponse = {
-              success: true,
-              data: {
-                crawl: {
-                  totalPages: result.crawlResult.totalPages,
-                  failedUrls: result.crawlResult.failedUrls || [],
-                  duration: "0초",
-                  pages: result.crawlResult.pages || [],
-                },
-              },
-            };
-            setCrawlResult(crawlResult);
-
             const pdfResult: GeneratePDFResponse = {
               success: true,
               data: {
@@ -152,9 +185,9 @@ export default function CrawlerForm({
                   mergedPdf: result.pdfUrl,
                   mergedPdfTooLarge: false,
                   zipDownloadUrl: result.zipUrl,
-                  screenshotPdfUrl: result.screenshotUrl || null,
+                  screenshotPdfUrl: result.screenshotPdfUrl || null,
                   warnings: [],
-                  pageCount: result.crawlResult.totalPages,
+                  pageCount: result.processedPages || result.crawlResult?.totalPages || 0,
                   totalSize: 0,
                   totalSizeMB: "0 MB",
                 },
@@ -228,15 +261,16 @@ export default function CrawlerForm({
     return <CrawlingProgressModal isOpen={true} progress={progress} />;
   }
 
-  // 크롤링 완료 후 페이지 선택 단계
-  if (crawlResult && !pdfResult) {
+  // 크롤링 완료 후 페이지 선택 단계 (Step 2)
+  if (crawlResult && !pdfResult && currentJobId) {
     return (
       <Modal isOpen={true} onClose={onClose || (() => {})}>
         <PageSelector
           pages={crawlResult.data.crawl.pages}
           onComplete={handlePDFComplete}
           onClose={onClose || (() => {})}
-          crawlMode={crawlMode} // 크롤링 모드 전달
+          crawlMode={crawlMode}
+          jobId={currentJobId} // Lambda PDF 생성용 jobId 전달
         />
       </Modal>
     );

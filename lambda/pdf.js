@@ -4,7 +4,8 @@
  * 절대 간소화하지 않음 - 모든 기능 포함
  */
 
-const { chromium } = require('playwright');
+const chromium = require('@sparticuz/chromium');
+const { chromium: playwright } = require('playwright-core');
 const { PDFDocument } = require('pdf-lib');
 
 // HTML 템플릿 (인라인으로 포함 - Lambda는 파일 시스템 접근 제한적)
@@ -1029,47 +1030,79 @@ class HTMLPDFGenerator {
   }
 
   async initBrowser() {
-    if (!this.browser) {
-      this.browser = await chromium.launch({
-        headless: true,
+    // 브라우저가 없거나 연결이 끊어진 경우 새로 생성
+    if (!this.browser || !this.browser.isConnected()) {
+      if (this.browser) {
+        try {
+          await this.browser.close();
+        } catch (e) {
+          console.warn('[PDF] 기존 브라우저 정리 중 에러:', e.message);
+        }
+        this.browser = null;
+      }
+
+      // Lambda 환경용 @sparticuz/chromium 설정
+      const executablePath = await chromium.executablePath();
+      console.log('[PDF] Chromium 경로:', executablePath);
+
+      this.browser = await playwright.launch({
         args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
+          ...chromium.args,
+          '--disable-gpu',
           '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process',
+          '--disable-setuid-sandbox',
+          '--no-sandbox',
         ],
+        executablePath: executablePath,
+        headless: true,
+        ignoreDefaultArgs: ['--disable-extensions'],
       });
     }
   }
 
   async htmlToPDF(html) {
-    await this.initBrowser();
-    const page = await this.browser.newPage();
-
-    await page.setContent(html, { waitUntil: 'networkidle' });
-
-    await page.evaluate(() => {
-      return document.fonts.ready;
+    // 각 PDF 생성 시 새 브라우저 사용 (Lambda 환경에서 안정성 확보)
+    const executablePath = await chromium.executablePath();
+    const browser = await playwright.launch({
+      args: [
+        ...chromium.args,
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--disable-setuid-sandbox',
+        '--no-sandbox',
+      ],
+      executablePath: executablePath,
+      headless: true,
+      ignoreDefaultArgs: ['--disable-extensions'],
     });
 
-    await page.waitForTimeout(1000);
+    try {
+      const page = await browser.newPage();
 
-    const pdfBuffer = await page.pdf({
-      format: 'A4',
-      printBackground: true,
-      margin: {
-        top: '0mm',
-        right: '0mm',
-        bottom: '0mm',
-        left: '0mm',
-      },
-    });
+      await page.setContent(html, { waitUntil: 'networkidle' });
 
-    await page.close();
-    return Buffer.from(pdfBuffer);
+      await page.evaluate(() => {
+        return document.fonts.ready;
+      });
+
+      await page.waitForTimeout(1000);
+
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '0mm',
+          right: '0mm',
+          bottom: '0mm',
+          left: '0mm',
+        },
+      });
+
+      await page.close();
+      return Buffer.from(pdfBuffer);
+    } finally {
+      await browser.close();
+    }
   }
 
   escapeHtml(text) {

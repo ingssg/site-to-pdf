@@ -29,6 +29,7 @@ interface PageSelectorProps {
   onComplete: (result: GeneratePDFResponse) => void;
   onClose?: () => void;
   crawlMode?: "full" | "smart"; // 크롤링 모드
+  jobId?: string; // Lambda PDF 생성용 jobId
 }
 
 export default function PageSelector({
@@ -36,6 +37,7 @@ export default function PageSelector({
   onComplete,
   onClose,
   crawlMode = "smart", // 기본값: smart 모드
+  jobId,
 }: PageSelectorProps) {
   // 기본값: defaultChecked가 true인 페이지만 선택됨 (스마트 필터링)
   const [selectedUrls, setSelectedUrls] = useState<Set<string>>(
@@ -186,32 +188,113 @@ export default function PageSelector({
     try {
       console.log(`[PageSelector] ========== PDF 생성 시작 ==========`);
       console.log(`[PageSelector] 선택된 URL 개수: ${selectedUrls.size}`);
-      console.log(`[PageSelector] 선택된 URLs:`, Array.from(selectedUrls));
-      console.log(`[PageSelector] 전체 pages 개수: ${pages.length}`);
+      console.log(`[PageSelector] jobId: ${jobId}`);
 
       const selectedPages = pages.filter((p) => selectedUrls.has(p.url));
+      setSelectedPagesForResult(selectedPages);
 
-      console.log(`[PageSelector] 필터링된 selectedPages 개수: ${selectedPages.length}`);
-      console.log(`[PageSelector] selectedPages titles:`, selectedPages.map(p => p.title));
+      // Lambda 방식 (jobId가 있는 경우)
+      if (jobId) {
+        console.log(`[PageSelector] Lambda PDF 생성 트리거...`);
 
-      if (selectedPages.length !== selectedUrls.size) {
-        console.error(`[PageSelector] ⚠️ 페이지 누락 발생! selectedUrls=${selectedUrls.size}, selectedPages=${selectedPages.length}`);
+        // 1. PDF 생성 트리거
+        const triggerResponse = await fetch(`/api/jobs/${jobId}/generate-pdf`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            selectedPages: Array.from(selectedUrls),
+          }),
+        });
+
+        if (!triggerResponse.ok) {
+          const errorData = await triggerResponse.json();
+          throw new Error(errorData.error?.userMessage || 'PDF 생성 트리거 실패');
+        }
+
+        // 2. 폴링으로 결과 확인
+        const pollInterval = setInterval(async () => {
+          try {
+            const statusResponse = await fetch(`/api/jobs/${jobId}/status`);
+            const statusData = await statusResponse.json();
+
+            if (!statusData.success) {
+              throw new Error(statusData.error?.userMessage || '상태 확인 실패');
+            }
+
+            const { status, progress: jobProgress, result, error: jobError } = statusData.data;
+
+            // 진행률 업데이트
+            if (jobProgress) {
+              setProgress({
+                message: jobProgress.message || 'PDF 생성 중...',
+                percentage: jobProgress.percentage || 0,
+              });
+            }
+
+            // 완료 처리
+            if (status === 'completed' && result) {
+              clearInterval(pollInterval);
+              setProgress(null);
+              setGenerating(false);
+              setCompleted(true);
+
+              const pdfResult: GeneratePDFResponse = {
+                success: true,
+                data: {
+                  pdf: {
+                    mergedPdf: result.pdfUrl,
+                    mergedPdfTooLarge: false,
+                    zipDownloadUrl: result.zipUrl,
+                    screenshotPdfUrl: result.screenshotPdfUrl || null,
+                    warnings: [],
+                    pageCount: result.processedPages || selectedPages.length,
+                    totalSize: 0,
+                    totalSizeMB: '0 MB',
+                  },
+                  summary: result.summary,
+                },
+              };
+              setPdfResult(pdfResult);
+            }
+
+            // 실패 처리
+            if (status === 'failed') {
+              clearInterval(pollInterval);
+              throw new Error(jobError || '작업 실패');
+            }
+          } catch (err) {
+            clearInterval(pollInterval);
+            const errorMessage = err instanceof Error ? err.message : '상태 확인 실패';
+            const errorData = getErrorInfo(inferErrorCode(errorMessage), errorMessage);
+            setError(errorData);
+            setGenerating(false);
+          }
+        }, 2000);
+
+        // 15분 타임아웃
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          if (generating) {
+            setGenerating(false);
+            setError(getErrorInfo(inferErrorCode('작업 시간이 초과되었습니다.'), '작업 시간이 초과되었습니다.'));
+          }
+        }, 15 * 60 * 1000);
+
+        return;
       }
 
-      // 선택된 페이지 저장 (ResultDisplay에 전달용)
-      setSelectedPagesForResult(selectedPages);
+      // 기존 방식 (jobId가 없는 경우 - 로컬 개발용)
+      console.log(`[PageSelector] 로컬 PDF 생성 (SSE)...`);
 
       const requestBody: GeneratePDFRequest = {
         pages: selectedPages,
-        detailLevel: "detailed", // MVP: detailed 분석 (비즈니스 모델, 강점, 개선점 포함)
-        crawlMode, // 크롤링 모드 전달
+        detailLevel: "detailed",
+        crawlMode,
       };
 
       const response = await fetch("/api/generate-pdf", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
       });
 
@@ -227,19 +310,16 @@ export default function PageSelector({
         throw new Error("응답을 읽을 수 없습니다");
       }
 
-      let buffer = ""; // 불완전한 chunk를 모으는 버퍼
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
 
         if (done) break;
 
-        // 버퍼에 새 chunk 추가
         buffer += decoder.decode(value, { stream: true });
-
-        // 완전한 라인들만 추출 (마지막 불완전한 라인은 버퍼에 보관)
         const lines = buffer.split("\n");
-        buffer = lines.pop() || ""; // 마지막 불완전한 라인은 버퍼에 유지
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
           if (line.startsWith("data: ")) {
@@ -250,25 +330,16 @@ export default function PageSelector({
               const data = JSON.parse(jsonStr);
 
               if (data.type === "progress") {
-                // 진행률 업데이트
-                console.log(
-                  "[PDF Progress]",
-                  data.message,
-                  data.percentage + "%"
-                );
                 setProgress({
                   message: data.message,
                   percentage: data.percentage,
                 });
               } else if (data.type === "complete") {
-                // PDF 생성 완료
-                console.log("[PDF Complete]", data);
                 setProgress(null);
                 setGenerating(false);
                 setCompleted(true);
                 setPdfResult(data as GeneratePDFResponse);
               } else if (data.type === "error") {
-                // data.error가 AppError 객체인 경우와 문자열인 경우 모두 처리
                 const errorData = typeof data.error === 'string'
                   ? getErrorInfo(inferErrorCode(data.error), data.error)
                   : data.error;
@@ -277,7 +348,6 @@ export default function PageSelector({
               }
             } catch (parseError) {
               console.error("[SSE Parse Error]", parseError, "Line:", line);
-              // JSON 파싱 에러는 무시하고 계속 진행
             }
           }
         }

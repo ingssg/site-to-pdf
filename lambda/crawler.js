@@ -3,7 +3,8 @@
  * 기존 src/lib/crawler/index.ts를 Lambda 환경에 맞게 포팅
  */
 
-const { chromium } = require('playwright');
+const chromium = require('@sparticuz/chromium');
+const { chromium: playwright } = require('playwright-core');
 
 // 페이지 타입 감지 (로컬 환경의 page-filter.ts와 동일)
 function detectPageType(url) {
@@ -132,17 +133,21 @@ class WebCrawler {
     const failedUrls = [];
 
     try {
-      this.browser = await chromium.launch({
-        headless: true,
+      // Lambda 환경용 @sparticuz/chromium 설정
+      const executablePath = await chromium.executablePath();
+      console.log('[Crawler] Chromium 경로:', executablePath);
+
+      this.browser = await playwright.launch({
         args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
+          ...chromium.args,
+          '--disable-gpu',
           '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process',
+          '--disable-setuid-sandbox',
+          '--no-sandbox',
         ],
+        executablePath: executablePath,
+        headless: true,
+        ignoreDefaultArgs: ['--disable-extensions'],
       });
 
       await this.crawlPage(this.config.url, 0);

@@ -50,13 +50,13 @@ export async function POST(request: NextRequest) {
       throw new Error(`작업 등록 실패: ${error.message}`);
     }
 
-    // 3. Lambda 워커 비동기 호출 (응답 대기 안 함)
+    // 3. Lambda 워커 비동기 호출 - 크롤링만 수행 (action: 'crawl')
     const lambdaUrl = process.env.LAMBDA_FUNCTION_URL;
     if (lambdaUrl) {
       fetch(lambdaUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: job.id }),
+        body: JSON.stringify({ jobId: job.id, action: 'crawl' }),
       }).catch((error) => {
         console.error('[Jobs] Lambda 호출 실패:', error);
         // 에러가 나도 작업은 등록되었으므로 계속 진행
