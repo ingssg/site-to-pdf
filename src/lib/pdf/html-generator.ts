@@ -92,8 +92,18 @@ export class HTMLPDFGenerator {
    */
   private async initBrowser(): Promise<void> {
     if (!this.browser) {
+      // Vercel 서버리스 환경에서 실행 옵션 추가
       this.browser = await chromium.launch({
         headless: true,
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-accelerated-2d-canvas',
+          '--no-first-run',
+          '--no-zygote',
+          '--single-process', // Vercel 서버리스 환경에서 필요
+        ],
       });
     }
   }
