@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { GeneratePDFResponse } from "@/types/api";
-import type { AppError } from '@/types/errors';
+import type { AppError } from "@/types/errors";
 import ErrorDisplay from "@/components/ui/ErrorDisplay";
-import { ErrorCode, getErrorInfo } from '@/constants/errorMessages';
+import SummaryCard from "@/components/ui/SummaryCard";
+import DownloadCard from "@/components/ui/DownloadCard";
+import { ErrorCode, getErrorInfo } from "@/constants/errorMessages";
+import { generateFilename, getDomainFromUrl } from "@/utils/filename";
 
 interface ResultDisplayProps {
   crawlResult: {
@@ -25,9 +28,8 @@ interface ResultDisplayProps {
       pageCount: number;
       mergedPdf: string | null;
       mergedPdfTooLarge?: boolean;
-      individualPdfsZip: string;
-      zipDownloadUrl?: string;
-      screenshotPdf?: string | null;
+      zipDownloadUrl: string; // 개별 PDF ZIP 파일 다운로드 URL
+      screenshotPdfUrl?: string | null; // 스크린샷 PDF 다운로드 URL
       warnings?: string[];
     };
     summary: any;
@@ -42,31 +44,15 @@ export default function ResultDisplay({
   const crawl = crawlResult;
   const [showPagesList, setShowPagesList] = useState(false);
   const [downloadError, setDownloadError] = useState<AppError | null>(null);
+  const [faviconSrc, setFaviconSrc] = useState<string>("");
 
   // 도메인 추출
   const getDomain = () => {
     try {
       const firstPageUrl = crawl.pages[0]?.url || "website";
-      return new URL(firstPageUrl).hostname.replace("www.", "");
+      return getDomainFromUrl(firstPageUrl);
     } catch {
       return "website";
-    }
-  };
-
-  // 파일명 생성
-  const generateFilename = (extension: "pdf" | "zip") => {
-    try {
-      const domain = getDomain().replace(/\./g, "_");
-      const date = new Date().toISOString().split("T")[0];
-      if (extension === "zip") {
-        return `${domain}_business_intelligence_${date}_pages.zip`;
-      }
-      return `${domain}_business_intelligence_${date}.pdf`;
-    } catch {
-      const date = new Date().toISOString().split("T")[0];
-      return extension === "zip"
-        ? `business_intelligence_${date}_pages.zip`
-        : `business_intelligence_${date}.pdf`;
     }
   };
 
@@ -77,15 +63,14 @@ export default function ResultDisplay({
     }
 
     if (!pdf.mergedPdf) {
-      setDownloadError(getErrorInfo(
-        ErrorCode.DOWNLOAD_FAILED,
-        'PDF data is missing'
-      ));
+      setDownloadError(
+        getErrorInfo(ErrorCode.DOWNLOAD_FAILED, "PDF data is missing")
+      );
       return;
     }
 
     try {
-      const filename = generateFilename("pdf");
+      const filename = generateFilename("pdf", getDomain());
       const response = await fetch("/api/download", {
         method: "POST",
         headers: {
@@ -110,65 +95,49 @@ export default function ResultDisplay({
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("PDF 다운로드 실패:", error);
-      setDownloadError(getErrorInfo(
-        ErrorCode.DOWNLOAD_FAILED,
-        error instanceof Error ? error.message : undefined
-      ));
+      setDownloadError(
+        getErrorInfo(
+          ErrorCode.DOWNLOAD_FAILED,
+          error instanceof Error ? error.message : undefined
+        )
+      );
     }
   };
 
   const handleDownloadZIP = async () => {
     try {
-      const filename = generateFilename("zip");
+      const filename = generateFilename("zip", getDomain());
 
-      if (pdf.zipDownloadUrl) {
-        // 서버에 저장된 ZIP 파일 다운로드
-        const a = document.createElement("a");
-        a.href = pdf.zipDownloadUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      } else {
-        // Base64 ZIP 다운로드
-        const response = await fetch("/api/download", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            pdfBase64: pdf.individualPdfsZip,
-            filename: filename,
-          }),
-        });
-
-        if (!response.ok) throw new Error("다운로드 실패");
-
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
+      if (!pdf.zipDownloadUrl) {
+        setDownloadError(
+          getErrorInfo(ErrorCode.DOWNLOAD_FAILED, "ZIP download URL is missing")
+        );
+        return;
       }
+
+      // 서버에 저장된 ZIP 파일 다운로드
+      const a = document.createElement("a");
+      a.href = pdf.zipDownloadUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     } catch (error) {
       console.error("ZIP 다운로드 실패:", error);
-      setDownloadError(getErrorInfo(
-        ErrorCode.DOWNLOAD_FAILED,
-        error instanceof Error ? error.message : undefined
-      ));
+      setDownloadError(
+        getErrorInfo(
+          ErrorCode.DOWNLOAD_FAILED,
+          error instanceof Error ? error.message : undefined
+        )
+      );
     }
   };
 
   const handleDownloadScreenshotPDF = async () => {
-    if (!pdf.screenshotPdf) {
-      setDownloadError(getErrorInfo(
-        ErrorCode.DOWNLOAD_FAILED,
-        'Screenshot PDF data is missing'
-      ));
+    if (!pdf.screenshotPdfUrl) {
+      setDownloadError(
+        getErrorInfo(ErrorCode.DOWNLOAD_FAILED, "Screenshot PDF URL is missing")
+      );
       return;
     }
 
@@ -177,34 +146,21 @@ export default function ResultDisplay({
       const date = new Date().toISOString().split("T")[0];
       const filename = `${domain}_screenshots_${date}.pdf`;
 
-      const response = await fetch("/api/download", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          pdfBase64: pdf.screenshotPdf,
-          filename: filename,
-        }),
-      });
-
-      if (!response.ok) throw new Error("다운로드 실패");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      // 서버에 저장된 스크린샷 PDF 다운로드
       const a = document.createElement("a");
-      a.href = url;
+      a.href = pdf.screenshotPdfUrl;
       a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("스크린샷 PDF 다운로드 실패:", error);
-      setDownloadError(getErrorInfo(
-        ErrorCode.DOWNLOAD_FAILED,
-        error instanceof Error ? error.message : undefined
-      ));
+      setDownloadError(
+        getErrorInfo(
+          ErrorCode.DOWNLOAD_FAILED,
+          error instanceof Error ? error.message : undefined
+        )
+      );
     }
   };
 
@@ -216,14 +172,43 @@ export default function ResultDisplay({
       const firstPageUrl = crawl.pages[0]?.url || "";
       const urlObj = new URL(firstPageUrl);
       const domainForFavicon = urlObj.hostname;
-      // Google Favicon API 사용 (더 안정적)
-      return `https://www.google.com/s2/favicons?domain=${domainForFavicon}&sz=32`;
+      const origin = urlObj.origin;
+      // 여러 파비콘 소스 시도 (onError로 fallback)
+      return {
+        google: `https://www.google.com/s2/favicons?domain=${domainForFavicon}&sz=64`,
+        direct: `${origin}/favicon.ico`,
+        fallback:
+          "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🌐%3C/text%3E%3C/svg%3E",
+      };
     } catch {
-      return "";
+      return {
+        google: "",
+        direct: "",
+        fallback:
+          "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🌐%3C/text%3E%3C/svg%3E",
+      };
     }
   };
 
-  const faviconUrl = getFaviconUrl();
+  const faviconUrls = getFaviconUrl();
+
+  // 파비콘 초기화 (Google API 먼저 시도)
+  useEffect(() => {
+    if (!faviconSrc && faviconUrls.google) {
+      setFaviconSrc(faviconUrls.google);
+    }
+  }, [faviconSrc, faviconUrls.google]);
+
+  // 파비콘 로드 실패 시 fallback
+  const handleFaviconError = () => {
+    if (faviconSrc === faviconUrls.google && faviconUrls.direct) {
+      // Google API 실패 → 직접 favicon.ico 시도
+      setFaviconSrc(faviconUrls.direct);
+    } else if (faviconSrc === faviconUrls.direct && faviconUrls.fallback) {
+      // favicon.ico도 실패 → 기본 아이콘 사용
+      setFaviconSrc(faviconUrls.fallback);
+    }
+  };
 
   // 페이지 목록 표시 로직: 기본 3개, 펼치면 최대 5개 + 스크롤
   const getDisplayedPages = () => {
@@ -331,31 +316,23 @@ export default function ResultDisplay({
                 d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
               />
             </svg>
-            <h2 className="text-xl font-bold tracking-tight">AI 비즈니스 분석</h2>
+            <h2 className="text-xl font-bold tracking-tight">
+              AI 비즈니스 분석
+            </h2>
           </div>
 
           {/* Main Overview Card */}
           <div className="bg-white dark:bg-[#1a1d2d] rounded-xl p-6 shadow-sm border border-[#cfd3e7] dark:border-white/10">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold">회사 개요</h3>
-              {faviconUrl ? (
+              {faviconSrc ? (
                 <img
-                  src={faviconUrl}
+                  src={faviconSrc}
                   alt={`${domain} favicon`}
                   className="w-8 h-8 rounded object-contain"
-                  onError={(e) => {
-                    // 파비콘 로드 실패 시 그라데이션 플레이스홀더 표시
-                    const target = e.target as HTMLImageElement;
-                    target.style.display = "none";
-                    const placeholder = document.createElement("div");
-                    placeholder.className =
-                      "w-8 h-8 rounded bg-gradient-to-br from-[#635BFF] to-[#00D4FF] opacity-80";
-                    target.parentNode?.appendChild(placeholder);
-                  }}
+                  onError={handleFaviconError}
                 />
-              ) : (
-                <div className="w-8 h-8 rounded bg-gradient-to-br from-[#635BFF] to-[#00D4FF] opacity-80"></div>
-              )}
+              ) : null}
             </div>
             <p className="text-[#0d101b] dark:text-[#f8f9fc] text-[15px] leading-relaxed font-medium">
               {summary?.overview ||
@@ -367,30 +344,11 @@ export default function ResultDisplay({
           <div className="flex flex-col gap-3">
             {/* Key Products / Main Services */}
             {(summary?.products || summary?.mainServices) && (
-              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
-                <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-                        />
-                      </svg>
-                    </div>
-                    <p className="text-base font-bold text-[#0d101b] dark:text-[#f8f9fc]">
-                      주요 제품 / 서비스
-                    </p>
-                  </div>
+              <SummaryCard
+                title="주요 제품 / 서비스"
+                icon={
                   <svg
-                    className="w-6 h-6 text-[#0d101b] dark:text-white transition-transform duration-300 group-open:rotate-180"
+                    className="w-5 h-5"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -399,31 +357,33 @@ export default function ResultDisplay({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M19 9l-7 7-7-7"
+                      d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
                     />
                   </svg>
-                </summary>
-                <div className="px-5 pb-5 pt-1">
-                  <ul className="space-y-3">
-                    {(summary.mainServices || summary.products || []).map(
-                      (item: string, idx: number) => (
-                        <li
-                          key={idx}
-                          className="flex items-start gap-2 text-sm text-[#4c599a] dark:text-[#b0b8d6]"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0"></span>
-                          <span>{item}</span>
-                        </li>
-                      )
-                    )}
-                  </ul>
-                </div>
-              </details>
+                }
+              >
+                <ul className="space-y-3">
+                  {(summary.mainServices || summary.products || []).map(
+                    (item: string, idx: number) => (
+                      <li
+                        key={idx}
+                        className="flex items-start gap-2 text-sm text-[#4c599a] dark:text-[#b0b8d6]"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0"></span>
+                        <span>{item}</span>
+                      </li>
+                    )
+                  )}
+                </ul>
+              </SummaryCard>
             )}
 
             {/* Target Customers */}
             {summary?.targetCustomers && summary.targetCustomers.length > 0 && (
-              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details
+                open
+                className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm"
+              >
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -469,7 +429,10 @@ export default function ResultDisplay({
 
             {/* Value Propositions / Unique Features */}
             {(summary?.valueProps || summary?.uniqueFeatures) && (
-              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details
+                open
+                className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm"
+              >
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -532,7 +495,10 @@ export default function ResultDisplay({
 
             {/* Problem Solved */}
             {summary?.problemSolved && (
-              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details
+                open
+                className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm"
+              >
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -576,7 +542,10 @@ export default function ResultDisplay({
 
             {/* Business Model */}
             {summary?.businessModel && (
-              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details
+                open
+                className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm"
+              >
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -645,7 +614,10 @@ export default function ResultDisplay({
 
             {/* Key Strengths */}
             {summary?.keyStrengths && summary.keyStrengths.length > 0 && (
-              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details
+                open
+                className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm"
+              >
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -702,7 +674,10 @@ export default function ResultDisplay({
             {/* Growth Opportunities */}
             {summary?.growthOpportunities &&
               summary.growthOpportunities.length > 0 && (
-                <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+                <details
+                  open
+                  className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm"
+                >
                   <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -758,7 +733,10 @@ export default function ResultDisplay({
 
             {/* Competitor Analysis */}
             {summary?.competitorAnalysis && (
-              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details
+                open
+                className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm"
+              >
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -803,7 +781,10 @@ export default function ResultDisplay({
             {/* Actionable Insights */}
             {summary?.actionableInsights &&
               summary.actionableInsights.length > 0 && (
-                <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+                <details
+                  open
+                  className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm"
+                >
                   <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                     <div className="flex items-center gap-3">
                       <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -859,7 +840,10 @@ export default function ResultDisplay({
 
             {/* Market Opportunity */}
             {summary?.marketOpportunity && (
-              <details open className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm">
+              <details
+                open
+                className="group rounded-xl bg-white dark:bg-[#1a1d2d] border border-[#cfd3e7] dark:border-white/10 overflow-hidden shadow-sm"
+              >
                 <summary className="flex cursor-pointer items-center justify-between p-4 list-none [&::-webkit-details-marker]:hidden bg-transparent hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                   <div className="flex items-center gap-3">
                     <div className="p-1.5 rounded-md bg-[#e7e9f3] dark:bg-white/10 text-[#0d101b] dark:text-white">
@@ -922,45 +906,12 @@ export default function ResultDisplay({
           </div>
           <div className="grid gap-3">
             {/* Full PDF Card */}
-            <div
-              onClick={handleDownloadPDF}
-              className="bg-white dark:bg-[#1a1d2d] p-4 rounded-xl shadow-sm border border-[#cfd3e7] dark:border-white/10 flex items-center justify-between group cursor-pointer hover:border-primary/50 transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-lg bg-red-50 dark:bg-red-900/20 flex items-center justify-center shrink-0 border border-red-100 dark:border-red-900/30">
-                  <svg
-                    className="w-7 h-7 text-red-600 dark:text-red-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                </div>
-                <div className="flex flex-col">
-                  <p className="font-bold text-base text-[#0d101b] dark:text-[#f8f9fc]">
-                    전체 웹사이트 PDF
-                  </p>
-                  <p className="text-xs text-[#4c599a] dark:text-[#94a3b8] mt-0.5 font-medium">
-                    {pdf.pageCount} 페이지 • {pdf.totalSizeMB} MB • 단일 파일
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDownloadPDF();
-                }}
-                className="w-9 h-9 rounded-full bg-[#f8f9fc] dark:bg-[#101322] border border-[#cfd3e7] dark:border-white/10 text-[#0d101b] dark:text-white hover:bg-primary hover:text-white hover:border-primary flex items-center justify-center transition-all"
-                aria-label="PDF 다운로드"
-              >
+            <DownloadCard
+              title="전체 웹사이트 PDF"
+              description={`${pdf.pageCount} 페이지 • ${pdf.totalSizeMB} MB • 단일 파일`}
+              icon={
                 <svg
-                  className="w-5 h-5"
+                  className="w-7 h-7 text-red-600 dark:text-red-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -969,52 +920,22 @@ export default function ResultDisplay({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                   />
                 </svg>
-              </button>
-            </div>
+              }
+              iconBgColor="bg-red-50 dark:bg-red-900/20"
+              iconBorderColor="border-red-100 dark:border-red-900/30"
+              onClick={handleDownloadPDF}
+            />
 
             {/* ZIP Card */}
-            <div
-              onClick={handleDownloadZIP}
-              className="bg-white dark:bg-[#1a1d2d] p-4 rounded-xl shadow-sm border border-[#cfd3e7] dark:border-white/10 flex items-center justify-between group cursor-pointer hover:border-primary/50 transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center shrink-0 border border-amber-100 dark:border-amber-900/30">
-                  <svg
-                    className="w-7 h-7 text-amber-600 dark:text-amber-400"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
-                    />
-                  </svg>
-                </div>
-                <div className="flex flex-col">
-                  <p className="font-bold text-base text-[#0d101b] dark:text-[#f8f9fc]">
-                    개별 페이지 PDF
-                  </p>
-                  <p className="text-xs text-[#4c599a] dark:text-[#94a3b8] mt-0.5 font-medium">
-                    ZIP 아카이브 • {pdf.totalSizeMB} MB • {pdf.pageCount}개 파일
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDownloadZIP();
-                }}
-                className="w-9 h-9 rounded-full bg-[#f8f9fc] dark:bg-[#101322] border border-[#cfd3e7] dark:border-white/10 text-[#0d101b] dark:text-white hover:bg-primary hover:text-white hover:border-primary flex items-center justify-center transition-all"
-                aria-label="ZIP 다운로드"
-              >
+            <DownloadCard
+              title="개별 페이지 PDF"
+              description={`ZIP 아카이브 • ${pdf.totalSizeMB} MB • ${pdf.pageCount}개 파일`}
+              icon={
                 <svg
-                  className="w-5 h-5"
+                  className="w-7 h-7 text-amber-600 dark:text-amber-400"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -1023,53 +944,23 @@ export default function ResultDisplay({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                    d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
                   />
                 </svg>
-              </button>
-            </div>
+              }
+              iconBgColor="bg-amber-50 dark:bg-amber-900/20"
+              iconBorderColor="border-amber-100 dark:border-amber-900/30"
+              onClick={handleDownloadZIP}
+            />
 
             {/* Screenshot PDF Card */}
-            {pdf.screenshotPdf && (
-              <div
-                onClick={handleDownloadScreenshotPDF}
-                className="bg-white dark:bg-[#1a1d2d] p-4 rounded-xl shadow-sm border border-[#cfd3e7] dark:border-white/10 flex items-center justify-between group cursor-pointer hover:border-primary/50 transition-colors"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center shrink-0 border border-blue-100 dark:border-blue-900/30">
-                    <svg
-                      className="w-7 h-7 text-blue-600 dark:text-blue-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </div>
-                  <div className="flex flex-col">
-                    <p className="font-bold text-base text-[#0d101b] dark:text-[#f8f9fc]">
-                      원본 스크린샷 PDF
-                    </p>
-                    <p className="text-xs text-[#4c599a] dark:text-[#94a3b8] mt-0.5 font-medium">
-                      법적 증거용 • 원본 품질 • {pdf.pageCount}개 스크린샷
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDownloadScreenshotPDF();
-                  }}
-                  className="w-9 h-9 rounded-full bg-[#f8f9fc] dark:bg-[#101322] border border-[#cfd3e7] dark:border-white/10 text-[#0d101b] dark:text-white hover:bg-primary hover:text-white hover:border-primary flex items-center justify-center transition-all"
-                  aria-label="스크린샷 PDF 다운로드"
-                >
+            {pdf.screenshotPdfUrl && (
+              <DownloadCard
+                title="원본 스크린샷 PDF"
+                description={`법적 증거용 • 원본 품질 • ${pdf.pageCount}개 스크린샷`}
+                icon={
                   <svg
-                    className="w-5 h-5"
+                    className="w-7 h-7 text-blue-600 dark:text-blue-400"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -1078,11 +969,14 @@ export default function ResultDisplay({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                     />
                   </svg>
-                </button>
-              </div>
+                }
+                iconBgColor="bg-blue-50 dark:bg-blue-900/20"
+                iconBorderColor="border-blue-100 dark:border-blue-900/30"
+                onClick={handleDownloadScreenshotPDF}
+              />
             )}
           </div>
         </section>
@@ -1205,16 +1099,10 @@ export default function ResultDisplay({
 
       {/* Sticky Bottom Action Bar */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#f6f6f8]/90 dark:bg-[#101322]/90 backdrop-blur-md border-t border-[#cfd3e7] dark:border-white/10 z-40">
-        <div className="max-w-3xl mx-auto flex gap-3">
+        <div className="max-w-3xl mx-auto">
           <button
             onClick={() => window.location.reload()}
-            className="flex-1 h-12 rounded-lg border border-[#cfd3e7] dark:border-white/10 bg-white dark:bg-[#1a1d2d] text-[#0d101b] dark:text-[#f8f9fc] font-bold text-sm hover:bg-[#f8f9fc] dark:hover:bg-white/10 transition-colors shadow-sm"
-          >
-            다른 사이트 분석
-          </button>
-          <button
-            onClick={() => window.location.reload()}
-            className="flex-[1.5] h-12 rounded-lg bg-primary text-white font-bold text-sm shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            className="w-full h-12 rounded-lg bg-primary text-white font-bold text-sm shadow-lg shadow-primary/30 hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
           >
             <svg
               className="w-5 h-5"
