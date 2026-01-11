@@ -215,10 +215,74 @@ export class WebCrawler {
       // 짧은 대기 시간 (폰트 렌더링 안정화 - 속도 최적화)
       await page.waitForTimeout(1000);  // 5초 → 1초로 단축
 
-      console.log(`[Crawler] Fonts loaded and applied, taking screenshot for ${url}`);
+      console.log(`[Crawler] Fonts loaded and applied, waiting for images to load for ${url}`);
+
+      // 이미지 로딩 완료 대기 (블러 처리 방지)
+      await page.evaluate(async () => {
+        // 모든 이미지 요소 찾기
+        const images = Array.from(document.querySelectorAll('img'));
+        
+        // 각 이미지가 완전히 로드될 때까지 대기
+        await Promise.all(
+          images.map((img) => {
+            // 이미 로드된 이미지는 즉시 반환
+            if (img.complete && img.naturalHeight !== 0) {
+              return Promise.resolve();
+            }
+            
+            // lazy loading 이미지 강제 로드
+            if (img.loading === 'lazy') {
+              img.loading = 'eager';
+            }
+            
+            // srcset이 있으면 srcset 사용, 없으면 src 사용
+            if (img.srcset) {
+              img.srcset = img.srcset;
+            } else if (img.src) {
+              img.src = img.src;
+            }
+            
+            // 이미지 로드 완료 대기
+            return new Promise<void>((resolve, reject) => {
+              const timeout = setTimeout(() => {
+                console.warn(`Image load timeout: ${img.src}`);
+                resolve(); // 타임아웃되어도 계속 진행
+              }, 5000); // 5초 타임아웃
+              
+              if (img.complete && img.naturalHeight !== 0) {
+                clearTimeout(timeout);
+                resolve();
+              } else {
+                img.onload = () => {
+                  clearTimeout(timeout);
+                  resolve();
+                };
+                img.onerror = () => {
+                  clearTimeout(timeout);
+                  resolve(); // 에러가 나도 계속 진행
+                };
+              }
+            });
+          })
+        );
+        
+        // 배경 이미지도 로드 대기
+        const elementsWithBg = Array.from(document.querySelectorAll('*')).filter((el) => {
+          const style = window.getComputedStyle(el);
+          return style.backgroundImage && style.backgroundImage !== 'none';
+        });
+        
+        // 추가 렌더링 대기
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      });
+
+      console.log(`[Crawler] Images loaded, taking screenshot for ${url}`);
 
       // 16:9 비율 스크린샷 (모니터 크기, 상단만 캡처) - 전체 웹사이트 PDF용
       await page.setViewportSize({ width: 1920, height: 1080 });
+
+      // 이미지 로딩 후 추가 대기 (렌더링 안정화)
+      await page.waitForTimeout(500);
 
       const screenshot = await page.screenshot({
         fullPage: false, // viewport 크기만 캡처
@@ -228,6 +292,181 @@ export class WebCrawler {
       console.log(`[Crawler] Screenshot (viewport) captured for ${url} (${(screenshot.length / 1024).toFixed(1)}KB, 1920x1080)`);
 
       // 전체 페이지 스크린샷 (원본 스크린샷 PDF용 - 법적 증거)
+      // 전체 페이지 스크린샷을 위해 스크롤하여 모든 이미지 로드
+      console.log(`[Crawler] Loading all images for full-page screenshot for ${url}`);
+      await page.evaluate(async () => {
+        // 1. 모든 lazy loading 이미지를 eager로 변경
+        const allImages = Array.from(document.querySelectorAll('img'));
+        allImages.forEach((img) => {
+          if (img.loading === 'lazy') {
+            img.loading = 'eager';
+          }
+          // srcset이 있으면 강제 리로드
+          if (img.srcset) {
+            const currentSrcset = img.srcset;
+            img.srcset = '';
+            img.srcset = currentSrcset;
+          } else if (img.src) {
+            const currentSrc = img.src;
+            img.src = '';
+            img.src = currentSrc;
+          }
+        });
+
+        // 2. CSS blur 필터 제거 (임시로)
+        const elementsWithBlur = Array.from(document.querySelectorAll('*'));
+        const originalFilters: Map<Element, string> = new Map();
+        elementsWithBlur.forEach((el) => {
+          const style = window.getComputedStyle(el);
+          if (style.filter && style.filter !== 'none' && style.filter.includes('blur')) {
+            originalFilters.set(el, style.filter);
+            (el as HTMLElement).style.filter = 'none';
+          }
+        });
+
+        // 3. 페이지를 섹션별로 나누어 스크롤하며 이미지 로드
+        const viewportHeight = window.innerHeight;
+        let totalHeight = document.documentElement.scrollHeight;
+        const scrollStep = viewportHeight * 0.8; // 80%씩 겹치며 스크롤
+        let scrollPosition = 0;
+        let lastHeight = 0;
+        let stableCount = 0;
+
+        while (scrollPosition < totalHeight || stableCount < 2) {
+          window.scrollTo(0, scrollPosition);
+          await new Promise((resolve) => setTimeout(resolve, 300)); // 스크롤 안정화 대기
+
+          // 현재 뷰포트 내의 모든 이미지가 로드될 때까지 대기
+          const visibleImages = Array.from(document.querySelectorAll('img')).filter((img) => {
+            const rect = img.getBoundingClientRect();
+            return (
+              rect.top < window.innerHeight &&
+              rect.bottom > 0 &&
+              rect.left < window.innerWidth &&
+              rect.right > 0
+            );
+          });
+
+          await Promise.all(
+            visibleImages.map((img) => {
+              return new Promise<void>((resolve) => {
+                // 이미 로드된 이미지
+                if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+                  resolve();
+                  return;
+                }
+
+                // 이미지 로드 대기
+                const timeout = setTimeout(() => {
+                  console.warn(`Image load timeout: ${img.src}`);
+                  resolve(); // 타임아웃되어도 계속 진행
+                }, 3000);
+
+                const onLoad = () => {
+                  clearTimeout(timeout);
+                  img.removeEventListener('load', onLoad);
+                  img.removeEventListener('error', onError);
+                  resolve();
+                };
+
+                const onError = () => {
+                  clearTimeout(timeout);
+                  img.removeEventListener('load', onLoad);
+                  img.removeEventListener('error', onError);
+                  resolve(); // 에러가 나도 계속 진행
+                };
+
+                img.addEventListener('load', onLoad);
+                img.addEventListener('error', onError);
+
+                // 이미지 강제 리로드 시도
+                if (img.src) {
+                  const currentSrc = img.src;
+                  img.src = '';
+                  img.src = currentSrc;
+                }
+              });
+            })
+          );
+
+          // 배경 이미지도 확인
+          const visibleElements = Array.from(document.querySelectorAll('*')).filter((el) => {
+            const rect = el.getBoundingClientRect();
+            return (
+              rect.top < window.innerHeight &&
+              rect.bottom > 0 &&
+              rect.left < window.innerWidth &&
+              rect.right > 0
+            );
+          });
+
+          visibleElements.forEach((el) => {
+            const style = window.getComputedStyle(el);
+            if (style.backgroundImage && style.backgroundImage !== 'none') {
+              // 배경 이미지가 있는 경우 추가 대기
+            }
+          });
+
+          // 동적 콘텐츠로 인한 높이 변경 대응
+          const currentHeight = document.documentElement.scrollHeight;
+          if (currentHeight === lastHeight) {
+            stableCount++;
+          } else {
+            stableCount = 0;
+            lastHeight = currentHeight;
+            totalHeight = currentHeight;
+          }
+
+          scrollPosition += scrollStep;
+        }
+
+        // 4. 페이지 끝까지 한 번 더 스크롤하여 모든 콘텐츠 로드
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        // 5. 모든 이미지 최종 확인
+        const finalImages = Array.from(document.querySelectorAll('img'));
+        await Promise.all(
+          finalImages.map((img) => {
+            return new Promise<void>((resolve) => {
+              if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+                resolve();
+                return;
+              }
+
+              const timeout = setTimeout(() => resolve(), 2000);
+              const onLoad = () => {
+                clearTimeout(timeout);
+                img.removeEventListener('load', onLoad);
+                img.removeEventListener('error', onError);
+                resolve();
+              };
+              const onError = () => {
+                clearTimeout(timeout);
+                img.removeEventListener('load', onLoad);
+                img.removeEventListener('error', onError);
+                resolve();
+              };
+              img.addEventListener('load', onLoad);
+              img.addEventListener('error', onError);
+            });
+          })
+        );
+
+        // 6. 다시 맨 위로 스크롤
+        window.scrollTo(0, 0);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        // 7. CSS blur 필터 복원 (스크린샷 후에는 필요 없지만 일단 복원)
+        // 실제로는 스크린샷을 찍기 전에 제거된 상태로 유지하는 것이 좋음
+        // originalFilters.forEach((filter, el) => {
+        //   (el as HTMLElement).style.filter = filter;
+        // });
+      });
+
+      // 추가 렌더링 안정화 대기
+      await page.waitForTimeout(1000);
+
       const fullPageScreenshot = await page.screenshot({
         fullPage: true, // 페이지 전체 캡처
         type: 'jpeg',
