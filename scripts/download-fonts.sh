@@ -14,14 +14,17 @@ fi
 
 echo "폰트 파일이 없습니다. 다운로드를 시도합니다..."
 
-# Google Fonts에서 직접 다운로드 (ZIP 파일)
+# GitHub Releases나 CDN에서 직접 다운로드 시도
 TEMP_ZIP="/tmp/noto-sans-kr-fonts.zip"
 
-# 방법 1: Google Fonts API를 통한 다운로드 시도
-echo "Google Fonts에서 다운로드 시도 중..."
-curl -L "https://fonts.google.com/download?family=Noto%20Sans%20KR" \
-  -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" \
-  -o "$TEMP_ZIP" 2>/dev/null || {
+# 방법 1: GitHub Releases에서 다운로드 시도 (더 안정적)
+echo "폰트 다운로드 시도 중..."
+DOWNLOAD_URL="https://github.com/google/fonts/raw/main/ofl/notosanskr/NotoSansKR%5Bwght%5D.ttf"
+
+# Regular 폰트 다운로드
+curl -L "$DOWNLOAD_URL" \
+  -H "User-Agent: Mozilla/5.0" \
+  -o "$FONT_DIR/NotoSansKR-Regular.ttf" 2>/dev/null || {
   echo "⚠️  자동 다운로드 실패. 폰트 없이 빌드를 계속합니다."
   echo "   PDF에서 한글이 제대로 표시되지 않을 수 있습니다."
   echo ""
@@ -30,11 +33,17 @@ curl -L "https://fonts.google.com/download?family=Noto%20Sans%20KR" \
   echo "2. 우측 상단 'Download family' 버튼 클릭"
   echo "3. 다운로드한 ZIP 파일을 압축 해제"
   echo "4. 다음 파일들을 $FONT_DIR/ 에 복사:"
-  echo "   - NotoSansKR-Regular.ttf"
-  echo "   - NotoSansKR-Bold.ttf"
-  rm -f "$TEMP_ZIP"
+  echo "   - NotoSansKR-Regular.ttf (또는 NotoSansKR.ttf)"
+  echo "   - NotoSansCJKkr-Regular.otf (선택사항)"
   exit 0
 }
+
+# 다운로드 성공 확인
+if [ -f "$FONT_DIR/NotoSansKR-Regular.ttf" ]; then
+  echo "✓ 폰트 다운로드 완료!"
+  echo "  - $FONT_DIR/NotoSansKR-Regular.ttf"
+  exit 0
+fi
 
 # ZIP 파일 확인
 if [ ! -f "$TEMP_ZIP" ] || file "$TEMP_ZIP" 2>/dev/null | grep -q "HTML"; then
