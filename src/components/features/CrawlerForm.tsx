@@ -77,7 +77,6 @@ export default function CrawlerForm({
     setError(null);
     setCrawlResult(null);
     setPdfResult(null);
-    // 크롤링 시작 시 즉시 진행 모달 표시를 위해 초기 progress 설정
     setProgress({
       current: 0,
       total: maxPages,
@@ -86,86 +85,115 @@ export default function CrawlerForm({
     });
 
     try {
-      const requestBody: CrawlAPIRequest = {
-        url,
-        maxPages,
-        crawlMode, // 크롤링 모드 전달
-      };
-
-      const response = await fetch("/api/crawl", {
+      // 1. 작업 등록
+      const createJobResponse = await fetch("/api/jobs/create", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, maxPages, crawlMode }),
       });
 
-      if (!response.ok) {
-        throw new Error("크롤링 요청 실패");
+      if (!createJobResponse.ok) {
+        const errorData: APIErrorResponse = await createJobResponse.json();
+        throw new Error(errorData.error?.userMessage || "작업 등록 실패");
       }
 
-      // SSE 스트림 읽기
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
+      const { data: { jobId } } = await createJobResponse.json();
+      console.log(`[Frontend] 작업 등록 완료: ${jobId}`);
 
-      if (!reader) {
-        throw new Error("응답을 읽을 수 없습니다");
-      }
+      // 2. 폴링 시작
+      let pollInterval: NodeJS.Timeout | null = setInterval(async () => {
+        try {
+          const statusResponse = await fetch(`/api/jobs/${jobId}/status`);
+          const statusData = await statusResponse.json();
 
-      let buffer = ""; // 불완전한 chunk를 모으는 버퍼
-
-      while (true) {
-        const { done, value } = await reader.read();
-
-        if (done) break;
-
-        // 버퍼에 새 chunk 추가
-        buffer += decoder.decode(value, { stream: true });
-
-        // 완전한 라인들만 추출 (마지막 불완전한 라인은 버퍼에 보관)
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || ""; // 마지막 불완전한 라인은 버퍼에 유지
-
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            try {
-              const jsonStr = line.slice(6).trim();
-              if (!jsonStr) continue;
-
-              const data = JSON.parse(jsonStr);
-
-              if (data.type === "progress") {
-                // 진행률 업데이트
-                setProgress({
-                  current: data.current,
-                  total: data.total,
-                  url: data.url,
-                  percentage: data.percentage,
-                });
-              } else if (data.type === "complete") {
-                // 크롤링 완료
-                setCrawlResult(data as CrawlAPIResponse);
-                setProgress(null);
-              } else if (data.type === "error") {
-                // data.error가 AppError 객체인 경우와 문자열인 경우 모두 처리
-                const errorData = typeof data.error === 'string'
-                  ? getErrorInfo(inferErrorCode(data.error), data.error)
-                  : data.error;
-                setError(errorData);
-                throw new Error(errorData.userMessage);
-              }
-            } catch (parseError) {
-              console.error("[SSE Parse Error]", parseError, "Line:", line);
-              // JSON 파싱 에러는 무시하고 계속 진행
-            }
+          if (!statusData.success) {
+            throw new Error(statusData.error?.userMessage || "상태 확인 실패");
           }
+
+          const { status, progress: jobProgress, result, error: jobError } = statusData.data;
+
+          // 진행률 업데이트
+          if (jobProgress) {
+            setProgress({
+              current: jobProgress.current || 0,
+              total: jobProgress.total || maxPages,
+              url: jobProgress.message || "",
+              percentage: jobProgress.percentage || 0,
+            });
+          }
+
+          // 완료 처리
+          if (status === "completed" && result) {
+            if (pollInterval) {
+              clearInterval(pollInterval);
+              pollInterval = null;
+            }
+            setProgress(null);
+            setLoading(false);
+
+            // 결과를 기존 형식으로 변환
+            const crawlResult: CrawlAPIResponse = {
+              type: "complete",
+              data: {
+                crawl: result.crawlResult,
+              },
+            };
+            setCrawlResult(crawlResult);
+
+            const pdfResult: GeneratePDFResponse = {
+              type: "complete",
+              data: {
+                pdf: {
+                  mergedPdf: result.pdfUrl,
+                  mergedPdfTooLarge: false,
+                  zipDownloadUrl: result.zipUrl,
+                  screenshotPdfUrl: result.screenshotUrl || null,
+                  warnings: [],
+                  pageCount: result.crawlResult.totalPages,
+                  totalSize: 0,
+                  totalSizeMB: "0 MB",
+                },
+                summary: result.summary,
+              },
+            };
+            setPdfResult(pdfResult);
+          }
+
+          // 실패 처리
+          if (status === "failed") {
+            if (pollInterval) {
+              clearInterval(pollInterval);
+              pollInterval = null;
+            }
+            setProgress(null);
+            throw new Error(jobError || "작업 실패");
+          }
+        } catch (err) {
+          if (pollInterval) {
+            clearInterval(pollInterval);
+            pollInterval = null;
+          }
+          setProgress(null);
+          const errorMessage = err instanceof Error ? err.message : "상태 확인 실패";
+          const errorData = getErrorInfo(inferErrorCode(errorMessage), errorMessage);
+          setError(errorData);
         }
-      }
+      }, 2000); // 2초마다 폴링
+
+      // Lambda 15분 타임아웃을 넘기지 않도록 15분 후 강제 종료
+      setTimeout(() => {
+        if (pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+          setLoading(false);
+          setError(getErrorInfo(inferErrorCode("작업 시간이 초과되었습니다."), "작업 시간이 초과되었습니다."));
+        }
+      }, 15 * 60 * 1000);
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "알 수 없는 에러가 발생했습니다";
       const errorData = getErrorInfo(inferErrorCode(errorMessage), errorMessage);
       setError(errorData);
-    } finally {
       setLoading(false);
     }
   };

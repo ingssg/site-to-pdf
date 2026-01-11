@@ -50,7 +50,22 @@ export async function POST(request: NextRequest) {
       throw new Error(`작업 등록 실패: ${error.message}`);
     }
 
-    // 3. 즉시 작업 ID 반환 (10초 내 완료 보장)
+    // 3. Lambda 워커 비동기 호출 (응답 대기 안 함)
+    const lambdaUrl = process.env.LAMBDA_FUNCTION_URL;
+    if (lambdaUrl) {
+      fetch(lambdaUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id }),
+      }).catch((error) => {
+        console.error('[Jobs] Lambda 호출 실패:', error);
+        // 에러가 나도 작업은 등록되었으므로 계속 진행
+      });
+    } else {
+      console.warn('[Jobs] LAMBDA_FUNCTION_URL이 설정되지 않았습니다.');
+    }
+
+    // 4. 즉시 작업 ID 반환 (10초 내 완료 보장)
     return NextResponse.json({
       success: true,
       data: {
