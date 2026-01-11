@@ -20,14 +20,18 @@ export interface CrawlAPIResponse {
       totalPages: number;
       failedUrls: string[];
       duration: string;
+      crawlMode?: 'full' | 'smart'; // 크롤링 모드
       pages: Array<{
         url: string;
         title: string;
         content: string; // 텍스트 콘텐츠
         depth: number;
-        screenshot?: Buffer; // 스크린샷 데이터 (viewport)
-        fullPageScreenshot?: Buffer; // 전체 페이지 스크린샷 (법적 증거용)
+        screenshot?: Buffer | string; // 스크린샷 데이터 (viewport) - Buffer 또는 base64 string
+        fullPageScreenshot?: Buffer | string; // 전체 페이지 스크린샷 (법적 증거용)
         pageSummary?: string; // 페이지별 AI 요약
+        pageType?: string; // 페이지 타입
+        defaultChecked?: boolean; // 기본 선택 여부
+        importance?: number; // 중요도
       }>;
     };
   };
