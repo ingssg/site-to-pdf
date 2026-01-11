@@ -10,10 +10,15 @@ import { enrichPagesWithFilterMetadata } from "@/lib/crawler/page-filter";
 import { getErrorInfo, inferErrorCode } from '@/constants/errorMessages';
 import { ErrorCode } from '@/types/errors';
 
+// Vercel Hobby 플랜: 최대 10초 타임아웃
+// ⚠️ 주의: 크롤링 작업이 10초를 초과하면 타임아웃됩니다
+// 해결 방법: 페이지 수를 줄이거나 Pro 플랜으로 업그레이드 필요
+export const maxDuration = 10;
+
 // 요청 스키마 정의
 const CrawlRequestSchema = z.object({
   url: z.string().url("유효한 URL을 입력해주세요"),
-  maxPages: z.number().min(1).max(50).optional().default(30), // MVP: 무료 버전은 50페이지 제한
+  maxPages: z.number().min(1).max(200).optional().default(30), // Business 플랜: 최대 200페이지
   crawlMode: z.enum(['full', 'smart']).optional().default('smart'), // 크롤링 모드
 });
 
@@ -26,10 +31,6 @@ export async function POST(request: NextRequest) {
     const validatedData = CrawlRequestSchema.parse(body);
 
     const { url, maxPages, crawlMode } = validatedData;
-
-    console.log(
-      `[API] 크롤링 시작: ${url} (최대 ${maxPages}페이지, 모드: ${crawlMode})`
-    );
 
     // 2. SSE 스트림 생성
     const encoder = new TextEncoder();
@@ -58,13 +59,8 @@ export async function POST(request: NextRequest) {
             crawlMode, // 크롤링 모드 전달
           }, onProgress);
 
-          console.log(`[API] 크롤링 완료: ${crawlResult.totalPages}페이지 수집됨`);
-
           // 페이지에 필터 메타데이터 추가
-          // 전체 모드와 스마트 모드 모두 동일하게 점수 기반 필터링 적용
           const enrichedPages = enrichPagesWithFilterMetadata(crawlResult.pages);
-
-          console.log(`[API] 필터링 완료 (${crawlMode} 모드): ${enrichedPages.filter(p => p.defaultChecked).length}/${enrichedPages.length}페이지 추천`);
 
           // 완료 데이터 전송
           const completeData = {
@@ -85,7 +81,8 @@ export async function POST(request: NextRequest) {
                   title: page.title,
                   content: page.content,
                   depth: page.depth,
-                  screenshot: page.screenshot, // 스크린샷 데이터 포함
+                  screenshot: page.screenshot, // viewport 스크린샷 (프레젠테이션용)
+                  fullPageScreenshot: page.fullPageScreenshot, // 전체 페이지 스크린샷 (법적 증거용)
                   defaultChecked: page.defaultChecked, // 기본 체크 상태
                   importance: page.importance, // 중요도 점수
                   exclusionReason: page.exclusionReason, // 체크 해제 이유

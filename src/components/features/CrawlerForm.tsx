@@ -29,6 +29,7 @@ interface CrawlerFormProps {
         content: string;
         depth: number;
         screenshot?: any;
+        fullPageScreenshot?: any; // 전체 페이지 스크린샷 (법적 증거용)
         pageSummary?: string;
       }>;
     };
@@ -39,8 +40,8 @@ interface CrawlerFormProps {
         pageCount: number;
         mergedPdf: string | null;
         mergedPdfTooLarge?: boolean;
-        individualPdfsZip: string;
-        zipDownloadUrl?: string;
+        zipDownloadUrl: string; // 개별 PDF ZIP 파일 다운로드 URL
+        screenshotPdfUrl?: string | null; // 스크린샷 PDF 다운로드 URL
         warnings?: string[];
       };
       summary: any;
@@ -274,14 +275,14 @@ export default function CrawlerForm({
               type="range"
               id="maxPages"
               min="1"
-              max="50"
+              max="200"
               value={maxPages}
               onChange={(e) => setMaxPages(Number(e.target.value))}
               className="w-full"
             />
             <div className="flex justify-between text-xs text-gray-500 dark:text-slate-400 mt-1">
               <span>1</span>
-              <span>50</span>
+              <span>200</span>
             </div>
             <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">
               💡 크롤링 후 PDF에 포함할 페이지를 직접 선택할 수 있습니다
