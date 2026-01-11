@@ -93,7 +93,7 @@ export class HTMLPDFGenerator {
   private async initBrowser(): Promise<void> {
     if (!this.browser) {
       // Vercel 서버리스 환경에서 실행 옵션 추가
-      this.browser = await chromium.launch({
+      const browserOptions: Parameters<typeof chromium.launch>[0] = {
         headless: true,
         args: [
           '--no-sandbox',
@@ -104,7 +104,22 @@ export class HTMLPDFGenerator {
           '--no-zygote',
           '--single-process', // Vercel 서버리스 환경에서 필요
         ],
-      });
+      };
+
+      // Vercel 환경에서 브라우저 실행 시도
+      if (process.env.VERCEL) {
+        try {
+          this.browser = await chromium.launch(browserOptions);
+        } catch (launchError) {
+          console.error('[PDF] Playwright 브라우저 실행 실패:', launchError);
+          throw new Error(
+            'Playwright 브라우저를 실행할 수 없습니다. Vercel Hobby 플랜에서는 Playwright PDF 생성이 제한적입니다. ' +
+            'AWS Lambda나 Vercel Pro 플랜을 사용하세요.'
+          );
+        }
+      } else {
+        this.browser = await chromium.launch(browserOptions);
+      }
     }
   }
 

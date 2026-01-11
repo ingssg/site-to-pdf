@@ -3,9 +3,9 @@
  * Playwright를 사용하여 웹사이트를 재귀적으로 크롤링
  */
 
-import { chromium, Browser, Page } from 'playwright';
-import type { CrawlConfig, CrawledPage, CrawlResult } from '@/types';
-import { shouldExcludeByDefault } from './page-filter';
+import { chromium, Browser, Page } from "playwright";
+import type { CrawlConfig, CrawledPage, CrawlResult } from "@/types";
+import { shouldExcludeByDefault } from "./page-filter";
 
 export class WebCrawler {
   private browser: Browser | null = null;
@@ -16,7 +16,10 @@ export class WebCrawler {
   private skippedUrls: Set<string> = new Set(); // 스마트 모드에서 제외된 URL 추적
   private readonly CONCURRENT_LIMIT = 5; // 동시에 5개 페이지 크롤링
 
-  constructor(config: CrawlConfig, onProgress?: (current: number, total: number, url: string) => void) {
+  constructor(
+    config: CrawlConfig,
+    onProgress?: (current: number, total: number, url: string) => void
+  ) {
     this.config = config;
     this.onProgress = onProgress;
   }
@@ -34,13 +37,13 @@ export class WebCrawler {
       this.browser = await chromium.launch({
         headless: true,
         args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process', // Vercel 서버리스 환경에서 필요
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-accelerated-2d-canvas",
+          "--no-first-run",
+          "--no-zygote",
+          "--single-process", // Vercel 서버리스 환경에서 필요
         ],
       });
 
@@ -50,8 +53,10 @@ export class WebCrawler {
       const endTime = new Date();
 
       // 스마트 모드 통계 출력
-      if (this.config.crawlMode === 'smart' && this.skippedUrls.size > 0) {
-        console.log(`[Crawler] 🎯 Smart Mode: Skipped ${this.skippedUrls.size} filtered URLs, Crawled ${this.crawledPages.length} important pages`);
+      if (this.config.crawlMode === "smart" && this.skippedUrls.size > 0) {
+        console.log(
+          `[Crawler] 🎯 Smart Mode: Skipped ${this.skippedUrls.size} filtered URLs, Crawled ${this.crawledPages.length} important pages`
+        );
       }
 
       return {
@@ -62,7 +67,7 @@ export class WebCrawler {
         endTime,
       };
     } catch (error) {
-      console.error('Crawl error:', error);
+      console.error("Crawl error:", error);
       throw error;
     } finally {
       await this.close();
@@ -78,13 +83,15 @@ export class WebCrawler {
       let hostname = parsedUrl.hostname;
 
       // www 제거 (www.naver.com과 naver.com을 같은 것으로 처리)
-      if (hostname.startsWith('www.')) {
+      if (hostname.startsWith("www.")) {
         hostname = hostname.slice(4);
       }
 
-      const normalizedOrigin = `${parsedUrl.protocol}//${hostname}${parsedUrl.port ? ':' + parsedUrl.port : ''}`;
+      const normalizedOrigin = `${parsedUrl.protocol}//${hostname}${
+        parsedUrl.port ? ":" + parsedUrl.port : ""
+      }`;
       // 쿼리 파라미터와 해시 제거, trailing slash 제거
-      return normalizedOrigin + parsedUrl.pathname.replace(/\/$/, '');
+      return normalizedOrigin + parsedUrl.pathname.replace(/\/$/, "");
     } catch {
       return url;
     }
@@ -111,26 +118,30 @@ export class WebCrawler {
     }
 
     // 스마트 모드: 명백히 불필요한 페이지만 제외 (보수적 접근)
-    if (this.config.crawlMode === 'smart' && shouldExcludeByDefault(url)) {
+    if (this.config.crawlMode === "smart" && shouldExcludeByDefault(url)) {
       this.skippedUrls.add(normalizedUrl);
       console.log(`[Crawler] 🚫 Skipped (Smart Mode): ${url}`);
       return;
     }
 
     this.visitedUrls.add(normalizedUrl);
-    console.log(`[Crawler] Crawling (${this.crawledPages.length + 1}/${this.config.maxPages}): ${url}`);
+    console.log(
+      `[Crawler] Crawling (${this.crawledPages.length + 1}/${
+        this.config.maxPages
+      }): ${url}`
+    );
 
     try {
       const page = await this.browser!.newPage();
 
       // 페이지 로드 (DOM 로드만 대기 - 속도 최적화)
       await page.goto(url, {
-        waitUntil: 'domcontentloaded',  // networkidle → domcontentloaded (빠른 로딩)
-        timeout: 15000,  // 15초 타임아웃
+        waitUntil: "domcontentloaded", // networkidle → domcontentloaded (빠른 로딩)
+        timeout: 15000, // 15초 타임아웃
       });
 
       // 짧은 대기 (렌더링 안정화)
-      await page.waitForTimeout(500);  // 0.5초만
+      await page.waitForTimeout(500); // 0.5초만
 
       // 페이지 정보 추출
       const title = await page.title();
@@ -139,21 +150,21 @@ export class WebCrawler {
       const content = await page.evaluate(() => {
         // 불필요한 요소 제거
         const unwantedSelectors = [
-          'script',
-          'style',
-          'noscript',
-          'iframe',
-          'svg',
-          'path',
-          'img',
-          'video',
-          'audio',
-          'canvas',
-          'nav',
-          'footer',
+          "script",
+          "style",
+          "noscript",
+          "iframe",
+          "svg",
+          "path",
+          "img",
+          "video",
+          "audio",
+          "canvas",
+          "nav",
+          "footer",
           'header[role="banner"]',
-          '.ad',
-          '.advertisement',
+          ".ad",
+          ".advertisement",
           '[class*="cookie"]',
           '[class*="popup"]',
           '[class*="modal"]',
@@ -169,7 +180,7 @@ export class WebCrawler {
 
         // 블록 레벨 요소들을 순회하며 텍스트 추출
         const blockElements = bodyClone.querySelectorAll(
-          'p, h1, h2, h3, h4, h5, h6, div, section, article, li, td, th, blockquote, pre'
+          "p, h1, h2, h3, h4, h5, h6, div, section, article, li, td, th, blockquote, pre"
         );
 
         const textParts: string[] = [];
@@ -185,7 +196,7 @@ export class WebCrawler {
             textParts.push(text);
 
             // 이 요소의 모든 자식도 처리됨으로 표시
-            el.querySelectorAll('*').forEach((child) => {
+            el.querySelectorAll("*").forEach((child) => {
               processedElements.add(child);
             });
             processedElements.add(el);
@@ -193,13 +204,13 @@ export class WebCrawler {
         });
 
         // 텍스트 조합
-        let fullText = textParts.join('\n\n');
+        let fullText = textParts.join("\n\n");
 
         // 연속된 공백을 하나로
-        fullText = fullText.replace(/[ \t]+/g, ' ');
+        fullText = fullText.replace(/[ \t]+/g, " ");
 
         // 연속된 줄바꿈을 최대 2개로
-        fullText = fullText.replace(/\n{3,}/g, '\n\n');
+        fullText = fullText.replace(/\n{3,}/g, "\n\n");
 
         // 앞뒤 공백 제거
         fullText = fullText.trim();
@@ -216,22 +227,24 @@ export class WebCrawler {
 
       // 폰트 로드 후 강제 리플로우 (브라우저가 폰트를 실제 적용하도록)
       await page.evaluate(() => {
-        document.body.style.display = 'none';
+        document.body.style.display = "none";
         // Force reflow
         void document.body.offsetHeight;
-        document.body.style.display = '';
+        document.body.style.display = "";
       });
 
       // 짧은 대기 시간 (폰트 렌더링 안정화 - 속도 최적화)
-      await page.waitForTimeout(1000);  // 5초 → 1초로 단축
+      await page.waitForTimeout(1000); // 5초 → 1초로 단축
 
-      console.log(`[Crawler] Fonts loaded and applied, waiting for images to load for ${url}`);
+      console.log(
+        `[Crawler] Fonts loaded and applied, waiting for images to load for ${url}`
+      );
 
       // 이미지 로딩 완료 대기 (블러 처리 방지)
       await page.evaluate(async () => {
         // 모든 이미지 요소 찾기
-        const images = Array.from(document.querySelectorAll('img'));
-        
+        const images = Array.from(document.querySelectorAll("img"));
+
         // 각 이미지가 완전히 로드될 때까지 대기
         await Promise.all(
           images.map((img) => {
@@ -239,26 +252,26 @@ export class WebCrawler {
             if (img.complete && img.naturalHeight !== 0) {
               return Promise.resolve();
             }
-            
+
             // lazy loading 이미지 강제 로드
-            if (img.loading === 'lazy') {
-              img.loading = 'eager';
+            if (img.loading === "lazy") {
+              img.loading = "eager";
             }
-            
+
             // srcset이 있으면 srcset 사용, 없으면 src 사용
             if (img.srcset) {
               img.srcset = img.srcset;
             } else if (img.src) {
               img.src = img.src;
             }
-            
+
             // 이미지 로드 완료 대기
             return new Promise<void>((resolve, reject) => {
               const timeout = setTimeout(() => {
                 console.warn(`Image load timeout: ${img.src}`);
                 resolve(); // 타임아웃되어도 계속 진행
               }, 5000); // 5초 타임아웃
-              
+
               if (img.complete && img.naturalHeight !== 0) {
                 clearTimeout(timeout);
                 resolve();
@@ -275,13 +288,15 @@ export class WebCrawler {
             });
           })
         );
-        
+
         // 배경 이미지도 로드 대기
-        const elementsWithBg = Array.from(document.querySelectorAll('*')).filter((el) => {
+        const elementsWithBg = Array.from(
+          document.querySelectorAll("*")
+        ).filter((el) => {
           const style = window.getComputedStyle(el);
-          return style.backgroundImage && style.backgroundImage !== 'none';
+          return style.backgroundImage && style.backgroundImage !== "none";
         });
-        
+
         // 추가 렌더링 대기
         await new Promise((resolve) => setTimeout(resolve, 500));
       });
@@ -296,41 +311,51 @@ export class WebCrawler {
 
       const screenshot = await page.screenshot({
         fullPage: false, // viewport 크기만 캡처
-        type: 'jpeg',
+        type: "jpeg",
         quality: 80,
       });
-      console.log(`[Crawler] Screenshot (viewport) captured for ${url} (${(screenshot.length / 1024).toFixed(1)}KB, 1920x1080)`);
+      console.log(
+        `[Crawler] Screenshot (viewport) captured for ${url} (${(
+          screenshot.length / 1024
+        ).toFixed(1)}KB, 1920x1080)`
+      );
 
       // 전체 페이지 스크린샷 (원본 스크린샷 PDF용 - 법적 증거)
       // 전체 페이지 스크린샷을 위해 스크롤하여 모든 이미지 로드
-      console.log(`[Crawler] Loading all images for full-page screenshot for ${url}`);
+      console.log(
+        `[Crawler] Loading all images for full-page screenshot for ${url}`
+      );
       await page.evaluate(async () => {
         // 1. 모든 lazy loading 이미지를 eager로 변경
-        const allImages = Array.from(document.querySelectorAll('img'));
+        const allImages = Array.from(document.querySelectorAll("img"));
         allImages.forEach((img) => {
-          if (img.loading === 'lazy') {
-            img.loading = 'eager';
+          if (img.loading === "lazy") {
+            img.loading = "eager";
           }
           // srcset이 있으면 강제 리로드
           if (img.srcset) {
             const currentSrcset = img.srcset;
-            img.srcset = '';
+            img.srcset = "";
             img.srcset = currentSrcset;
           } else if (img.src) {
             const currentSrc = img.src;
-            img.src = '';
+            img.src = "";
             img.src = currentSrc;
           }
         });
 
         // 2. CSS blur 필터 제거 (임시로)
-        const elementsWithBlur = Array.from(document.querySelectorAll('*'));
+        const elementsWithBlur = Array.from(document.querySelectorAll("*"));
         const originalFilters: Map<Element, string> = new Map();
         elementsWithBlur.forEach((el) => {
           const style = window.getComputedStyle(el);
-          if (style.filter && style.filter !== 'none' && style.filter.includes('blur')) {
+          if (
+            style.filter &&
+            style.filter !== "none" &&
+            style.filter.includes("blur")
+          ) {
             originalFilters.set(el, style.filter);
-            (el as HTMLElement).style.filter = 'none';
+            (el as HTMLElement).style.filter = "none";
           }
         });
 
@@ -347,7 +372,9 @@ export class WebCrawler {
           await new Promise((resolve) => setTimeout(resolve, 300)); // 스크롤 안정화 대기
 
           // 현재 뷰포트 내의 모든 이미지가 로드될 때까지 대기
-          const visibleImages = Array.from(document.querySelectorAll('img')).filter((img) => {
+          const visibleImages = Array.from(
+            document.querySelectorAll("img")
+          ).filter((img) => {
             const rect = img.getBoundingClientRect();
             return (
               rect.top < window.innerHeight &&
@@ -361,7 +388,11 @@ export class WebCrawler {
             visibleImages.map((img) => {
               return new Promise<void>((resolve) => {
                 // 이미 로드된 이미지
-                if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+                if (
+                  img.complete &&
+                  img.naturalWidth > 0 &&
+                  img.naturalHeight > 0
+                ) {
                   resolve();
                   return;
                 }
@@ -374,25 +405,25 @@ export class WebCrawler {
 
                 const onLoad = () => {
                   clearTimeout(timeout);
-                  img.removeEventListener('load', onLoad);
-                  img.removeEventListener('error', onError);
+                  img.removeEventListener("load", onLoad);
+                  img.removeEventListener("error", onError);
                   resolve();
                 };
 
                 const onError = () => {
                   clearTimeout(timeout);
-                  img.removeEventListener('load', onLoad);
-                  img.removeEventListener('error', onError);
+                  img.removeEventListener("load", onLoad);
+                  img.removeEventListener("error", onError);
                   resolve(); // 에러가 나도 계속 진행
                 };
 
-                img.addEventListener('load', onLoad);
-                img.addEventListener('error', onError);
+                img.addEventListener("load", onLoad);
+                img.addEventListener("error", onError);
 
                 // 이미지 강제 리로드 시도
                 if (img.src) {
                   const currentSrc = img.src;
-                  img.src = '';
+                  img.src = "";
                   img.src = currentSrc;
                 }
               });
@@ -400,7 +431,9 @@ export class WebCrawler {
           );
 
           // 배경 이미지도 확인
-          const visibleElements = Array.from(document.querySelectorAll('*')).filter((el) => {
+          const visibleElements = Array.from(
+            document.querySelectorAll("*")
+          ).filter((el) => {
             const rect = el.getBoundingClientRect();
             return (
               rect.top < window.innerHeight &&
@@ -412,7 +445,7 @@ export class WebCrawler {
 
           visibleElements.forEach((el) => {
             const style = window.getComputedStyle(el);
-            if (style.backgroundImage && style.backgroundImage !== 'none') {
+            if (style.backgroundImage && style.backgroundImage !== "none") {
               // 배경 이미지가 있는 경우 추가 대기
             }
           });
@@ -435,11 +468,15 @@ export class WebCrawler {
         await new Promise((resolve) => setTimeout(resolve, 1000));
 
         // 5. 모든 이미지 최종 확인
-        const finalImages = Array.from(document.querySelectorAll('img'));
+        const finalImages = Array.from(document.querySelectorAll("img"));
         await Promise.all(
           finalImages.map((img) => {
             return new Promise<void>((resolve) => {
-              if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+              if (
+                img.complete &&
+                img.naturalWidth > 0 &&
+                img.naturalHeight > 0
+              ) {
                 resolve();
                 return;
               }
@@ -447,18 +484,18 @@ export class WebCrawler {
               const timeout = setTimeout(() => resolve(), 2000);
               const onLoad = () => {
                 clearTimeout(timeout);
-                img.removeEventListener('load', onLoad);
-                img.removeEventListener('error', onError);
+                img.removeEventListener("load", onLoad);
+                img.removeEventListener("error", onError);
                 resolve();
               };
               const onError = () => {
                 clearTimeout(timeout);
-                img.removeEventListener('load', onLoad);
-                img.removeEventListener('error', onError);
+                img.removeEventListener("load", onLoad);
+                img.removeEventListener("error", onError);
                 resolve();
               };
-              img.addEventListener('load', onLoad);
-              img.addEventListener('error', onError);
+              img.addEventListener("load", onLoad);
+              img.addEventListener("error", onError);
             });
           })
         );
@@ -479,17 +516,21 @@ export class WebCrawler {
 
       const fullPageScreenshot = await page.screenshot({
         fullPage: true, // 페이지 전체 캡처
-        type: 'jpeg',
+        type: "jpeg",
         quality: 80,
       });
-      console.log(`[Crawler] Screenshot (fullPage) captured for ${url} (${(fullPageScreenshot.length / 1024).toFixed(1)}KB)`);
+      console.log(
+        `[Crawler] Screenshot (fullPage) captured for ${url} (${(
+          fullPageScreenshot.length / 1024
+        ).toFixed(1)}KB)`
+      );
 
       // 크롤링된 페이지 저장 (병렬 처리 경쟁 조건 방지)
       if (this.crawledPages.length < this.config.maxPages) {
         this.crawledPages.push({
           url,
           title,
-          content: content || '',
+          content: content || "",
           screenshot,
           fullPageScreenshot, // 전체 페이지 스크린샷 추가
           timestamp: new Date(),
@@ -538,7 +579,9 @@ export class WebCrawler {
           })
         );
 
-        console.log(`[Crawler] Batch completed: ${this.crawledPages.length}/${this.config.maxPages} pages`);
+        console.log(
+          `[Crawler] Batch completed: ${this.crawledPages.length}/${this.config.maxPages} pages`
+        );
       }
     } catch (error) {
       console.error(`[Crawler] Failed to crawl ${url}:`, error);
@@ -549,7 +592,7 @@ export class WebCrawler {
    * 페이지에서 링크 추출
    */
   private async extractLinks(page: Page): Promise<string[]> {
-    const links = await page.$$eval('a[href]', (anchors) =>
+    const links = await page.$$eval("a[href]", (anchors) =>
       anchors.map((a) => (a as HTMLAnchorElement).href)
     );
 
@@ -558,7 +601,7 @@ export class WebCrawler {
       try {
         const url = new URL(link);
         // http/https만 허용
-        return url.protocol === 'http:' || url.protocol === 'https:';
+        return url.protocol === "http:" || url.protocol === "https:";
       } catch {
         return false;
       }
@@ -574,24 +617,34 @@ export class WebCrawler {
       const targetUrl = new URL(url);
 
       // 2단계 TLD 리스트 (co.kr, co.uk, com.au 등)
-      const twoLevelTLDs = ['co.kr', 'co.uk', 'co.jp', 'com.au', 'com.br', 'ne.jp', 'or.kr', 're.kr', 'go.kr'];
+      const twoLevelTLDs = [
+        "co.kr",
+        "co.uk",
+        "co.jp",
+        "com.au",
+        "com.br",
+        "ne.jp",
+        "or.kr",
+        "re.kr",
+        "go.kr",
+      ];
 
       // 루트 도메인 추출 (2단계 TLD 고려)
       const getRootDomain = (hostname: string): string => {
-        const parts = hostname.split('.');
+        const parts = hostname.split(".");
 
         // 2단계 TLD 확인 (예: co.kr)
         if (parts.length >= 3) {
-          const possibleTLD = parts.slice(-2).join('.');
+          const possibleTLD = parts.slice(-2).join(".");
           if (twoLevelTLDs.includes(possibleTLD)) {
             // 2단계 TLD인 경우: 마지막 3개 (예: mangocreative.co.kr)
-            return parts.slice(-3).join('.');
+            return parts.slice(-3).join(".");
           }
         }
 
         // 일반 TLD인 경우: 마지막 2개 (예: naver.com)
         if (parts.length >= 2) {
-          return parts.slice(-2).join('.');
+          return parts.slice(-2).join(".");
         }
 
         return hostname;
