@@ -174,7 +174,8 @@ export class PDFGenerator {
     const individualPdfs = await this.extractIndividualPDFs(
       pdfDoc,
       aiSummaryPageCount, // AI 분석 페이지만
-      tocPageCount        // 목차 페이지
+      tocPageCount,       // 목차 페이지
+      pages               // 크롤링 페이지 정보
     );
 
     return {
@@ -535,17 +536,22 @@ export class PDFGenerator {
   private async extractIndividualPDFs(
     sourcePdf: PDFDocument,
     aiSummaryPages: number,
-    tocPages: number
+    tocPages: number,
+    pages: CrawledPage[]
   ): Promise<Buffer[]> {
     const individualPdfs: Buffer[] = [];
     const totalPages = sourcePdf.getPageCount();
     const startPage = 1 + aiSummaryPages + tocPages; // 표지(1) + AI 분석 + 목차
 
     console.log(
-      `[PDF] 개별 PDF 추출 시작 (전체 요약 + ${
-        startPage + 1
-      }페이지부터 ${totalPages}페이지까지)`
+      `[PDF] 개별 PDF 추출 시작:`
     );
+    console.log(`  - 전체 페이지 수: ${totalPages}`);
+    console.log(`  - 표지: 1페이지 (index 0)`);
+    console.log(`  - AI 분석: ${aiSummaryPages}페이지`);
+    console.log(`  - 목차: ${tocPages}페이지`);
+    console.log(`  - 크롤링 페이지: ${pages.length}개`);
+    console.log(`  - 크롤링 페이지 시작 index: ${startPage}`);
 
     // 1. 전체 요약 PDF 생성 (표지 제외, AI 분석 + 목차만)
     if (aiSummaryPages > 0 || tocPages > 0) {
@@ -559,6 +565,8 @@ export class PDFGenerator {
         (_, i) => i + 1 // 1페이지부터 (표지 제외)
       );
 
+      console.log(`[PDF] 전체 요약 PDF 복사 페이지 인덱스: ${JSON.stringify(summaryPageIndexes)}`);
+
       const summaryPages = await summaryPdf.copyPages(sourcePdf, summaryPageIndexes);
       summaryPages.forEach((page) => summaryPdf.addPage(page));
 
@@ -568,23 +576,34 @@ export class PDFGenerator {
       console.log(`[PDF] 전체 요약 PDF 생성 완료 (${summaryPageIndexes.length}페이지)`);
     }
 
-    // 2. AI 요약과 목차를 제외한 각 페이지를 개별 PDF로 추출
-    for (let i = startPage; i < totalPages; i++) {
+    // 2. 각 크롤링 페이지를 개별 PDF로 추출 (스크린샷 + 요약 묶음)
+    let currentPageIndex = startPage;
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
       const newPdf = await PDFDocument.create();
 
       // fontkit 등록
       const fontkitToRegister = (fontkit as any).default || fontkit;
       newPdf.registerFontkit(fontkitToRegister);
 
-      // 페이지 복사 (폰트는 자동으로 포함됨)
-      const [copiedPage] = await newPdf.copyPages(sourcePdf, [i]);
-      newPdf.addPage(copiedPage);
+      // 각 크롤링 페이지는 스크린샷(1) + 요약(0 or 1) 페이지로 구성
+      const pageCount = page.screenshot && page.pageSummary ? 2 : 1;
+      const pageIndexes = Array.from({ length: pageCount }, (_, j) => currentPageIndex + j);
+
+      console.log(`[PDF] 개별 PDF ${i + 1}: 페이지 인덱스 ${JSON.stringify(pageIndexes)} 복사 - ${page.title}`);
+
+      // 페이지 복사 (스크린샷 + 요약)
+      const copiedPages = await newPdf.copyPages(sourcePdf, pageIndexes);
+      copiedPages.forEach((copiedPage) => newPdf.addPage(copiedPage));
 
       const pdfBytes = await newPdf.save();
       individualPdfs.push(Buffer.from(pdfBytes));
+
+      console.log(`[PDF] 개별 PDF ${i + 1}/${pages.length} 생성 완료 (${pageCount}페이지): ${page.title}`);
+      currentPageIndex += pageCount;
     }
 
-    console.log(`[PDF] 총 ${individualPdfs.length}개 개별 PDF 추출 완료 (전체 요약 1개 + 페이지별 ${individualPdfs.length - 1}개)`);
+    console.log(`[PDF] 총 ${individualPdfs.length}개 개별 PDF 추출 완료 (전체 요약 1개 + 크롤링 페이지 ${pages.length}개)`);
     return individualPdfs;
   }
 

@@ -68,6 +68,26 @@ export class HTMLPDFGenerator {
   }
 
   /**
+   * 타임스탬프 포맷팅 (법적 증거용)
+   */
+  private formatTimestamp(timestamp: Date | undefined): string {
+    if (!timestamp) return "N/A";
+    try {
+      const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+      // ISO 8601 형식: YYYY-MM-DD HH:MM:SS UTC
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(date.getUTCDate()).padStart(2, "0");
+      const hours = String(date.getUTCHours()).padStart(2, "0");
+      const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+      const seconds = String(date.getUTCSeconds()).padStart(2, "0");
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} UTC`;
+    } catch {
+      return "N/A";
+    }
+  }
+
+  /**
    * Playwright 브라우저 초기화
    */
   private async initBrowser(): Promise<void> {
@@ -425,7 +445,49 @@ export class HTMLPDFGenerator {
 
       // 단일 PDF 생성
       const pdfBuffer = await this.htmlToPDF(html);
-      const totalSize = pdfBuffer.length;
+
+      // PDF 로드하여 실제 페이지 구조 확인 및 생성일 설정
+      const { PDFDocument } = await import("pdf-lib");
+      const sourcePdf = await PDFDocument.load(pdfBuffer);
+      
+      // 통합 PDF 생성 시점의 날짜를 메타데이터에 명시적으로 설정
+      const creationDate = new Date();
+      sourcePdf.setCreationDate(creationDate);
+      sourcePdf.setModificationDate(creationDate);
+      
+      // 메타데이터가 적용된 PDF 다시 저장
+      const pdfWithMetadata = await sourcePdf.save();
+      const finalPdfBuffer = Buffer.from(pdfWithMetadata);
+      const totalSize = finalPdfBuffer.length;
+      
+      // 페이지 구조 확인을 위해 다시 로드
+      const sourcePdfForStructure = await PDFDocument.load(finalPdfBuffer);
+      const totalPages = sourcePdfForStructure.getPageCount();
+      
+      // 통합 PDF의 생성일 가져오기 (메타데이터에서)
+      const sourceCreationDate = sourcePdfForStructure.getCreationDate();
+
+      // 페이지 구조 계산
+      // 구조: 표지(1) + 목차(N) + 종합분석(1) + 개별페이지들(pageCount)
+      // totalPages = 1 + tocPages + 1 + pageCount
+      // tocPages = totalPages - pageCount - 2
+      const coverPages = 1; // 표지: 항상 1페이지
+      const tocPages = Math.max(1, totalPages - pagesWithScreenshots.length - 2); // 목차: 계산
+      const summaryPages = 1; // 종합 분석 요약: 항상 1페이지
+      
+      // 페이지 구조 정보
+      const pageStructure = {
+        coverPages,
+        tocPages,
+        summaryPages,
+        summaryPageIndex: coverPages + tocPages, // 종합 분석 요약 페이지 인덱스
+        individualPagesStartIndex: coverPages + tocPages + summaryPages, // 개별 페이지 시작 인덱스
+      };
+
+      console.log(`[PDF] 통합 PDF 생성 완료: ${totalPages}페이지`);
+      console.log(`[PDF] 페이지 구조: 표지(${coverPages}) + 목차(${tocPages}) + 종합분석(${summaryPages}) + 개별페이지(${pagesWithScreenshots.length})`);
+      console.log(`[PDF] 종합 분석 요약 인덱스: ${pageStructure.summaryPageIndex}`);
+      console.log(`[PDF] 개별 페이지 시작 인덱스: ${pageStructure.individualPagesStartIndex}`);
 
       // 스크린샷 PDF 생성
       console.log("[PDF] 스크린샷 PDF 생성 시작...");
@@ -437,18 +499,19 @@ export class HTMLPDFGenerator {
       );
       console.log("[PDF] 스크린샷 PDF 생성 완료");
 
-      // 개별 페이지별 PDF 생성
-      console.log("[PDF] 개별 페이지 PDF 생성 시작...");
-      const individualPdfs: Buffer[] = await this.generateIndividualPagePDFs(
-        pagesWithScreenshots,
-        domain,
-        generatedDate
+      // 통합 PDF에서 개별 PDF 추출 (페이지 구조 정보 및 생성일 전달)
+      console.log("[PDF] 통합 PDF에서 개별 PDF 추출 시작...");
+      const individualPdfs = await this.extractIndividualPDFsFromMerged(
+        finalPdfBuffer,
+        pagesWithScreenshots.length,
+        pageStructure,
+        sourceCreationDate
       );
-      console.log(`[PDF] ${individualPdfs.length}개 개별 페이지 PDF 생성 완료`);
+      console.log(`[PDF] 총 ${individualPdfs.length}개 PDF 추출 완료 (전체요약 1개 + 페이지 ${pagesWithScreenshots.length}개)`);
 
       // PDFResult 타입에 맞춰 반환
       return {
-        mergedPdf: pdfBuffer,
+        mergedPdf: finalPdfBuffer,
         individualPdfs: individualPdfs,
         tableOfContents: tocItems,
         totalSize,
@@ -640,6 +703,8 @@ export class HTMLPDFGenerator {
       // 페이지 타입 감지
       const pageType = this.detectPageType(page.url);
 
+      const captureTimestamp = this.formatTimestamp(page.timestamp);
+      
       sections.push(`
         <div class="page page-section">
           <div class="page-section-header">
@@ -654,9 +719,9 @@ export class HTMLPDFGenerator {
           </div>
           <article class="page-section-article">
             <div class="page-title-section">
-              <span class="page-number-label">Page ${i + 1}</span>
               <h2>${this.escapeHtml(page.title || "Untitled")}</h2>
               <div class="page-url">${this.escapeHtml(page.url)}</div>
+              <div style="font-size: 7px; color: #9ca3af; margin-top: 2px; font-family: monospace;">Captured: ${captureTimestamp}</div>
             </div>
 
             <!-- 스크린샷 -->
@@ -723,12 +788,17 @@ export class HTMLPDFGenerator {
     const screenshotPages = filteredPages
       .map((page, index) => {
         // fullPageScreenshot 우선 사용, 없으면 일반 screenshot 사용
+        const hasFullPage = !!page.fullPageScreenshot;
+        const hasScreenshot = !!page.screenshot;
         const screenshotBuffer = page.fullPageScreenshot || page.screenshot;
         const screenshotBase64 = screenshotBuffer
           ? `data:image/jpeg;base64,${screenshotBuffer.toString("base64")}`
           : "";
 
+        console.log(`[스크린샷 PDF] 페이지 ${index + 1}: fullPage=${hasFullPage}, screenshot=${hasScreenshot}, using=${hasFullPage ? 'fullPage' : 'viewport'}`);
+
         const pageNumber = index + 2; // Cover is page 1
+        const captureTimestamp = this.formatTimestamp(page.timestamp);
 
         return `
           <div class="page screenshot-page">
@@ -742,7 +812,7 @@ export class HTMLPDFGenerator {
             </div>
             <div class="screenshot-footer">
               <div class="screenshot-footer-left">
-                <span class="screenshot-timestamp">Captured on ${generatedDate}</span>
+                <span class="screenshot-timestamp">Captured: ${captureTimestamp}</span>
               </div>
               <div class="screenshot-footer-right">Page ${pageNumber}</div>
             </div>
@@ -807,6 +877,168 @@ export class HTMLPDFGenerator {
     }
 
     return individualPdfs;
+  }
+
+  /**
+   * 통합 PDF에서 개별 PDF 추출
+   *
+   * 통합 PDF 구조 (각 1 PDF 페이지):
+   * - Page 0: 표지
+   * - Page 1~N: 목차 (가변적, 여러 페이지일 수 있음)
+   * - Page N+1: AI 종합 분석 요약
+   * - Page N+2~: 개별 페이지들 (스크린샷 + AI 인사이트)
+   *
+   * 추출 결과:
+   * - 00_전체_요약.pdf: AI 종합 분석 요약 - 1 PDF 페이지
+   * - 01_페이지.pdf: 첫 번째 개별 페이지 - 1 PDF 페이지
+   * - 02_페이지.pdf: 두 번째 개별 페이지 - 1 PDF 페이지
+   */
+  private async extractIndividualPDFsFromMerged(
+    mergedPdfBuffer: Buffer,
+    pageCount: number,
+    pageStructure: {
+      coverPages: number;
+      tocPages: number;
+      summaryPages: number;
+      summaryPageIndex: number;
+      individualPagesStartIndex: number;
+    },
+    creationDate?: Date
+  ): Promise<Buffer[]> {
+    const { PDFDocument } = await import("pdf-lib");
+    const individualPdfs: Buffer[] = [];
+
+    // 통합 PDF 로드
+    const sourcePdf = await PDFDocument.load(mergedPdfBuffer);
+    const totalPages = sourcePdf.getPageCount();
+    
+    // 통합 PDF의 생성일 가져오기 (파라미터로 전달받지 않으면 원본에서 가져오기, 없으면 현재 시간 사용)
+    const sourceCreationDate = creationDate || sourcePdf.getCreationDate() || new Date();
+
+    console.log(`[PDF] 통합 PDF 총 페이지 수: ${totalPages}`);
+    console.log(`[PDF] 페이지 구조 정보 사용:`);
+    console.log(`  - 표지: ${pageStructure.coverPages}페이지 (index 0)`);
+    console.log(`  - 목차: ${pageStructure.tocPages}페이지 (index 1~${pageStructure.tocPages})`);
+    console.log(`  - 종합 분석 요약: ${pageStructure.summaryPages}페이지 (index ${pageStructure.summaryPageIndex})`);
+    console.log(`  - 개별 페이지들: ${pageCount}페이지 (index ${pageStructure.individualPagesStartIndex}~)`);
+
+    // 1. 전체 요약 PDF (종합 분석 요약만, 목차 제외)
+    if (pageStructure.summaryPageIndex < totalPages) {
+      const summaryPdf = await PDFDocument.create();
+      // 통합 PDF의 생성일을 개별 PDF에도 설정
+      summaryPdf.setCreationDate(sourceCreationDate);
+      summaryPdf.setModificationDate(sourceCreationDate);
+      const summaryPages = await summaryPdf.copyPages(sourcePdf, [pageStructure.summaryPageIndex]);
+      summaryPages.forEach((page) => summaryPdf.addPage(page));
+      const summaryPdfBytes = await summaryPdf.save();
+      individualPdfs.push(Buffer.from(summaryPdfBytes));
+      console.log(`[PDF] 전체 요약 PDF 추출: 페이지 ${pageStructure.summaryPageIndex}`);
+    } else {
+      console.warn(`[PDF] 종합 분석 요약 페이지 추출 실패: 인덱스 ${pageStructure.summaryPageIndex}가 총 페이지 수 ${totalPages}를 초과`);
+    }
+
+    // 2. 각 크롤링 페이지 PDF (페이지 구조 정보 기준으로 추출)
+    for (let i = 0; i < pageCount; i++) {
+      const pageIndex = pageStructure.individualPagesStartIndex + i;
+
+      if (pageIndex < totalPages) {
+        const pagePdf = await PDFDocument.create();
+        // 통합 PDF의 생성일을 개별 PDF에도 설정
+        pagePdf.setCreationDate(sourceCreationDate);
+        pagePdf.setModificationDate(sourceCreationDate);
+        const pages = await pagePdf.copyPages(sourcePdf, [pageIndex]);
+        pages.forEach((page) => pagePdf.addPage(page));
+        const pagePdfBytes = await pagePdf.save();
+        individualPdfs.push(Buffer.from(pagePdfBytes));
+        console.log(`[PDF] 페이지 ${i + 1} PDF 추출: 페이지 ${pageIndex}`);
+      } else {
+        console.warn(`[PDF] 페이지 ${i + 1} 추출 실패: 인덱스 ${pageIndex}가 총 페이지 수 ${totalPages}를 초과`);
+      }
+    }
+
+    return individualPdfs;
+  }
+
+  /**
+   * 전체 요약 PDF 생성 (AI 분석 + 목차) - 사용 안 함 (통합 PDF에서 추출)
+   */
+  private async generateSummaryPDF(
+    aiSummary: AISummary | null | undefined,
+    toc: TableOfContentsItem[],
+    domain: string,
+    generatedDate: string
+  ): Promise<Buffer> {
+    // AI 요약 HTML 생성
+    let aiSummaryHtml = "";
+    if (aiSummary) {
+      aiSummaryHtml = `
+        <div style="margin-bottom: 20px;">
+          <h3 style="color: #333; font-size: 16px;">${this.escapeHtml(aiSummary.companyName || domain)}</h3>
+          <p style="color: #666; font-size: 14px; margin: 10px 0;">${this.escapeHtml(aiSummary.oneLineSummary)}</p>
+        </div>
+        <div style="margin-bottom: 15px;">
+          <strong>Overview:</strong>
+          <p style="color: #444; font-size: 13px; line-height: 1.6;">${this.escapeHtml(aiSummary.overview)}</p>
+        </div>
+        ${aiSummary.mainServices && aiSummary.mainServices.length > 0 ? `
+        <div style="margin-bottom: 15px;">
+          <strong>Main Services:</strong>
+          <ul style="margin: 10px 0; padding-left: 20px;">
+            ${aiSummary.mainServices.map(s => `<li style="color: #444; font-size: 13px;">${this.escapeHtml(s)}</li>`).join('')}
+          </ul>
+        </div>
+        ` : ''}
+      `;
+    }
+
+    // 목차 HTML 생성
+    const tocHtml = toc
+      .map(
+        (item) => `
+        <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee;">
+          <span style="flex: 1;">${this.escapeHtml(item.title)}</span>
+          <span style="color: #666;">Page ${item.pageNumber}</span>
+        </div>
+      `
+      )
+      .join("");
+
+    // 간단한 HTML 생성
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          body { font-family: Arial, sans-serif; padding: 40px; }
+          h1 { color: #333; font-size: 24px; margin-bottom: 20px; }
+          h2 { color: #555; font-size: 18px; margin-top: 30px; margin-bottom: 15px; }
+          .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+          .section { margin-bottom: 30px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>${this.escapeHtml(domain)} - Analysis Summary</h1>
+          <p style="color: #666;">Generated on ${this.escapeHtml(generatedDate)}</p>
+        </div>
+
+        ${aiSummaryHtml ? `
+        <div class="section">
+          <h2>AI Business Analysis</h2>
+          ${aiSummaryHtml}
+        </div>
+        ` : ''}
+
+        <div class="section">
+          <h2>Table of Contents</h2>
+          ${tocHtml}
+        </div>
+      </body>
+      </html>
+    `;
+
+    return await this.htmlToPDF(html);
   }
 
   /**
