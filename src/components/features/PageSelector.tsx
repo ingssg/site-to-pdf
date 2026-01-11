@@ -20,6 +20,7 @@ interface PageSelectorProps {
     content: string;
     depth: number;
     screenshot?: any;
+    fullPageScreenshot?: any; // 전체 페이지 스크린샷 (법적 증거용)
     defaultChecked?: boolean;
     importance?: number;
     exclusionReason?: string;
@@ -135,14 +136,31 @@ export default function PageSelector({
         throw new Error(result.error?.userMessage || 'AI 필터링 실패');
       }
 
-      // 선택된 URL들로 상태 업데이트
-      setSelectedUrls(new Set(result.data.selectedUrls));
+      console.log(`[AI Filter] API 응답:`, result.data.selectedUrls);
+      console.log(`[AI Filter] pages 배열 URLs:`, pages.map(p => p.url));
+
+      // 선택된 URL들이 실제 pages 배열에 있는지 확인
+      const validUrls = result.data.selectedUrls.filter((url: string) =>
+        pages.some(p => p.url === url)
+      );
+      const invalidUrls = result.data.selectedUrls.filter((url: string) =>
+        !pages.some(p => p.url === url)
+      );
+
+      if (invalidUrls.length > 0) {
+        console.error(`[AI Filter] ⚠️ pages 배열에 없는 URL이 선택됨:`, invalidUrls);
+      }
+
+      console.log(`[AI Filter] 유효한 URL: ${validUrls.length}개, 무효한 URL: ${invalidUrls.length}개`);
+
+      // 선택된 URL들로 상태 업데이트 (유효한 URL만)
+      setSelectedUrls(new Set(validUrls));
 
       // AI 선택 이유 저장 (기본 접힌 상태 유지)
       setAiReasoning(result.data.reasoning);
       // setShowReasoning(false); // 이미 위에서 false로 설정됨
 
-      console.log(`[AI Filter] ${result.data.selectedUrls.length}개 선택`);
+      console.log(`[AI Filter] ${validUrls.length}개 선택 (${result.data.selectedUrls.length}개 중)`);
       console.log(`[AI Filter] 이유: ${result.data.reasoning}`);
 
     } catch (err) {
@@ -166,7 +184,19 @@ export default function PageSelector({
     setProgress(null);
 
     try {
+      console.log(`[PageSelector] ========== PDF 생성 시작 ==========`);
+      console.log(`[PageSelector] 선택된 URL 개수: ${selectedUrls.size}`);
+      console.log(`[PageSelector] 선택된 URLs:`, Array.from(selectedUrls));
+      console.log(`[PageSelector] 전체 pages 개수: ${pages.length}`);
+
       const selectedPages = pages.filter((p) => selectedUrls.has(p.url));
+
+      console.log(`[PageSelector] 필터링된 selectedPages 개수: ${selectedPages.length}`);
+      console.log(`[PageSelector] selectedPages titles:`, selectedPages.map(p => p.title));
+
+      if (selectedPages.length !== selectedUrls.size) {
+        console.error(`[PageSelector] ⚠️ 페이지 누락 발생! selectedUrls=${selectedUrls.size}, selectedPages=${selectedPages.length}`);
+      }
 
       // 선택된 페이지 저장 (ResultDisplay에 전달용)
       setSelectedPagesForResult(selectedPages);
@@ -384,12 +414,13 @@ export default function PageSelector({
             </span>
           </label>
 
-          {/* AI 자동 선택 버튼 - 프리미엄 */}
-          <button
-            onClick={handleAIFilter}
-            disabled={aiFiltering || pages.length === 0}
-            className="w-full px-3 py-2 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 rounded-lg hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 transition-colors border border-purple-200 dark:border-purple-800 flex flex-col items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed relative"
-          >
+          {/* AI 자동 선택 버튼 - 프리미엄 (완료 후 숨김) */}
+          {!aiReasoning && (
+            <button
+              onClick={handleAIFilter}
+              disabled={aiFiltering || pages.length === 0}
+              className="w-full px-3 py-2 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 rounded-lg hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 transition-colors border border-purple-200 dark:border-purple-800 flex flex-col items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed relative"
+            >
             {aiFiltering ? (
               <>
                 {/* AI 분석 중 애니메이션 */}
@@ -417,11 +448,12 @@ export default function PageSelector({
                   </span>
                 </div>
                 <span className="text-[10px] font-normal opacity-75">
-                  비즈니스 분석에 중요한 10-15개 페이지 자동 선별
+                  비즈니스 분석에 필요한 핵심 페이지만 자동 선별
                 </span>
               </>
             )}
           </button>
+          )}
 
           {/* AI 선택 이유 박스 - 컴팩트 */}
           {aiReasoning && (
