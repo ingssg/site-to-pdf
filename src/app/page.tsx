@@ -45,18 +45,12 @@ export default function Home() {
               >
                 기능
               </a>
-              <a
+              <Link
                 className="hover:text-primary dark:hover:text-blue-400 transition-colors"
-                href="#pricing"
+                href="/pricing"
               >
                 가격
-              </a>
-              <a
-                className="hover:text-primary dark:hover:text-blue-400 transition-colors"
-                href="#enterprise"
-              >
-                기업용
-              </a>
+              </Link>
             </nav>
             <div className="flex items-center gap-2 sm:gap-3">
               <ThemeToggle />
@@ -98,9 +92,9 @@ export default function Home() {
 
                 {/* Heading */}
                 <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-[3.5rem] leading-[1.1] font-extrabold text-slate-900 dark:text-white tracking-tight mb-3 sm:mb-4 md:mb-6">
-                  어떤 웹사이트든{" "}
+                  웹사이트를{" "}
                   <span className="text-primary dark:text-blue-400">
-                    전문 PDF로
+                    AI가 분석한 PDF 리포트로
                   </span>{" "}
                   변환하세요
                 </h1>
@@ -111,15 +105,15 @@ export default function Home() {
                   생성하며, 아카이브 준비가 완료된 문서를 즉시 만들어보세요.
                 </p>
 
-                {/* CTA Buttons */}
-                <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 md:gap-4 justify-center lg:justify-start mb-4 sm:mb-6 md:mb-8">
+                {/* CTA Button */}
+                <div className="mb-4 sm:mb-6 md:mb-8">
                   <button
                     onClick={() => setShowModal(true)}
-                    className="inline-flex items-center justify-center h-11 sm:h-12 md:h-14 px-5 sm:px-6 md:px-8 rounded-xl bg-primary hover:bg-primary-dark transition-all shadow-xl shadow-blue-500/20 text-white text-xs sm:text-sm md:text-base font-bold tracking-wide group"
+                    className="inline-flex items-center justify-center h-12 sm:h-14 md:h-16 px-6 sm:px-8 md:px-10 rounded-xl bg-primary hover:bg-primary-dark transition-all shadow-xl shadow-blue-500/20 text-white text-sm sm:text-base md:text-lg font-bold tracking-wide group"
                   >
-                    <span>첫 URL 변환하기</span>
+                    <span>PDF 만들기</span>
                     <svg
-                      className="ml-1.5 sm:ml-2 w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5 group-hover:translate-x-1 transition-transform"
+                      className="ml-2 sm:ml-3 w-4 sm:w-5 md:w-6 h-4 sm:h-5 md:h-6 group-hover:translate-x-1 transition-transform"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -131,9 +125,6 @@ export default function Home() {
                         d="M13 7l5 5m0 0l-5 5m5-5H6"
                       />
                     </svg>
-                  </button>
-                  <button className="inline-flex items-center justify-center h-11 sm:h-12 md:h-14 px-5 sm:px-6 md:px-8 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-slate-700 dark:text-white text-xs sm:text-sm md:text-base font-bold tracking-wide">
-                    샘플 PDF 보기
                   </button>
                 </div>
 
@@ -258,7 +249,8 @@ export default function Home() {
                 강력한 기능
               </h2>
               <p className="text-base sm:text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-                비즈니스 분석부터 법적 증거 보존까지, 필요한 모든 기능을 제공합니다
+                비즈니스 분석부터 법적 증거 보존까지, 필요한 모든 기능을
+                제공합니다
               </p>
             </div>
 
@@ -273,7 +265,8 @@ export default function Home() {
                   AI 비즈니스 분석
                 </h3>
                 <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                  Claude AI가 웹사이트를 분석하여 비즈니스 모델, 강점, 성장 가능성을 자동으로 요약합니다.
+                  AI가 웹사이트를 분석하여 비즈니스 모델, 강점, 성장 가능성을
+                  자동으로 요약합니다.
                 </p>
               </div>
 
@@ -286,7 +279,8 @@ export default function Home() {
                   전체 사이트 PDF 변환
                 </h3>
                 <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                  최대 50페이지까지 자동 크롤링하여 전문적인 PDF 리포트를 생성합니다.
+                  최대 200페이지까지 자동 크롤링하여 전문적인 PDF 리포트를
+                  생성합니다.
                 </p>
               </div>
 
@@ -299,7 +293,8 @@ export default function Home() {
                   스마트 필터링
                 </h3>
                 <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                  AI가 중요한 페이지만 선별하여 불필요한 약관, SNS 링크 등을 자동 제외합니다.
+                  중요한 페이지만 선별하여 불필요한 약관, SNS 링크 등을 자동
+                  제외합니다.
                 </p>
               </div>
             </div>
@@ -323,7 +318,8 @@ export default function Home() {
                   VC 투자심사
                 </h4>
                 <p className="text-sm text-slate-600 dark:text-slate-400">
-                  투자 검토 시 포트폴리오 기업 웹사이트를 빠르게 분석하고 리포트 생성
+                  투자 검토 시 포트폴리오 기업 웹사이트를 빠르게 분석하고 리포트
+                  생성
                 </p>
               </div>
 
