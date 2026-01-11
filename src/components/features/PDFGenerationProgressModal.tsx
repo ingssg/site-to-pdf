@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import Modal from "@/components/ui/modal";
 
 interface PDFGenerationProgressModalProps {
@@ -16,6 +17,20 @@ export default function PDFGenerationProgressModal({
   progress,
   onClose,
 }: PDFGenerationProgressModalProps) {
+  const startTimeRef = useRef<number | null>(null);
+  const [estimatedTime, setEstimatedTime] = useState<number>(30);
+
+  // 모달이 열릴 때 시작 시간 기록
+  useEffect(() => {
+    if (isOpen && !startTimeRef.current) {
+      startTimeRef.current = Date.now();
+    }
+    if (!isOpen) {
+      startTimeRef.current = null;
+      setEstimatedTime(30);
+    }
+  }, [isOpen]);
+
   // PDF 생성과 AI 요약 진행률 분리
   const pdfProgress = progress?.message.includes("PDF") 
     ? progress.percentage 
@@ -31,8 +46,32 @@ export default function PDFGenerationProgressModal({
 
   const isAIGenerating = progress?.message.includes("요약") || progress?.message.includes("AI");
 
-  // 예상 시간 계산
-  const estimatedTime = Math.max(5, 30 - Math.floor((progress?.percentage || 0) / 3.33));
+  // 실제 경과 시간 기반 예상 남은 시간 계산
+  useEffect(() => {
+    if (!isOpen || !startTimeRef.current || !progress) return;
+
+    const currentPercentage = progress.percentage;
+    if (currentPercentage <= 0) {
+      setEstimatedTime(30);
+      return;
+    }
+
+    // 실제 경과 시간 계산
+    const elapsedTime = (Date.now() - startTimeRef.current) / 1000; // 초 단위
+    
+    // 진행률 기반 선형 보간으로 전체 예상 시간 계산
+    // elapsedTime / currentPercentage = totalTime / 100
+    // totalTime = (elapsedTime / currentPercentage) * 100
+    const estimatedTotalTime = (elapsedTime / currentPercentage) * 100;
+    
+    // 남은 시간 = 전체 예상 시간 - 경과 시간
+    const remainingTime = estimatedTotalTime - elapsedTime;
+    
+    // 최소 3초, 최대 120초로 제한 (너무 작거나 큰 값 방지)
+    const clampedTime = Math.max(3, Math.min(120, Math.ceil(remainingTime)));
+    
+    setEstimatedTime(clampedTime);
+  }, [isOpen, progress?.percentage]);
 
   return (
     <Modal isOpen={isOpen} onClose={onClose || (() => {})} showCloseButton={false}>
