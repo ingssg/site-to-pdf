@@ -133,15 +133,20 @@ export default function CrawlerForm({
 
             // 결과를 기존 형식으로 변환
             const crawlResult: CrawlAPIResponse = {
-              type: "complete",
+              success: true,
               data: {
-                crawl: result.crawlResult,
+                crawl: {
+                  totalPages: result.crawlResult.totalPages,
+                  failedUrls: result.crawlResult.failedUrls || [],
+                  duration: "0초",
+                  pages: result.crawlResult.pages || [],
+                },
               },
             };
             setCrawlResult(crawlResult);
 
             const pdfResult: GeneratePDFResponse = {
-              type: "complete",
+              success: true,
               data: {
                 pdf: {
                   mergedPdf: result.pdfUrl,
