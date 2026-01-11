@@ -23,10 +23,14 @@ const AIFilterRequestSchema = z.object({
   })),
 });
 
-// OpenAI 클라이언트
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// OpenAI 클라이언트 (환경 변수 확인 후 초기화)
+const getOpenAIClient = () => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY 환경 변수가 설정되지 않았습니다.');
+  }
+  return new OpenAI({ apiKey });
+};
 
 // 하드 제외 패턴 (9가지 - 100% 확실한 것만)
 // 원칙: 콘텐츠 가치가 있을 수 있는 페이지는 AI가 판단하도록 허용
@@ -304,6 +308,7 @@ ${page.content}
 
     // 5. OpenAI API 호출 (Few-shot Learning 적용)
     console.log('[AI Filter] OpenAI API 호출 중 (Few-shot + 긴 콘텐츠)...');
+    const openai = getOpenAIClient();
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [

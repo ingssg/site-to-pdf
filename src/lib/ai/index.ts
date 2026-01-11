@@ -5,9 +5,14 @@
 import OpenAI from 'openai';
 import type { AISummary, AISummaryRequest, CrawledPage } from '@/types';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// 환경 변수가 있을 때만 OpenAI 클라이언트 초기화 (빌드 시 에러 방지)
+const getOpenAIClient = () => {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY 환경 변수가 설정되지 않았습니다.');
+  }
+  return new OpenAI({ apiKey });
+};
 
 /**
  * 페이지 타입별 맞춤형 분석 가이드 생성
@@ -112,6 +117,7 @@ ${typeSpecificGuidance}
 출력: 위 형식 그대로 출력 (추가 설명 없이)`;
 
   try {
+    const openai = getOpenAIClient();
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
@@ -156,6 +162,7 @@ export async function generateAISummary(
   const prompt = generatePrompt(detailLevel, truncatedContent);
 
   try {
+    const openai = getOpenAIClient();
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini', // 가성비 좋은 모델
       messages: [
