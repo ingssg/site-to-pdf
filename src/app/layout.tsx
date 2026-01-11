@@ -18,10 +18,7 @@ export const metadata: Metadata = {
   description:
     "지저분한 스크린샷은 그만. 전체 웹페이지를 캡처하고, AI 요약을 생성하며, 아카이브 준비가 완료된 문서를 즉시 만들어보세요.",
   icons: {
-    icon: [
-      { url: "/icon.png", type: "image/png" },
-      { url: "/logo.png", type: "image/png" },
-    ],
+    icon: "/logo.png",
     shortcut: "/logo.png",
     apple: "/logo.png",
   },
