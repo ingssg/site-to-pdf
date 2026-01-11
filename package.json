@@ -2,13 +2,16 @@
   "name": "site-to-pdf",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "download-fonts": "bash scripts/download-fonts.sh",
-    "postinstall": "bash scripts/download-fonts.sh && npx playwright install chromium"
+    "postinstall": "bash scripts/download-fonts.sh"
   },
   "dependencies": {
     "@fontsource/noto-sans-kr": "^5.2.8",

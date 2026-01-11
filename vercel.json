@@ -11,5 +11,5 @@
     }
   },
   "buildCommand": "npm run build",
-  "installCommand": "npm install && npx playwright install chromium --with-deps"
+  "installCommand": "npm install"
 }
