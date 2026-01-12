@@ -223,6 +223,9 @@ export default function PageSelector({
 
             const { status, progress: jobProgress, result, error: jobError } = statusData.data;
 
+            // 디버깅: 상태 확인
+            console.log('[PageSelector] 상태 확인:', { status, hasResult: !!result, result });
+
             // 진행률 업데이트
             if (jobProgress) {
               setProgress({
@@ -232,7 +235,22 @@ export default function PageSelector({
             }
 
             // 완료 처리
-            if (status === 'completed' && result) {
+            if (status === 'completed') {
+              console.log('[PageSelector] PDF 생성 완료, status:', status, 'result:', result);
+              
+              if (!result) {
+                console.error('[PageSelector] 완료되었지만 result가 없습니다');
+                clearInterval(pollInterval);
+                setGenerating(false);
+                setError(getErrorInfo(ErrorCode.UNKNOWN_ERROR, 'PDF 생성은 완료되었지만 결과를 가져올 수 없습니다.'));
+                return;
+              }
+
+              // result가 문자열인 경우 파싱
+              const resultData = typeof result === 'string' ? JSON.parse(result) : result;
+              console.log('[PageSelector] resultData:', resultData);
+              console.log('[PageSelector] pdfUrl:', resultData.pdfUrl, 'zipUrl:', resultData.zipUrl);
+
               clearInterval(pollInterval);
               setProgress(null);
               setGenerating(false);
@@ -242,18 +260,19 @@ export default function PageSelector({
                 success: true,
                 data: {
                   pdf: {
-                    mergedPdf: result.pdfUrl,
+                    mergedPdf: resultData.pdfUrl,
                     mergedPdfTooLarge: false,
-                    zipDownloadUrl: result.zipUrl,
-                    screenshotPdfUrl: result.screenshotPdfUrl || null,
+                    zipDownloadUrl: resultData.zipUrl,
+                    screenshotPdfUrl: resultData.screenshotPdfUrl || null,
                     warnings: [],
-                    pageCount: result.processedPages || selectedPages.length,
+                    pageCount: resultData.processedPages || selectedPages.length,
                     totalSize: 0,
                     totalSizeMB: '0 MB',
                   },
-                  summary: result.summary,
+                  summary: resultData.summary,
                 },
               };
+              console.log('[PageSelector] pdfResult 생성 완료:', pdfResult);
               setPdfResult(pdfResult);
             }
 
