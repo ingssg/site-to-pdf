@@ -17,6 +17,7 @@ const ALL_IN_ONE_TEMPLATE = `<!DOCTYPE html>
   <title>Business Intelligence Report</title>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@100;300;400;500;700;900&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
   <style>
     /* ==================== GLOBAL STYLES ==================== */
@@ -42,7 +43,7 @@ const ALL_IN_ONE_TEMPLATE = `<!DOCTYPE html>
 
     body {
       width: 210mm;
-      font-family: 'Manrope', sans-serif;
+      font-family: 'Noto Sans KR', 'Manrope', sans-serif;
       background: #ffffff;
       color: #111827;
     }
@@ -87,7 +88,7 @@ const ALL_IN_ONE_TEMPLATE = `<!DOCTYPE html>
     }
 
     .cover-title h1 {
-      font-family: 'Merriweather', serif;
+      font-family: 'Noto Sans KR', 'Merriweather', serif;
       font-size: 48px;
       font-weight: 700;
       line-height: 1.2;
@@ -220,7 +221,7 @@ const ALL_IN_ONE_TEMPLATE = `<!DOCTYPE html>
     }
 
     .exec-title-section h1 {
-      font-family: 'Merriweather', serif;
+      font-family: 'Noto Sans KR', 'Merriweather', serif;
       font-size: 24px;
       font-weight: 700;
       color: #111827;
@@ -281,7 +282,7 @@ const ALL_IN_ONE_TEMPLATE = `<!DOCTYPE html>
     }
 
     .section-content {
-      font-family: 'Merriweather', serif;
+      font-family: 'Noto Sans KR', 'Merriweather', serif;
       font-size: 12px;
       line-height: 1.6;
       color: #374151;
@@ -535,7 +536,7 @@ const ALL_IN_ONE_TEMPLATE = `<!DOCTYPE html>
     }
 
     .page-title-section h2 {
-      font-family: 'Merriweather', serif;
+      font-family: 'Noto Sans KR', 'Merriweather', serif;
       font-size: 16px;
       font-weight: 700;
       color: #0f172a;
@@ -612,7 +613,7 @@ const ALL_IN_ONE_TEMPLATE = `<!DOCTYPE html>
       line-height: 1.7;
       color: #374151;
       font-weight: 400;
-      font-family: 'Manrope', sans-serif;
+      font-family: 'Noto Sans KR', 'Manrope', sans-serif;
       white-space: pre-wrap;
     }
 
@@ -625,7 +626,7 @@ const ALL_IN_ONE_TEMPLATE = `<!DOCTYPE html>
       align-items: center;
       font-size: 9px;
       color: #9ca3af;
-      font-family: 'Manrope', sans-serif;
+      font-family: 'Noto Sans KR', 'Manrope', sans-serif;
       font-weight: 500;
     }
 
@@ -768,6 +769,7 @@ const SCREENSHOT_PDF_TEMPLATE = `<!DOCTYPE html>
   <title>Screenshot Archive</title>
   <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;0,900;1,300;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@100;300;400;500;700;900&display=swap" rel="stylesheet">
   <style>
     @page {
       size: A4;
@@ -781,7 +783,7 @@ const SCREENSHOT_PDF_TEMPLATE = `<!DOCTYPE html>
     }
 
     body {
-      font-family: 'Manrope', sans-serif;
+      font-family: 'Noto Sans KR', 'Manrope', sans-serif;
     }
 
     .page {
@@ -897,7 +899,7 @@ const SCREENSHOT_PDF_TEMPLATE = `<!DOCTYPE html>
       font-weight: 700;
       color: #0f172a;
       margin-bottom: 6px;
-      font-family: 'Merriweather', serif;
+      font-family: 'Noto Sans KR', 'Merriweather', serif;
     }
 
     .screenshot-url {

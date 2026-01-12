@@ -106,7 +106,7 @@ async function handleCrawl(job) {
     await updateProgress(job.id, {
       current,
       total,
-      message: `크롤링 중: ${url}`,
+      message: url, // Lambda 이전 버전과 동일: URL만 전달 (접두사 없음)
       percentage: Math.round((current / total) * 100),
     });
   });
@@ -231,27 +231,35 @@ async function handleGeneratePDF(job) {
     await generator.close();
   }
 
-  // ZIP 파일 생성
+  // ZIP 파일 생성 (Lambda 이전 버전과 동일한 구조)
+  // Lambda 이전 버전: src/app/api/generate-pdf/route.ts 참고
   const zip = new JSZip();
-  zip.file(`${domain}_analysis.pdf`, pdfResult.mergedPdf);
+  
+  // Lambda 이전 버전과 동일: individualPdfs만 ZIP에 추가
+  // - 통합 PDF 전체는 추가하지 않음
+  // - 스크린샷 PDF도 ZIP에 포함하지 않음 (별도 다운로드 URL로 제공)
+  (pdfResult.individualPdfs || []).forEach((pdfBuffer, index) => {
+    const pageNumber = index + 1;
 
-  pdfResult.individualPdfs.forEach((pdf, index) => {
-    let filename;
     if (index === 0) {
-      filename = `01_전체_요약.pdf`;
-    } else {
-      const pageNumber = String(index + 1).padStart(2, '0');
-      const page = pagesWithBuffers[index - 1];
-      const baseName = page ? (page.title || `개별페이지${index}`) : `개별페이지${index}`;
-      const sanitizedName = baseName.replace(/[^a-zA-Z0-9가-힣._-]/g, '_').slice(0, 100);
-      filename = `${pageNumber}_${sanitizedName}.pdf`;
+      // 첫 번째 PDF는 종합 분석 요약
+      const filename = `${String(pageNumber).padStart(2, '0')}_전체_요약.pdf`;
+      zip.file(filename, pdfBuffer);
+      return;
     }
-    zip.file(filename, pdf);
-  });
 
-  if (pdfResult.screenshotPdf && pdfResult.screenshotPdf.length > 0) {
-    zip.file(`전체_스크린샷.pdf`, pdfResult.screenshotPdf);
-  }
+    // 개별 페이지 PDF
+    const pageIndex = index - 1;
+    const page = pagesWithBuffers[pageIndex];
+    if (!page) return;
+
+    const baseName = `${String(pageNumber).padStart(2, '0')}_${page.title || 'page'}`;
+    const filename = `${baseName}.pdf`
+      .replace(/[^a-zA-Z0-9가-힣._-]/g, '_')
+      .slice(0, 100);
+
+    zip.file(filename, pdfBuffer);
+  });
 
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
 
