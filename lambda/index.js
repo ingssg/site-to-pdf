@@ -306,11 +306,15 @@ async function handleGeneratePDF(job) {
   const mergedPdfSize = pdfResult.mergedPdf ? pdfResult.mergedPdf.length : 0;
   const zipSize = zipBuffer.length;
   const individualPdfCount = pdfResult.individualPdfs ? pdfResult.individualPdfs.length : 0;
+  const screenshotPdfSize = pdfResult.screenshotPdf ? pdfResult.screenshotPdf.length : 0;
   
   // 통합 PDF 페이지 수 계산 (pdfResult에서 가져오기)
   const mergedPdfPageCount = pdfResult.totalPages || 0;
+  
+  // 스크린샷 PDF 개수 (처리된 페이지 수)
+  const screenshotPdfCount = pagesWithBuffers.length;
 
-  console.log(`[Lambda] 파일 크기 정보: 통합 PDF=${mergedPdfSize} bytes, ZIP=${zipSize} bytes, 개별 PDF 개수=${individualPdfCount}, 통합 PDF 페이지 수=${mergedPdfPageCount}`);
+  console.log(`[Lambda] 파일 크기 정보: 통합 PDF=${mergedPdfSize} bytes (${(mergedPdfSize / 1024 / 1024).toFixed(2)} MB), ZIP=${zipSize} bytes (${(zipSize / 1024 / 1024).toFixed(2)} MB), 개별 PDF 개수=${individualPdfCount}, 통합 PDF 페이지 수=${mergedPdfPageCount}, 스크린샷 PDF 개수=${screenshotPdfCount}`);
 
   // 작업 완료
   await updateJobStatus(job.id, {
@@ -329,6 +333,7 @@ async function handleGeneratePDF(job) {
       zipSize: zipSize,
       zipSizeMB: (zipSize / 1024 / 1024).toFixed(2),
       individualPdfCount: individualPdfCount,
+      screenshotPdfCount: screenshotPdfCount, // 스크린샷 PDF 개수 추가
     },
     completed_at: new Date().toISOString(),
   });

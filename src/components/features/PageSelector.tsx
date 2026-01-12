@@ -268,11 +268,12 @@ export default function PageSelector({
                     // Lambda 이전 버전과 동일: 실제 값 사용
                     pageCount: resultData.pageCount || resultData.processedPages || selectedPages.length,
                     totalSize: resultData.totalSize || 0,
-                    totalSizeMB: resultData.totalSizeMB ? `${resultData.totalSizeMB} MB` : '0 MB',
+                    totalSizeMB: resultData.totalSizeMB ? `${resultData.totalSizeMB}` : '0',
                     // ZIP 파일 정보 (Lambda 이전 버전과 동일)
                     zipSize: resultData.zipSize || 0,
-                    zipSizeMB: resultData.zipSizeMB ? `${resultData.zipSizeMB} MB` : '0 MB',
+                    zipSizeMB: resultData.zipSizeMB ? `${resultData.zipSizeMB}` : '0',
                     individualPdfCount: resultData.individualPdfCount || (resultData.processedPages || selectedPages.length),
+                    screenshotPdfCount: resultData.screenshotPdfCount || resultData.processedPages || selectedPages.length,
                   },
                   summary: resultData.summary,
                 },

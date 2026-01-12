@@ -67,8 +67,9 @@ export interface GeneratePDFResponse {
       warnings?: string[]; // 경고 메시지 (예: 폰트 파일 없음)
       // Lambda 버전 추가 필드
       zipSize?: number; // ZIP 파일 크기 (bytes)
-      zipSizeMB?: string; // ZIP 파일 크기 (MB)
+      zipSizeMB?: string; // ZIP 파일 크기 (MB, 숫자만)
       individualPdfCount?: number; // 개별 PDF 파일 개수
+      screenshotPdfCount?: number; // 스크린샷 PDF 개수
     };
     summary: AISummary;
   };

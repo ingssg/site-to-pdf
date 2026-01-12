@@ -190,11 +190,12 @@ export default function CrawlerForm({
                   // Lambda 이전 버전과 동일: 실제 값 사용
                   pageCount: result.pageCount || result.processedPages || result.crawlResult?.totalPages || 0,
                   totalSize: result.totalSize || 0,
-                  totalSizeMB: result.totalSizeMB ? `${result.totalSizeMB} MB` : "0 MB",
+                  totalSizeMB: result.totalSizeMB ? `${result.totalSizeMB}` : "0",
                   // ZIP 파일 정보 (Lambda 이전 버전과 동일)
                   zipSize: result.zipSize || 0,
-                  zipSizeMB: result.zipSizeMB ? `${result.zipSizeMB} MB` : "0 MB",
+                  zipSizeMB: result.zipSizeMB ? `${result.zipSizeMB}` : "0",
                   individualPdfCount: result.individualPdfCount || result.processedPages || result.crawlResult?.totalPages || 0,
+                  screenshotPdfCount: result.screenshotPdfCount || result.processedPages || result.crawlResult?.totalPages || 0,
                 },
                 summary: result.summary,
               },

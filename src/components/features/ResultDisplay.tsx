@@ -35,6 +35,7 @@ interface ResultDisplayProps {
       zipSize?: number;
       zipSizeMB?: string;
       individualPdfCount?: number;
+      screenshotPdfCount?: number; // 스크린샷 PDF 개수
     };
     summary: any;
   };
@@ -932,7 +933,7 @@ export default function ResultDisplay({
             {/* Full PDF Card */}
             <DownloadCard
               title="전체 웹사이트 PDF"
-              description={`${pdf.pageCount} 페이지 • ${pdf.totalSizeMB} MB • 단일 파일`}
+              description={`${pdf.pageCount} 페이지 • ${pdf.totalSizeMB} • 단일 파일`}
               icon={
                 <svg
                   className="w-7 h-7 text-red-600 dark:text-red-400"
@@ -956,7 +957,7 @@ export default function ResultDisplay({
             {/* ZIP Card */}
             <DownloadCard
               title="개별 페이지 PDF"
-              description={`ZIP 아카이브 • ${pdf.zipSizeMB || pdf.totalSizeMB} MB • ${pdf.individualPdfCount || pdf.pageCount}개 파일`}
+              description={`ZIP 아카이브 • ${pdf.zipSizeMB || pdf.totalSizeMB} • ${pdf.individualPdfCount || pdf.pageCount}개 파일`}
               icon={
                 <svg
                   className="w-7 h-7 text-amber-600 dark:text-amber-400"
@@ -981,7 +982,7 @@ export default function ResultDisplay({
             {pdf.screenshotPdfUrl && (
               <DownloadCard
                 title="원본 스크린샷 PDF"
-                description={`법적 증거용 • 원본 품질 • ${pdf.pageCount}개 스크린샷`}
+                description={`법적 증거용 • 원본 품질 • ${pdf.screenshotPdfCount || pdf.pageCount}개 스크린샷`}
                 icon={
                   <svg
                     className="w-7 h-7 text-blue-600 dark:text-blue-400"
