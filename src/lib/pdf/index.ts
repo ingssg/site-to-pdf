@@ -174,8 +174,8 @@ export class PDFGenerator {
     const individualPdfs = await this.extractIndividualPDFs(
       pdfDoc,
       aiSummaryPageCount, // AI 분석 페이지만
-      tocPageCount,       // 목차 페이지
-      pages               // 크롤링 페이지 정보
+      tocPageCount, // 목차 페이지
+      pages // 크롤링 페이지 정보
     );
 
     return {
@@ -543,9 +543,7 @@ export class PDFGenerator {
     const totalPages = sourcePdf.getPageCount();
     const startPage = 1 + aiSummaryPages + tocPages; // 표지(1) + AI 분석 + 목차
 
-    console.log(
-      `[PDF] 개별 PDF 추출 시작:`
-    );
+    console.log(`[PDF] 개별 PDF 추출 시작:`);
     console.log(`  - 전체 페이지 수: ${totalPages}`);
     console.log(`  - 표지: 1페이지 (index 0)`);
     console.log(`  - AI 분석: ${aiSummaryPages}페이지`);
@@ -565,15 +563,24 @@ export class PDFGenerator {
         (_, i) => i + 1 // 1페이지부터 (표지 제외)
       );
 
-      console.log(`[PDF] 전체 요약 PDF 복사 페이지 인덱스: ${JSON.stringify(summaryPageIndexes)}`);
+      console.log(
+        `[PDF] 전체 요약 PDF 복사 페이지 인덱스: ${JSON.stringify(
+          summaryPageIndexes
+        )}`
+      );
 
-      const summaryPages = await summaryPdf.copyPages(sourcePdf, summaryPageIndexes);
+      const summaryPages = await summaryPdf.copyPages(
+        sourcePdf,
+        summaryPageIndexes
+      );
       summaryPages.forEach((page) => summaryPdf.addPage(page));
 
       const summaryPdfBytes = await summaryPdf.save();
       individualPdfs.push(Buffer.from(summaryPdfBytes));
 
-      console.log(`[PDF] 전체 요약 PDF 생성 완료 (${summaryPageIndexes.length}페이지)`);
+      console.log(
+        `[PDF] 전체 요약 PDF 생성 완료 (${summaryPageIndexes.length}페이지)`
+      );
     }
 
     // 2. 각 크롤링 페이지를 개별 PDF로 추출 (스크린샷 + 요약 묶음)
@@ -588,9 +595,16 @@ export class PDFGenerator {
 
       // 각 크롤링 페이지는 스크린샷(1) + 요약(0 or 1) 페이지로 구성
       const pageCount = page.screenshot && page.pageSummary ? 2 : 1;
-      const pageIndexes = Array.from({ length: pageCount }, (_, j) => currentPageIndex + j);
+      const pageIndexes = Array.from(
+        { length: pageCount },
+        (_, j) => currentPageIndex + j
+      );
 
-      console.log(`[PDF] 개별 PDF ${i + 1}: 페이지 인덱스 ${JSON.stringify(pageIndexes)} 복사 - ${page.title}`);
+      console.log(
+        `[PDF] 개별 PDF ${i + 1}: 페이지 인덱스 ${JSON.stringify(
+          pageIndexes
+        )} 복사 - ${page.title}`
+      );
 
       // 페이지 복사 (스크린샷 + 요약)
       const copiedPages = await newPdf.copyPages(sourcePdf, pageIndexes);
@@ -599,11 +613,17 @@ export class PDFGenerator {
       const pdfBytes = await newPdf.save();
       individualPdfs.push(Buffer.from(pdfBytes));
 
-      console.log(`[PDF] 개별 PDF ${i + 1}/${pages.length} 생성 완료 (${pageCount}페이지): ${page.title}`);
+      console.log(
+        `[PDF] 개별 PDF ${i + 1}/${
+          pages.length
+        } 생성 완료 (${pageCount}페이지): ${page.title}`
+      );
       currentPageIndex += pageCount;
     }
 
-    console.log(`[PDF] 총 ${individualPdfs.length}개 개별 PDF 추출 완료 (전체 요약 1개 + 크롤링 페이지 ${pages.length}개)`);
+    console.log(
+      `[PDF] 총 ${individualPdfs.length}개 개별 PDF 추출 완료 (전체 요약 1개 + 크롤링 페이지 ${pages.length}개)`
+    );
     return individualPdfs;
   }
 

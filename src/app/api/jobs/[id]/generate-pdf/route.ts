@@ -57,18 +57,29 @@ export async function POST(
     }
 
     // 3. 선택된 페이지 저장 및 상태 업데이트
+    // selected_pages는 result JSONB 필드 안에 저장
+    const currentResult = job.result || {};
+    const updatedResult = {
+      ...currentResult,
+      selectedPages: selectedPages,
+    };
+
+    const updateData = {
+      status: 'page_selected',
+      result: updatedResult,
+    };
+
     const { error: updateError } = await supabase
       .from('jobs')
-      .update({
-        status: 'page_selected',
-        selected_pages: selectedPages,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', jobId);
 
     if (updateError) {
       console.error('[Jobs] 페이지 선택 저장 실패:', updateError);
-      throw new Error(`페이지 선택 저장 실패: ${updateError.message}`);
+      console.error('[Jobs] 업데이트 데이터:', JSON.stringify(updateData, null, 2));
+      console.error('[Jobs] 현재 작업 상태:', job.status);
+      console.error('[Jobs] 현재 result:', JSON.stringify(job.result, null, 2));
+      throw new Error(`페이지 선택 저장 실패: ${updateError.message} (코드: ${updateError.code})`);
     }
 
     // 4. Lambda 워커 비동기 호출 - PDF 생성 (action: 'generate-pdf')

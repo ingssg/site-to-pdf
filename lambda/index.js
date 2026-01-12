@@ -157,8 +157,8 @@ async function handleCrawl(job) {
 async function handleGeneratePDF(job) {
   console.log(`[Lambda] PDF 생성 시작: ${job.id}`);
 
-  // 선택된 페이지 정보 가져오기
-  const selectedPages = job.selected_pages || [];
+  // 선택된 페이지 정보 가져오기 (result.selectedPages에서 가져옴)
+  const selectedPages = job.result?.selectedPages || [];
   const crawlResult = job.result?.crawlResult;
 
   if (!crawlResult || !crawlResult.pages) {

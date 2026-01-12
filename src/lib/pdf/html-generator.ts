@@ -729,7 +729,7 @@ export class HTMLPDFGenerator {
       const pageType = this.detectPageType(page.url);
 
       const captureTimestamp = this.formatTimestamp(page.timestamp);
-      
+
       sections.push(`
         <div class="page page-section">
           <div class="page-section-header">
@@ -949,14 +949,14 @@ export class HTMLPDFGenerator {
 
     // 1. 전체 요약 PDF (종합 분석 요약만, 목차 제외)
     if (pageStructure.summaryPageIndex < totalPages) {
-      const summaryPdf = await PDFDocument.create();
+    const summaryPdf = await PDFDocument.create();
       // 통합 PDF의 생성일을 개별 PDF에도 설정
       summaryPdf.setCreationDate(sourceCreationDate);
       summaryPdf.setModificationDate(sourceCreationDate);
       const summaryPages = await summaryPdf.copyPages(sourcePdf, [pageStructure.summaryPageIndex]);
-      summaryPages.forEach((page) => summaryPdf.addPage(page));
-      const summaryPdfBytes = await summaryPdf.save();
-      individualPdfs.push(Buffer.from(summaryPdfBytes));
+    summaryPages.forEach((page) => summaryPdf.addPage(page));
+    const summaryPdfBytes = await summaryPdf.save();
+    individualPdfs.push(Buffer.from(summaryPdfBytes));
       console.log(`[PDF] 전체 요약 PDF 추출: 페이지 ${pageStructure.summaryPageIndex}`);
     } else {
       console.warn(`[PDF] 종합 분석 요약 페이지 추출 실패: 인덱스 ${pageStructure.summaryPageIndex}가 총 페이지 수 ${totalPages}를 초과`);

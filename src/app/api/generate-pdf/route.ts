@@ -157,14 +157,14 @@ export async function POST(request: NextRequest) {
             if (!fs.existsSync(tempDir)) {
               fs.mkdirSync(tempDir, { recursive: true });
             }
-          }
+            }
 
           const zipFileId = crypto.randomUUID();
           const zipFilename = `${zipFileId}.zip`;
-          const zipPath = path.join(tempDir, zipFilename);
+            const zipPath = path.join(tempDir, zipFilename);
 
           // 파일 저장
-          fs.writeFileSync(zipPath, zipBuffer);
+            fs.writeFileSync(zipPath, zipBuffer);
 
           // API 엔드포인트로 파일 제공 (서버리스 환경 호환)
           const zipDownloadUrl = `/api/download-file?fileId=${zipFileId}&type=zip&filename=${encodeURIComponent(
@@ -237,8 +237,8 @@ export async function POST(request: NextRequest) {
         } catch (error) {
           const errorCode =
             error instanceof Error
-              ? inferErrorCode(error.message)
-              : ErrorCode.PDF_GENERATION_FAILED;
+            ? inferErrorCode(error.message)
+            : ErrorCode.PDF_GENERATION_FAILED;
 
           const errorInfo = getErrorInfo(
             errorCode,
@@ -285,8 +285,8 @@ export async function POST(request: NextRequest) {
     // 일반 에러
     const errorCode =
       error instanceof Error
-        ? inferErrorCode(error.message)
-        : ErrorCode.PDF_GENERATION_FAILED;
+      ? inferErrorCode(error.message)
+      : ErrorCode.PDF_GENERATION_FAILED;
 
     const errorInfo = getErrorInfo(
       errorCode,

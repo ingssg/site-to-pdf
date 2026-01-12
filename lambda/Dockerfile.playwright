@@ -1,0 +1,21 @@
+# Playwright 공식 이미지 사용 (권장)
+FROM mcr.microsoft.com/playwright:v1.57.0-noble
+
+# Lambda 런타임 인터페이스 에뮬레이터 설치
+RUN curl -Lo /usr/local/bin/aws-lambda-rie https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/latest/download/aws-lambda-rie && \
+    chmod +x /usr/local/bin/aws-lambda-rie
+
+WORKDIR ${LAMBDA_TASK_ROOT:-/var/task}
+
+# 의존성 파일 복사
+COPY package*.json ./
+
+# 의존성 설치 (playwright는 이미 이미지에 포함되어 있음)
+RUN npm ci --only=production
+
+# Lambda 핸들러 코드 복사
+COPY index.js crawler.js ai.js pdf.js ./
+
+# Lambda 핸들러 지정
+ENTRYPOINT ["/usr/local/bin/aws-lambda-rie"]
+CMD ["node", "index.js"]

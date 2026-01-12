@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
-  CONSTRAINT status_check CHECK (status IN ('pending', 'crawling', 'summarizing', 'generating_pdf', 'completed', 'failed'))
+  CONSTRAINT status_check CHECK (status IN ('pending', 'crawling', 'crawl_completed', 'page_selected', 'summarizing', 'generating_pdf', 'completed', 'failed'))
 );
 
 -- 인덱스 생성

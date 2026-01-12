@@ -42,9 +42,9 @@ fi
 # 방법 3: Google Fonts API (마지막 시도)
 if [ "$DOWNLOAD_SUCCESS" = false ]; then
   echo "Google Fonts API에서 다운로드 시도 중..."
-  TEMP_ZIP="/tmp/noto-sans-kr-fonts.zip"
+TEMP_ZIP="/tmp/noto-sans-kr-fonts.zip"
   if curl -L -f -s "https://fonts.google.com/download?family=Noto%20Sans%20KR" \
-    -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" \
+  -H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36" \
     -o "$TEMP_ZIP" 2>/dev/null; then
     if [ -f "$TEMP_ZIP" ] && ! file "$TEMP_ZIP" 2>/dev/null | grep -q "HTML"; then
       if unzip -j "$TEMP_ZIP" "*.ttf" -d "$FONT_DIR/" 2>/dev/null; then
@@ -53,7 +53,7 @@ if [ "$DOWNLOAD_SUCCESS" = false ]; then
           DOWNLOAD_SUCCESS=true
         fi
       fi
-      rm -f "$TEMP_ZIP"
+  rm -f "$TEMP_ZIP"
     fi
   fi
 fi
