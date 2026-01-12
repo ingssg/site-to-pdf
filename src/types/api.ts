@@ -60,11 +60,15 @@ export interface GeneratePDFResponse {
       totalSize: number;
       totalSizeMB: string;
       pageCount: number;
-      mergedPdf: string | null; // Base64 encoded (50MB 이상일 경우 null)
+      mergedPdf: string | null; // Base64 encoded (50MB 이상일 경우 null) 또는 URL (Lambda 버전)
       mergedPdfTooLarge?: boolean;
       zipDownloadUrl: string; // 개별 PDF ZIP 파일 다운로드 URL
       screenshotPdfUrl?: string | null; // 스크린샷 PDF 다운로드 URL
       warnings?: string[]; // 경고 메시지 (예: 폰트 파일 없음)
+      // Lambda 버전 추가 필드
+      zipSize?: number; // ZIP 파일 크기 (bytes)
+      zipSizeMB?: string; // ZIP 파일 크기 (MB)
+      individualPdfCount?: number; // 개별 PDF 파일 개수
     };
     summary: AISummary;
   };

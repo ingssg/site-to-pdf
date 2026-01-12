@@ -31,6 +31,10 @@ interface ResultDisplayProps {
       zipDownloadUrl: string; // 개별 PDF ZIP 파일 다운로드 URL
       screenshotPdfUrl?: string | null; // 스크린샷 PDF 다운로드 URL
       warnings?: string[];
+      // Lambda 버전 추가 필드
+      zipSize?: number;
+      zipSizeMB?: string;
+      individualPdfCount?: number;
     };
     summary: any;
   };
