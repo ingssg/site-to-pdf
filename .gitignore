@@ -46,6 +46,21 @@ next-env.d.ts
 # project docs (internal use only)
 /docs
 
+# lambda 가이드 문서 (내부 참고용)
+/lambda/*-가이드.md
+/lambda/*-해결.md
+/lambda/*-체크리스트.md
+/lambda/수정-완료-요약.md
+/lambda/최종-해결-방법.md
+/lambda/페이지-관리-전략-분석.md
+/lambda/동기식-비동기식-차이.md
+/lambda/README-AWS-CLI-INSTALL.md
+/lambda/README-CONTAINER.md
+/lambda/CMD-재정의-설정-가이드.md
+/lambda/CONTAINER-IMAGE-연결-가이드.md
+/lambda/Dockerfile-CMD-수정-가이드.md
+/lambda/Handler-설정-찾기.md
+
 # fonts (downloaded at build time via postinstall script)
 /public/fonts/*.ttf
 /public/fonts/*.otf
