@@ -71,28 +71,48 @@ export default function ResultDisplay({
 
     try {
       const filename = generateFilename("pdf", getDomain());
-      const response = await fetch("/api/download", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          pdfBase64: pdf.mergedPdf,
-          filename: filename,
-        }),
-      });
+      
+      // Lambda 버전: mergedPdf가 URL인 경우 fetch로 가져와서 다운로드
+      // Lambda 이전 버전: mergedPdf가 base64인 경우 /api/download 사용
+      if (pdf.mergedPdf.startsWith('http://') || pdf.mergedPdf.startsWith('https://')) {
+        // URL인 경우 (Lambda 버전) - fetch로 가져와서 Blob으로 처리
+        const response = await fetch(pdf.mergedPdf);
+        if (!response.ok) throw new Error("PDF 다운로드 실패");
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } else {
+        // base64인 경우 (Lambda 이전 버전)
+        const response = await fetch("/api/download", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            pdfBase64: pdf.mergedPdf,
+            filename: filename,
+          }),
+        });
 
-      if (!response.ok) throw new Error("다운로드 실패");
+        if (!response.ok) throw new Error("다운로드 실패");
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }
     } catch (error) {
       console.error("PDF 다운로드 실패:", error);
       setDownloadError(
@@ -932,7 +952,7 @@ export default function ResultDisplay({
             {/* ZIP Card */}
             <DownloadCard
               title="개별 페이지 PDF"
-              description={`ZIP 아카이브 • ${pdf.totalSizeMB} MB • ${pdf.pageCount}개 파일`}
+              description={`ZIP 아카이브 • ${pdf.zipSizeMB || pdf.totalSizeMB} MB • ${pdf.individualPdfCount || pdf.pageCount}개 파일`}
               icon={
                 <svg
                   className="w-7 h-7 text-amber-600 dark:text-amber-400"

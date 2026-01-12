@@ -1529,6 +1529,7 @@ class HTMLPDFGenerator {
         individualPdfs: individualPdfs,
         tableOfContents: tocItems,
         totalSize,
+        totalPages: totalPages, // 통합 PDF 총 페이지 수 추가 (Lambda 이전 버전과 동일)
         warnings: [],
         screenshotPdf,
       };

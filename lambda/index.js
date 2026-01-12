@@ -233,6 +233,7 @@ async function handleGeneratePDF(job) {
 
   // ZIP 파일 생성 (Lambda 이전 버전과 동일한 구조)
   // Lambda 이전 버전: src/app/api/generate-pdf/route.ts 참고
+  console.log(`[ZIP] ZIP 파일 생성 시작: individualPdfs 개수 = ${(pdfResult.individualPdfs || []).length}`);
   const zip = new JSZip();
   
   // Lambda 이전 버전과 동일: individualPdfs만 ZIP에 추가
@@ -244,6 +245,7 @@ async function handleGeneratePDF(job) {
     if (index === 0) {
       // 첫 번째 PDF는 종합 분석 요약
       const filename = `${String(pageNumber).padStart(2, '0')}_전체_요약.pdf`;
+      console.log(`[ZIP] 파일 추가: ${filename} (index=${index}, pageNumber=${pageNumber})`);
       zip.file(filename, pdfBuffer);
       return;
     }
@@ -251,23 +253,34 @@ async function handleGeneratePDF(job) {
     // 개별 페이지 PDF
     const pageIndex = index - 1;
     const page = pagesWithBuffers[pageIndex];
-    if (!page) return;
+    if (!page) {
+      console.log(`[ZIP] 페이지 없음: index=${index}, pageIndex=${pageIndex}`);
+      return;
+    }
 
     const baseName = `${String(pageNumber).padStart(2, '0')}_${page.title || 'page'}`;
     const filename = `${baseName}.pdf`
       .replace(/[^a-zA-Z0-9가-힣._-]/g, '_')
       .slice(0, 100);
 
+    console.log(`[ZIP] 파일 추가: ${filename} (index=${index}, pageNumber=${pageNumber}, title=${page.title})`);
     zip.file(filename, pdfBuffer);
   });
 
+  console.log(`[ZIP] ZIP 파일 생성 중... (총 ${Object.keys(zip.files).length}개 파일)`);
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+  console.log(`[ZIP] ZIP 파일 생성 완료: 크기=${zipBuffer.length} bytes`);
 
-  // Supabase Storage에 업로드
+  // Lambda 이전 버전과 동일한 파일명 형식: ${domain}_individual_pdfs_${date}.zip
+  const safeDomain = domain.replace(/\./g, '_');
+  const date = new Date().toISOString().split('T')[0];
+  const zipFilename = `${safeDomain}_individual_pdfs_${date}.zip`;
+
+  // Supabase Storage에 업로드 (파일명 포함)
   const timestamp = Date.now();
   const zipUrl = await uploadToStorage(
     'job-results',
-    `${job.id}/result_${timestamp}.zip`,
+    `${job.id}/${zipFilename}`,
     zipBuffer,
     'application/zip'
   );
@@ -289,6 +302,16 @@ async function handleGeneratePDF(job) {
     );
   }
 
+  // 파일 크기 및 개수 계산 (Lambda 이전 버전과 동일)
+  const mergedPdfSize = pdfResult.mergedPdf ? pdfResult.mergedPdf.length : 0;
+  const zipSize = zipBuffer.length;
+  const individualPdfCount = pdfResult.individualPdfs ? pdfResult.individualPdfs.length : 0;
+  
+  // 통합 PDF 페이지 수 계산 (pdfResult에서 가져오기)
+  const mergedPdfPageCount = pdfResult.totalPages || 0;
+
+  console.log(`[Lambda] 파일 크기 정보: 통합 PDF=${mergedPdfSize} bytes, ZIP=${zipSize} bytes, 개별 PDF 개수=${individualPdfCount}, 통합 PDF 페이지 수=${mergedPdfPageCount}`);
+
   // 작업 완료
   await updateJobStatus(job.id, {
     status: 'completed',
@@ -299,6 +322,13 @@ async function handleGeneratePDF(job) {
       pdfUrl,
       screenshotPdfUrl,
       processedPages: pagesWithBuffers.length,
+      // Lambda 이전 버전과 동일한 형식으로 파일 크기 및 개수 전달
+      totalSize: mergedPdfSize,
+      totalSizeMB: (mergedPdfSize / 1024 / 1024).toFixed(2),
+      pageCount: mergedPdfPageCount,
+      zipSize: zipSize,
+      zipSizeMB: (zipSize / 1024 / 1024).toFixed(2),
+      individualPdfCount: individualPdfCount,
     },
     completed_at: new Date().toISOString(),
   });

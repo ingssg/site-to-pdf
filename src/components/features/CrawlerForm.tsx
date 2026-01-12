@@ -187,9 +187,14 @@ export default function CrawlerForm({
                   zipDownloadUrl: result.zipUrl,
                   screenshotPdfUrl: result.screenshotPdfUrl || null,
                   warnings: [],
-                  pageCount: result.processedPages || result.crawlResult?.totalPages || 0,
-                  totalSize: 0,
-                  totalSizeMB: "0 MB",
+                  // Lambda 이전 버전과 동일: 실제 값 사용
+                  pageCount: result.pageCount || result.processedPages || result.crawlResult?.totalPages || 0,
+                  totalSize: result.totalSize || 0,
+                  totalSizeMB: result.totalSizeMB ? `${result.totalSizeMB} MB` : "0 MB",
+                  // ZIP 파일 정보 (Lambda 이전 버전과 동일)
+                  zipSize: result.zipSize || 0,
+                  zipSizeMB: result.zipSizeMB ? `${result.zipSizeMB} MB` : "0 MB",
+                  individualPdfCount: result.individualPdfCount || result.processedPages || result.crawlResult?.totalPages || 0,
                 },
                 summary: result.summary,
               },

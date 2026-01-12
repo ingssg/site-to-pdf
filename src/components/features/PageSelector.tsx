@@ -265,9 +265,14 @@ export default function PageSelector({
                     zipDownloadUrl: resultData.zipUrl,
                     screenshotPdfUrl: resultData.screenshotPdfUrl || null,
                     warnings: [],
-                    pageCount: resultData.processedPages || selectedPages.length,
-                    totalSize: 0,
-                    totalSizeMB: '0 MB',
+                    // Lambda 이전 버전과 동일: 실제 값 사용
+                    pageCount: resultData.pageCount || resultData.processedPages || selectedPages.length,
+                    totalSize: resultData.totalSize || 0,
+                    totalSizeMB: resultData.totalSizeMB ? `${resultData.totalSizeMB} MB` : '0 MB',
+                    // ZIP 파일 정보 (Lambda 이전 버전과 동일)
+                    zipSize: resultData.zipSize || 0,
+                    zipSizeMB: resultData.zipSizeMB ? `${resultData.zipSizeMB} MB` : '0 MB',
+                    individualPdfCount: resultData.individualPdfCount || (resultData.processedPages || selectedPages.length),
                   },
                   summary: resultData.summary,
                 },
