@@ -69,3 +69,7 @@ next-env.d.ts
 
 # temporary files (PDF/ZIP downloads)
 /public/temp/
+
+# playwright layer files (too large for git)
+/playwright-layer/
+/playwright-chromium-layer*.zip
