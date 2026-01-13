@@ -320,7 +320,10 @@ class WebCrawler {
           return fullText.trim();
         });
       } catch (error) {
-        console.warn(`[Crawler] Content 추출 실패 (스킵): ${url}`, error.message);
+        console.warn(
+          `[Crawler] Content 추출 실패 (스킵): ${url}`,
+          error.message
+        );
         return; // 해당 페이지만 스킵하고 계속 진행
       }
 
@@ -388,7 +391,10 @@ class WebCrawler {
           await new Promise((resolve) => setTimeout(resolve, 500));
         });
       } catch (error) {
-        console.warn(`[Crawler] 이미지 로딩 실패 (스킵): ${url}`, error.message);
+        console.warn(
+          `[Crawler] 이미지 로딩 실패 (스킵): ${url}`,
+          error.message
+        );
         return;
       }
 
@@ -547,7 +553,10 @@ class WebCrawler {
           await new Promise((resolve) => setTimeout(resolve, 500));
         });
       } catch (error) {
-        console.warn(`[Crawler] 전체 페이지 이미지 로딩 실패 (스킵): ${url}`, error.message);
+        console.warn(
+          `[Crawler] 전체 페이지 이미지 로딩 실패 (스킵): ${url}`,
+          error.message
+        );
         return;
       }
 
@@ -561,7 +570,10 @@ class WebCrawler {
           quality: 80,
         });
       } catch (error) {
-        console.warn(`[Crawler] 전체 페이지 스크린샷 실패 (스킵): ${url}`, error.message);
+        console.warn(
+          `[Crawler] 전체 페이지 스크린샷 실패 (스킵): ${url}`,
+          error.message
+        );
         return;
       }
 

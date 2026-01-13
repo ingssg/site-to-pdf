@@ -61,14 +61,21 @@ async function updateJobStatus(jobId, updates) {
  * 진행률 업데이트
  */
 async function updateProgress(jobId, progress) {
-  await updateJobStatus(jobId, {
-    progress: {
-      current: progress.current,
-      total: progress.total,
-      message: progress.message,
-      percentage: progress.percentage,
-    },
-  });
+  console.log(`[Lambda] 진행률 업데이트: ${jobId}, ${progress.message}, ${progress.percentage}%`);
+  try {
+    await updateJobStatus(jobId, {
+      progress: {
+        current: progress.current,
+        total: progress.total,
+        message: progress.message,
+        percentage: progress.percentage,
+      },
+    });
+    console.log(`[Lambda] 진행률 업데이트 완료: ${jobId}`);
+  } catch (error) {
+    console.error(`[Lambda] 진행률 업데이트 실패: ${jobId}`, error);
+    // 진행률 업데이트 실패해도 계속 진행
+  }
 }
 
 /**
@@ -180,12 +187,19 @@ async function handleGeneratePDF(job) {
   console.log(`[Lambda] PDF 생성 시작: ${job.id}`);
 
   // Lambda 이전 버전과 동일: 시작 시 즉시 진행률 업데이트
-  await updateProgress(job.id, {
-    current: 0,
-    total: 100,
-    message: '페이지 데이터 처리 중...',
-    percentage: 10,
-  });
+  console.log(`[Lambda] 초기 진행률 업데이트 시작...`);
+  try {
+    await updateProgress(job.id, {
+      current: 0,
+      total: 100,
+      message: '페이지 데이터 처리 중...',
+      percentage: 10,
+    });
+    console.log(`[Lambda] 초기 진행률 업데이트 완료`);
+  } catch (error) {
+    console.error(`[Lambda] 초기 진행률 업데이트 실패:`, error);
+    // 진행률 업데이트 실패해도 계속 진행
+  }
 
   // 선택된 페이지 정보 가져오기 (result.selectedPages에서 가져옴)
   const selectedPages = job.result?.selectedPages || [];
