@@ -78,10 +78,12 @@ export default function CrawlerForm({
     setError(null);
     setCrawlResult(null);
     setPdfResult(null);
+    // Lambda 이전 버전과 동일: 초기 진행률 즉시 설정
+    // 첫 페이지 크롤링 시작 전까지는 입력한 URL의 경로 표시
     setProgress({
       current: 0,
       total: maxPages,
-      url: url,
+      url: url, // 입력한 URL (경로만 추출되어 표시됨)
       percentage: 0,
     });
 
@@ -102,8 +104,8 @@ export default function CrawlerForm({
       console.log(`[Frontend] 작업 등록 완료: ${jobId}`);
       setCurrentJobId(jobId);
 
-      // 2. 폴링 시작
-      let pollInterval: NodeJS.Timeout | null = setInterval(async () => {
+      // 2. 폴링 함수 정의
+      const pollStatus = async () => {
         try {
           const statusResponse = await fetch(`/api/jobs/${jobId}/status`);
           const statusData = await statusResponse.json();
@@ -114,15 +116,16 @@ export default function CrawlerForm({
 
           const { status, progress: jobProgress, result, error: jobError } = statusData.data;
 
-          // 진행률 업데이트
+          // 진행률 업데이트 (jobProgress가 있으면 업데이트, 없으면 기존 progress 유지)
           if (jobProgress) {
             setProgress({
               current: jobProgress.current || 0,
               total: jobProgress.total || maxPages,
-              url: jobProgress.message || "",
+              url: jobProgress.message || url, // Lambda에서 업데이트된 URL 또는 입력한 URL
               percentage: jobProgress.percentage || 0,
             });
           }
+          // jobProgress가 없어도 기존 progress 유지 (초기값: 입력한 URL, 0%)
 
           // 크롤링 완료 처리 (Step 1 완료 → Step 2 페이지 선택으로 이동)
           if (status === "crawl_completed" && result) {
@@ -222,7 +225,11 @@ export default function CrawlerForm({
           const errorData = getErrorInfo(inferErrorCode(errorMessage), errorMessage);
           setError(errorData);
         }
-      }, 2000); // 2초마다 폴링
+      };
+
+      // Lambda 이전 버전과 동일: 즉시 첫 폴링 실행 후 2초마다 반복
+      pollStatus(); // 즉시 실행
+      let pollInterval: NodeJS.Timeout | null = setInterval(pollStatus, 2000); // 2초마다 반복
 
       // Lambda 15분 타임아웃을 넘기지 않도록 15분 후 강제 종료
       setTimeout(() => {

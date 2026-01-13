@@ -101,6 +101,28 @@ async function handleCrawl(job) {
   // 작업 상태를 'crawling'으로 업데이트
   await updateJobStatus(job.id, { status: 'crawling' });
 
+  // Lambda 이전 버전과 동일: 크롤링 시작 시 즉시 진행률 업데이트
+  // 첫 페이지 크롤링 시작 전까지는 입력한 URL의 경로 표시
+  const initialUrl = job.config.url;
+  try {
+    const urlObj = new URL(initialUrl);
+    const initialPath = urlObj.pathname || "/";
+    await updateProgress(job.id, {
+      current: 0,
+      total: job.config.maxPages || 50,
+      message: initialPath, // 입력한 URL의 경로만 표시
+      percentage: 0,
+    });
+  } catch (error) {
+    // URL 파싱 실패 시 전체 URL 사용
+    await updateProgress(job.id, {
+      current: 0,
+      total: job.config.maxPages || 50,
+      message: initialUrl,
+      percentage: 0,
+    });
+  }
+
   // 크롤링 실행
   const crawler = new WebCrawler(job.config, async (current, total, url) => {
     await updateProgress(job.id, {
@@ -157,6 +179,14 @@ async function handleCrawl(job) {
 async function handleGeneratePDF(job) {
   console.log(`[Lambda] PDF 생성 시작: ${job.id}`);
 
+  // Lambda 이전 버전과 동일: 시작 시 즉시 진행률 업데이트
+  await updateProgress(job.id, {
+    current: 0,
+    total: 100,
+    message: '페이지 데이터 처리 중...',
+    percentage: 10,
+  });
+
   // 선택된 페이지 정보 가져오기 (result.selectedPages에서 가져옴)
   const selectedPages = job.result?.selectedPages || [];
   const crawlResult = job.result?.crawlResult;
@@ -187,6 +217,14 @@ async function handleGeneratePDF(job) {
 
   // 작업 상태 업데이트
   await updateJobStatus(job.id, { status: 'summarizing' });
+  
+  // Lambda 이전 버전과 동일: 전체 사이트 AI 요약 생성 시작 진행률 업데이트
+  await updateProgress(job.id, {
+    current: 0,
+    total: 100,
+    message: '전체 사이트 AI 요약 생성 중...',
+    percentage: 20,
+  });
 
   // AI 요약 생성 (전체)
   if (!openai) {
@@ -234,6 +272,15 @@ async function handleGeneratePDF(job) {
   // ZIP 파일 생성 (Lambda 이전 버전과 동일한 구조)
   // Lambda 이전 버전: src/app/api/generate-pdf/route.ts 참고
   console.log(`[ZIP] ZIP 파일 생성 시작: individualPdfs 개수 = ${(pdfResult.individualPdfs || []).length}`);
+  
+  // Lambda 이전 버전과 동일: ZIP 파일 생성 시작 진행률 업데이트
+  await updateProgress(job.id, {
+    current: 0,
+    total: 100,
+    message: 'ZIP 파일 생성 중...',
+    percentage: 90,
+  });
+  
   const zip = new JSZip();
   
   // Lambda 이전 버전과 동일: individualPdfs만 ZIP에 추가
@@ -270,6 +317,14 @@ async function handleGeneratePDF(job) {
   console.log(`[ZIP] ZIP 파일 생성 중... (총 ${Object.keys(zip.files).length}개 파일)`);
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
   console.log(`[ZIP] ZIP 파일 생성 완료: 크기=${zipBuffer.length} bytes`);
+  
+  // Lambda 이전 버전과 동일: ZIP 파일 생성 완료 진행률 업데이트
+  await updateProgress(job.id, {
+    current: 100,
+    total: 100,
+    message: '파일 업로드 중...',
+    percentage: 95,
+  });
 
   // Lambda 이전 버전과 동일한 파일명 형식: ${domain}_individual_pdfs_${date}.zip
   const safeDomain = domain.replace(/\./g, '_');

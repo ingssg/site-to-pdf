@@ -183,7 +183,11 @@ export default function PageSelector({
 
     setGenerating(true);
     setError(null);
-    setProgress(null);
+    // Lambda 이전 버전과 동일: 초기 진행률 즉시 설정
+    setProgress({
+      message: 'PDF 생성 준비 중...',
+      percentage: 0,
+    });
 
     try {
       console.log(`[PageSelector] ========== PDF 생성 시작 ==========`);
@@ -211,8 +215,8 @@ export default function PageSelector({
           throw new Error(errorData.error?.userMessage || 'PDF 생성 트리거 실패');
         }
 
-        // 2. 폴링으로 결과 확인
-        const pollInterval = setInterval(async () => {
+        // 2. 폴링 함수 정의
+        const pollStatus = async () => {
           try {
             const statusResponse = await fetch(`/api/jobs/${jobId}/status`);
             const statusData = await statusResponse.json();
@@ -224,15 +228,16 @@ export default function PageSelector({
             const { status, progress: jobProgress, result, error: jobError } = statusData.data;
 
             // 디버깅: 상태 확인
-            console.log('[PageSelector] 상태 확인:', { status, hasResult: !!result, result });
+            console.log('[PageSelector] 상태 확인:', { status, hasResult: !!result, result, jobProgress });
 
-            // 진행률 업데이트
+            // 진행률 업데이트 (jobProgress가 있으면 업데이트)
             if (jobProgress) {
               setProgress({
                 message: jobProgress.message || 'PDF 생성 중...',
                 percentage: jobProgress.percentage || 0,
               });
             }
+            // jobProgress가 없어도 기존 progress 유지 (초기값 "PDF 생성 준비 중..." 0%)
 
             // 완료 처리
             if (status === 'completed') {
@@ -294,7 +299,11 @@ export default function PageSelector({
             setError(errorData);
             setGenerating(false);
           }
-        }, 2000);
+        };
+
+        // Lambda 이전 버전과 동일: 즉시 첫 폴링 실행 후 2초마다 반복
+        pollStatus(); // 즉시 실행
+        const pollInterval = setInterval(pollStatus, 2000); // 2초마다 반복
 
         // 15분 타임아웃
         setTimeout(() => {

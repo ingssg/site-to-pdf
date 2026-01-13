@@ -25,12 +25,17 @@ export default function CrawlingProgressModal({
 
   // URL에서 경로만 추출
   const getUrlPath = (url: string | undefined): string => {
-    if (!url) return "";
+    if (!url) return "크롤링 준비 중...";
     try {
+      // 이미 경로만 있는 경우 (예: "/products")
+      if (url.startsWith("/")) {
+        return url;
+      }
+      // 전체 URL인 경우 경로만 추출
       const urlObj = new URL(url);
       return urlObj.pathname || "/";
     } catch {
-      // URL 파싱 실패 시 원본 반환
+      // URL 파싱 실패 시 원본 반환 (이미 경로일 수 있음)
       return url;
     }
   };
