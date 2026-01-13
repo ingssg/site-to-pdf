@@ -167,13 +167,11 @@ class WebCrawler {
     this.visitedUrls = new Set();
     this.crawledPages = [];
     this.skippedUrls = new Set();
-    this.CONCURRENT_LIMIT = 5;
-    this.openPages = []; // 열려있는 페이지 추적
+    this.openPages = [];
   }
 
   async crawl() {
     const startTime = new Date();
-    const failedUrls = [];
 
     try {
       // Lambda 환경용 @sparticuz/chromium 설정
@@ -206,7 +204,6 @@ class WebCrawler {
       return {
         pages: this.crawledPages,
         totalPages: this.crawledPages.length,
-        failedUrls,
         startTime,
         endTime,
       };
@@ -253,7 +250,7 @@ class WebCrawler {
     let page = null;
     try {
       page = await this.browser.newPage();
-      this.openPages.push(page); // 페이지 추적
+      this.openPages.push(page);
 
       await page.goto(url, {
         waitUntil: "domcontentloaded",
@@ -380,9 +377,7 @@ class WebCrawler {
         quality: 80,
       });
 
-      // 전체 페이지 스크린샷을 위한 이미지 로딩
-      try {
-        await page.evaluate(async () => {
+      await page.evaluate(async () => {
           const allImages = Array.from(document.querySelectorAll("img"));
           allImages.forEach((img) => {
             if (img.loading === "lazy") {
@@ -566,13 +561,6 @@ class WebCrawler {
         `[Crawler] Found ${links.length} links on ${url} (${sameDomainLinks.length} same domain)`
       );
 
-      // 근본 해결: 페이지를 닫지 않고 계속 사용
-      // @sparticuz/chromium의 single-process 모드에서 page.close()가 브라우저를 닫을 수 있음
-      // 페이지를 닫지 않으면 브라우저가 안정적으로 유지됨
-      // Lambda 환경에서는 메모리가 충분하므로 (2048MB) 페이지를 열어두어도 문제 없음
-      // 페이지는 finally 블록에서 일괄 정리됨
-
-      // 동시 크롤링 대신 순차 처리로 변경 (브라우저 안정성 향상)
       for (const link of sameDomainLinks) {
         if (this.crawledPages.length >= this.config.maxPages) {
           break;
@@ -590,21 +578,17 @@ class WebCrawler {
       }
     } catch (error) {
       console.error(`[Crawler] Failed to crawl ${url}:`, error);
-      // 페이지를 닫지 않음 - 브라우저가 닫히는 것을 방지
-      // 모든 페이지는 finally 블록에서 일괄 정리됨
     }
   }
 
   async close() {
     if (this.browser) {
-      // 추적 중인 모든 페이지를 닫기
       try {
         await Promise.all(
           this.openPages.map((page) => {
             try {
               return page.close();
-            } catch (error) {
-              // 페이지가 이미 닫혔거나 에러가 발생해도 계속 진행
+            } catch {
               return Promise.resolve();
             }
           })
@@ -614,7 +598,6 @@ class WebCrawler {
         console.warn("[Crawler] 페이지 정리 중 에러:", error);
       }
 
-      // 브라우저 닫기
       try {
         if (this.browser.isConnected()) {
           await this.browser.close();
