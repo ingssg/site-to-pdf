@@ -223,7 +223,9 @@ class WebCrawler {
 
     // 브라우저 상태 확인
     if (!this.browser || !this.browser.isConnected()) {
-      console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
+      console.warn(
+        `[Crawler] 브라우저가 닫혔습니다. 새 페이지 생성 불가: ${url}`
+      );
       return;
     }
 
@@ -252,6 +254,7 @@ class WebCrawler {
       }): ${url}`
     );
 
+    let page = null;
     try {
       // 브라우저 상태 재확인
       if (!this.browser || !this.browser.isConnected()) {
@@ -259,7 +262,7 @@ class WebCrawler {
         return;
       }
 
-      const page = await this.browser.newPage();
+      page = await this.browser.newPage();
       this.openPages.push(page); // 페이지 추적
 
       await page.goto(url, {
@@ -269,6 +272,12 @@ class WebCrawler {
 
       await page.waitForTimeout(500);
 
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(`[Crawler] 페이지가 이미 닫혔습니다: ${url}`);
+        return;
+      }
+
       // 브라우저 상태 확인 (page.evaluate 전)
       if (!this.browser || !this.browser.isConnected()) {
         console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
@@ -277,20 +286,38 @@ class WebCrawler {
 
       const title = await page.title();
 
-      // 브라우저 상태 재확인
-      if (!this.browser || !this.browser.isConnected()) {
-        console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
+      // 페이지 상태 재확인
+      if (page.isClosed()) {
+        console.warn(`[Crawler] 페이지가 닫혔습니다 (title 후): ${url}`);
         return;
       }
 
-      // 브라우저 상태 확인 (page.evaluate 전)
+      // 브라우저 상태 재확인
       if (!this.browser || !this.browser.isConnected()) {
-        console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
+        console.warn(
+          `[Crawler] 브라우저가 닫혔습니다: ${url}. 다음 페이지로 계속 진행.`
+        );
         return;
       }
 
       let content;
       try {
+        // 페이지 상태 확인 (evaluate 전)
+        if (page.isClosed()) {
+          console.warn(
+            `[Crawler] 페이지가 닫혔습니다 (content 추출 전): ${url}. 다음 페이지로 계속 진행.`
+          );
+          return; // 해당 페이지만 스킵하고 계속 진행
+        }
+
+        // 브라우저 상태 확인
+        if (!this.browser || !this.browser.isConnected()) {
+          console.warn(
+            `[Crawler] 브라우저가 닫혔습니다 (content 추출 전): ${url}. 다음 페이지로 계속 진행.`
+          );
+          return; // 해당 페이지만 스킵하고 계속 진행
+        }
+
         content = await page.evaluate(() => {
           const unwantedSelectors = [
             "script",
@@ -345,16 +372,47 @@ class WebCrawler {
           return fullText.trim();
         });
       } catch (error) {
-        if (error.message && error.message.includes("closed")) {
-          console.error("[Crawler] 페이지가 닫혔습니다. 크롤링 중단.");
-          return;
+        if (
+          error.message &&
+          (error.message.includes("closed") ||
+            error.message.includes("Target page") ||
+            error.message.includes("browser"))
+        ) {
+          console.warn(
+            `[Crawler] 페이지가 닫혔습니다 (content 추출 실패): ${url}. 다음 페이지로 계속 진행.`,
+            error.message
+          );
+          return; // 해당 페이지만 스킵하고 계속 진행
         }
-        throw error;
+        console.error(
+          `[Crawler] content 추출 중 예상치 못한 에러: ${url}`,
+          error
+        );
+        // 예상치 못한 에러도 해당 페이지만 스킵하고 계속 진행
+        return;
+      }
+
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (content 추출 후): ${url}. 다음 페이지로 계속 진행.`
+        );
+        return;
+      }
+
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (fonts.ready 전): ${url}. 다음 페이지로 계속 진행.`
+        );
+        return;
       }
 
       // 브라우저 상태 확인
       if (!this.browser || !this.browser.isConnected()) {
-        console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
+        console.warn(
+          `[Crawler] 브라우저가 닫혔습니다 (fonts.ready 전): ${url}. 다음 페이지로 계속 진행.`
+        );
         return;
       }
 
@@ -363,38 +421,98 @@ class WebCrawler {
           return document.fonts.ready;
         });
       } catch (error) {
-        if (error.message && error.message.includes("closed")) {
-          console.error("[Crawler] 페이지가 닫혔습니다. 크롤링 중단.");
-          return;
+        if (
+          error.message &&
+          (error.message.includes("closed") ||
+            error.message.includes("Target page") ||
+            error.message.includes("browser"))
+        ) {
+          console.warn(
+            `[Crawler] 페이지가 닫혔습니다 (fonts.ready 실패): ${url}. 다음 페이지로 계속 진행.`,
+            error.message
+          );
+          return; // 해당 페이지만 스킵하고 계속 진행
         }
-        throw error;
+        console.error(
+          `[Crawler] fonts.ready 중 예상치 못한 에러: ${url}`,
+          error
+        );
+        // 예상치 못한 에러도 해당 페이지만 스킵하고 계속 진행
+        return;
+      }
+
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (fonts.ready 후): ${url}. 다음 페이지로 계속 진행.`
+        );
+        return;
       }
 
       // 브라우저 상태 확인
       if (!this.browser || !this.browser.isConnected()) {
-        console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
+        console.warn(
+          `[Crawler] 브라우저가 닫혔습니다 (body style 전): ${url}. 다음 페이지로 계속 진행.`
+        );
         return;
       }
 
       try {
+        if (page.isClosed()) {
+          console.warn(
+            `[Crawler] 페이지가 닫혔습니다 (body style 전): ${url}. 다음 페이지로 계속 진행.`
+          );
+          return;
+        }
         await page.evaluate(() => {
           document.body.style.display = "none";
           void document.body.offsetHeight;
           document.body.style.display = "";
         });
       } catch (error) {
-        if (error.message && error.message.includes("closed")) {
-          console.error("[Crawler] 페이지가 닫혔습니다. 크롤링 중단.");
-          return;
+        if (
+          error.message &&
+          (error.message.includes("closed") ||
+            error.message.includes("Target page") ||
+            error.message.includes("browser"))
+        ) {
+          console.warn(
+            `[Crawler] 페이지가 닫혔습니다 (body style 실패): ${url}. 다음 페이지로 계속 진행.`,
+            error.message
+          );
+          return; // 해당 페이지만 스킵하고 계속 진행
         }
-        throw error;
+        console.error(
+          `[Crawler] body style 중 예상치 못한 에러: ${url}`,
+          error
+        );
+        // 예상치 못한 에러도 해당 페이지만 스킵하고 계속 진행
+        return;
+      }
+
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (body style 후): ${url}. 다음 페이지로 계속 진행.`
+        );
+        return;
       }
 
       await page.waitForTimeout(1000);
 
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (이미지 로딩 전): ${url}. 다음 페이지로 계속 진행.`
+        );
+        return;
+      }
+
       // 브라우저 상태 확인
       if (!this.browser || !this.browser.isConnected()) {
-        console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
+        console.warn(
+          `[Crawler] 브라우저가 닫혔습니다 (이미지 로딩 전): ${url}. 다음 페이지로 계속 진행.`
+        );
         return;
       }
 
@@ -440,89 +558,216 @@ class WebCrawler {
           await new Promise((resolve) => setTimeout(resolve, 500));
         });
       } catch (error) {
-        if (error.message && error.message.includes("closed")) {
-          console.error("[Crawler] 페이지가 닫혔습니다. 크롤링 중단.");
-          return;
+        if (
+          error.message &&
+          (error.message.includes("closed") ||
+            error.message.includes("Target page") ||
+            error.message.includes("browser"))
+        ) {
+          console.warn(
+            `[Crawler] 페이지가 닫혔습니다 (이미지 로딩 실패): ${url}. 다음 페이지로 계속 진행.`,
+            error.message
+          );
+          return; // 해당 페이지만 스킵하고 계속 진행
         }
-        throw error;
+        console.error(
+          `[Crawler] 이미지 로딩 중 예상치 못한 에러: ${url}`,
+          error
+        );
+        // 예상치 못한 에러도 해당 페이지만 스킵하고 계속 진행
+        return;
+      }
+
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (이미지 로딩 후): ${url}. 다음 페이지로 계속 진행.`
+        );
+        return;
       }
 
       // 브라우저 상태 확인
       if (!this.browser || !this.browser.isConnected()) {
         console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
+        return;
+      }
+
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (viewport 설정 전): ${url}`
+        );
         return;
       }
 
       await page.setViewportSize({ width: 1920, height: 1080 });
       await page.waitForTimeout(500);
 
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (viewport 설정 후): ${url}`
+        );
+        return;
+      }
+
       // 브라우저 상태 확인
       if (!this.browser || !this.browser.isConnected()) {
         console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
         return;
       }
 
-      const screenshot = await page.screenshot({
-        fullPage: false,
-        type: "jpeg",
-        quality: 80,
-      });
+      let screenshot;
+      try {
+        screenshot = await page.screenshot({
+          fullPage: false,
+          type: "jpeg",
+          quality: 80,
+        });
+      } catch (error) {
+        if (
+          error.message &&
+          (error.message.includes("closed") ||
+            error.message.includes("Target page"))
+        ) {
+          console.warn(
+            `[Crawler] 페이지가 닫혔습니다 (스크린샷 실패): ${url}. 다음 페이지로 계속 진행.`
+          );
+          return; // 해당 페이지만 스킵하고 계속 진행
+        }
+        throw error;
+      }
+
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(`[Crawler] 페이지가 닫혔습니다 (스크린샷 후): ${url}`);
+        return;
+      }
+
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (전체 페이지 이미지 로딩 전): ${url}. 다음 페이지로 계속 진행.`
+        );
+        return;
+      }
+
+      // 브라우저 상태 확인
+      if (!this.browser || !this.browser.isConnected()) {
+        console.warn(
+          `[Crawler] 브라우저가 닫혔습니다 (전체 페이지 이미지 로딩 전): ${url}. 다음 페이지로 계속 진행.`
+        );
+        return;
+      }
 
       // 전체 페이지 스크린샷을 위한 이미지 로딩
-      await page.evaluate(async () => {
-        const allImages = Array.from(document.querySelectorAll("img"));
-        allImages.forEach((img) => {
-          if (img.loading === "lazy") {
-            img.loading = "eager";
-          }
-          if (img.srcset) {
-            const currentSrcset = img.srcset;
-            img.srcset = "";
-            img.srcset = currentSrcset;
-          } else if (img.src) {
-            const currentSrc = img.src;
-            img.src = "";
-            img.src = currentSrc;
-          }
-        });
-
-        const elementsWithBlur = Array.from(document.querySelectorAll("*"));
-        elementsWithBlur.forEach((el) => {
-          const style = window.getComputedStyle(el);
-          if (
-            style.filter &&
-            style.filter !== "none" &&
-            style.filter.includes("blur")
-          ) {
-            el.style.filter = "none";
-          }
-        });
-
-        const viewportHeight = window.innerHeight;
-        let totalHeight = document.documentElement.scrollHeight;
-        const scrollStep = viewportHeight * 0.8;
-        let scrollPosition = 0;
-        let lastHeight = 0;
-        let stableCount = 0;
-
-        while (scrollPosition < totalHeight || stableCount < 2) {
-          window.scrollTo(0, scrollPosition);
-          await new Promise((resolve) => setTimeout(resolve, 300));
-
-          const visibleImages = Array.from(
-            document.querySelectorAll("img")
-          ).filter((img) => {
-            const rect = img.getBoundingClientRect();
-            return (
-              rect.top < window.innerHeight &&
-              rect.bottom > 0 &&
-              rect.left < window.innerWidth &&
-              rect.right > 0
-            );
+      try {
+        await page.evaluate(async () => {
+          const allImages = Array.from(document.querySelectorAll("img"));
+          allImages.forEach((img) => {
+            if (img.loading === "lazy") {
+              img.loading = "eager";
+            }
+            if (img.srcset) {
+              const currentSrcset = img.srcset;
+              img.srcset = "";
+              img.srcset = currentSrcset;
+            } else if (img.src) {
+              const currentSrc = img.src;
+              img.src = "";
+              img.src = currentSrc;
+            }
           });
 
+          const elementsWithBlur = Array.from(document.querySelectorAll("*"));
+          elementsWithBlur.forEach((el) => {
+            const style = window.getComputedStyle(el);
+            if (
+              style.filter &&
+              style.filter !== "none" &&
+              style.filter.includes("blur")
+            ) {
+              el.style.filter = "none";
+            }
+          });
+
+          const viewportHeight = window.innerHeight;
+          let totalHeight = document.documentElement.scrollHeight;
+          const scrollStep = viewportHeight * 0.8;
+          let scrollPosition = 0;
+          let lastHeight = 0;
+          let stableCount = 0;
+
+          while (scrollPosition < totalHeight || stableCount < 2) {
+            window.scrollTo(0, scrollPosition);
+            await new Promise((resolve) => setTimeout(resolve, 300));
+
+            const visibleImages = Array.from(
+              document.querySelectorAll("img")
+            ).filter((img) => {
+              const rect = img.getBoundingClientRect();
+              return (
+                rect.top < window.innerHeight &&
+                rect.bottom > 0 &&
+                rect.left < window.innerWidth &&
+                rect.right > 0
+              );
+            });
+
+            await Promise.all(
+              visibleImages.map((img) => {
+                return new Promise((resolve) => {
+                  if (
+                    img.complete &&
+                    img.naturalWidth > 0 &&
+                    img.naturalHeight > 0
+                  ) {
+                    resolve();
+                    return;
+                  }
+
+                  const timeout = setTimeout(() => resolve(), 3000);
+                  const onLoad = () => {
+                    clearTimeout(timeout);
+                    img.removeEventListener("load", onLoad);
+                    img.removeEventListener("error", onError);
+                    resolve();
+                  };
+                  const onError = () => {
+                    clearTimeout(timeout);
+                    img.removeEventListener("load", onLoad);
+                    img.removeEventListener("error", onError);
+                    resolve();
+                  };
+                  img.addEventListener("load", onLoad);
+                  img.addEventListener("error", onError);
+                  if (img.src) {
+                    const currentSrc = img.src;
+                    img.src = "";
+                    img.src = currentSrc;
+                  }
+                });
+              })
+            );
+
+            const currentHeight = document.documentElement.scrollHeight;
+            if (currentHeight === lastHeight) {
+              stableCount++;
+            } else {
+              stableCount = 0;
+              lastHeight = currentHeight;
+              totalHeight = currentHeight;
+            }
+
+            scrollPosition += scrollStep;
+          }
+
+          window.scrollTo(0, document.documentElement.scrollHeight);
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+
+          const finalImages = Array.from(document.querySelectorAll("img"));
           await Promise.all(
-            visibleImages.map((img) => {
+            finalImages.map((img) => {
               return new Promise((resolve) => {
                 if (
                   img.complete &&
@@ -532,8 +777,7 @@ class WebCrawler {
                   resolve();
                   return;
                 }
-
-                const timeout = setTimeout(() => resolve(), 3000);
+                const timeout = setTimeout(() => resolve(), 2000);
                 const onLoad = () => {
                   clearTimeout(timeout);
                   img.removeEventListener("load", onLoad);
@@ -548,84 +792,105 @@ class WebCrawler {
                 };
                 img.addEventListener("load", onLoad);
                 img.addEventListener("error", onError);
-                if (img.src) {
-                  const currentSrc = img.src;
-                  img.src = "";
-                  img.src = currentSrc;
-                }
               });
             })
           );
 
-          const currentHeight = document.documentElement.scrollHeight;
-          if (currentHeight === lastHeight) {
-            stableCount++;
-          } else {
-            stableCount = 0;
-            lastHeight = currentHeight;
-            totalHeight = currentHeight;
-          }
-
-          scrollPosition += scrollStep;
+          window.scrollTo(0, 0);
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        });
+      } catch (error) {
+        if (
+          error.message &&
+          (error.message.includes("closed") ||
+            error.message.includes("Target page") ||
+            error.message.includes("browser"))
+        ) {
+          console.warn(
+            `[Crawler] 페이지가 닫혔습니다 (전체 페이지 이미지 로딩 실패): ${url}. 다음 페이지로 계속 진행.`,
+            error.message
+          );
+          return; // 해당 페이지만 스킵하고 계속 진행
         }
-
-        window.scrollTo(0, document.documentElement.scrollHeight);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-
-        const finalImages = Array.from(document.querySelectorAll("img"));
-        await Promise.all(
-          finalImages.map((img) => {
-            return new Promise((resolve) => {
-              if (
-                img.complete &&
-                img.naturalWidth > 0 &&
-                img.naturalHeight > 0
-              ) {
-                resolve();
-                return;
-              }
-              const timeout = setTimeout(() => resolve(), 2000);
-              const onLoad = () => {
-                clearTimeout(timeout);
-                img.removeEventListener("load", onLoad);
-                img.removeEventListener("error", onError);
-                resolve();
-              };
-              const onError = () => {
-                clearTimeout(timeout);
-                img.removeEventListener("load", onLoad);
-                img.removeEventListener("error", onError);
-                resolve();
-              };
-              img.addEventListener("load", onLoad);
-              img.addEventListener("error", onError);
-            });
-          })
+        console.error(
+          `[Crawler] 전체 페이지 이미지 로딩 중 예상치 못한 에러: ${url}`,
+          error
         );
+        // 예상치 못한 에러도 해당 페이지만 스킵하고 계속 진행
+        return;
+      }
 
-        window.scrollTo(0, 0);
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      });
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (전체 페이지 이미지 로딩 후): ${url}. 다음 페이지로 계속 진행.`
+        );
+        return;
+      }
 
       await page.waitForTimeout(1000);
 
-      const fullPageScreenshot = await page.screenshot({
-        fullPage: true,
-        type: "jpeg",
-        quality: 80,
-      });
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (전체 페이지 스크린샷 전): ${url}. 다음 페이지로 계속 진행.`
+        );
+        return;
+      }
 
-      if (this.crawledPages.length < this.config.maxPages) {
-        this.crawledPages.push({
-          url,
-          title,
-          content: content || "",
-          screenshot,
-          fullPageScreenshot,
-          timestamp: new Date(),
-          depth,
-          pageType: detectPageType(url), // 페이지 타입 추가
+      let fullPageScreenshot;
+      try {
+        fullPageScreenshot = await page.screenshot({
+          fullPage: true,
+          type: "jpeg",
+          quality: 80,
         });
+      } catch (error) {
+        if (
+          error.message &&
+          (error.message.includes("closed") ||
+            error.message.includes("Target page") ||
+            error.message.includes("browser"))
+        ) {
+          console.warn(
+            `[Crawler] 페이지가 닫혔습니다 (전체 페이지 스크린샷 실패): ${url}. 다음 페이지로 계속 진행.`,
+            error.message
+          );
+          return; // 해당 페이지만 스킵하고 계속 진행
+        }
+        console.error(
+          `[Crawler] 전체 페이지 스크린샷 중 예상치 못한 에러: ${url}`,
+          error
+        );
+        // 예상치 못한 에러도 해당 페이지만 스킵하고 계속 진행
+        return;
+      }
+
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (전체 페이지 스크린샷 후): ${url}. 다음 페이지로 계속 진행.`
+        );
+        return;
+      }
+
+      // 크롤링한 데이터 저장 (에러가 발생해도 가능한 데이터는 저장)
+      if (this.crawledPages.length < this.config.maxPages) {
+        try {
+          this.crawledPages.push({
+            url,
+            title: title || url,
+            content: content || "",
+            screenshot: screenshot || null,
+            fullPageScreenshot: fullPageScreenshot || null,
+            timestamp: new Date(),
+            depth,
+            pageType: detectPageType(url), // 페이지 타입 추가
+          });
+        } catch (error) {
+          console.error(`[Crawler] 데이터 저장 중 에러: ${url}`, error);
+          // 데이터 저장 실패해도 계속 진행
+        }
       } else {
         // maxPages에 도달했어도 페이지를 닫지 않음
         // 브라우저가 닫히는 것을 방지하기 위함
@@ -636,23 +901,56 @@ class WebCrawler {
         this.onProgress(this.crawledPages.length, this.config.maxPages, url);
       }
 
-      // 브라우저 상태 확인
-      if (!this.browser || !this.browser.isConnected()) {
-        console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (링크 추출 전): ${url}. 다음 페이지로 계속 진행.`
+        );
         return;
       }
 
-      let links;
+      // 브라우저 상태 확인
+      if (!this.browser || !this.browser.isConnected()) {
+        console.warn(
+          `[Crawler] 브라우저가 닫혔습니다 (링크 추출 전): ${url}. 다음 페이지로 계속 진행.`
+        );
+        return;
+      }
+
+      let links = [];
       try {
         links = await page.$$eval("a[href]", (anchors) =>
           anchors.map((a) => a.href)
         );
       } catch (error) {
-        if (error.message && error.message.includes("closed")) {
-          console.error("[Crawler] 페이지가 닫혔습니다. 크롤링 중단.");
-          return;
+        if (
+          error.message &&
+          (error.message.includes("closed") ||
+            error.message.includes("Target page") ||
+            error.message.includes("browser"))
+        ) {
+          console.warn(
+            `[Crawler] 페이지가 닫혔습니다 (링크 추출 실패): ${url}. 다음 페이지로 계속 진행.`,
+            error.message
+          );
+          // 링크 추출 실패해도 이미 크롤링한 데이터는 저장
+          links = [];
+        } else {
+          console.error(
+            `[Crawler] 링크 추출 중 예상치 못한 에러: ${url}`,
+            error
+          );
+          links = [];
         }
-        throw error;
+        // 에러가 발생해도 이미 크롤링한 데이터는 저장하고 계속 진행
+      }
+
+      // 페이지 상태 확인
+      if (page.isClosed()) {
+        console.warn(
+          `[Crawler] 페이지가 닫혔습니다 (링크 추출 후): ${url}. 다음 페이지로 계속 진행.`
+        );
+        // 링크 추출 후 페이지가 닫혔어도 이미 크롤링한 데이터는 저장
       }
 
       const sameDomainLinks = [...new Set(links)].filter((link) => {
@@ -691,7 +989,9 @@ class WebCrawler {
 
         // 브라우저 상태 확인
         if (!this.browser || !this.browser.isConnected()) {
-          console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
+          console.warn(
+            `[Crawler] 브라우저가 닫혔습니다. 링크 크롤링 중단: ${url}`
+          );
           break;
         }
 
