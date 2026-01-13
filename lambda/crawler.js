@@ -255,34 +255,16 @@ class WebCrawler {
       page = await this.browser.newPage();
       this.openPages.push(page); // 페이지 추적
 
-      try {
-        await page.goto(url, {
-          waitUntil: "domcontentloaded",
-          timeout: 15000,
-        });
-      } catch (error) {
-        console.warn(`[Crawler] 페이지 로드 실패 (스킵): ${url}`, error.message);
-        return;
-      }
+      await page.goto(url, {
+        waitUntil: "domcontentloaded",
+        timeout: 15000,
+      });
 
-      try {
-        await page.waitForTimeout(500);
-      } catch (error) {
-        console.warn(`[Crawler] waitForTimeout 실패 (스킵): ${url}`, error.message);
-        return;
-      }
+      await page.waitForTimeout(500);
 
-      let title;
-      try {
-        title = await page.title();
-      } catch (error) {
-        console.warn(`[Crawler] title 추출 실패 (스킵): ${url}`, error.message);
-        return;
-      }
+      const title = await page.title();
 
-      let content;
-      try {
-        content = await page.evaluate(() => {
+      const content = await page.evaluate(() => {
           const unwantedSelectors = [
             "script",
             "style",
@@ -335,43 +317,20 @@ class WebCrawler {
           fullText = fullText.replace(/\n{3,}/g, "\n\n");
           return fullText.trim();
         });
-      } catch (error) {
-        console.warn(
-          `[Crawler] Content 추출 실패 (스킵): ${url}`,
-          error.message
-        );
-        return; // 해당 페이지만 스킵하고 계속 진행
-      }
 
-      try {
-        await page.evaluate(() => {
-          return document.fonts.ready;
-        });
-      } catch (error) {
-        console.warn(`[Crawler] Fonts 로딩 실패 (스킵): ${url}`, error.message);
-        return;
-      }
+      await page.evaluate(() => {
+        return document.fonts.ready;
+      });
 
-      try {
-        await page.evaluate(() => {
-          document.body.style.display = "none";
-          void document.body.offsetHeight;
-          document.body.style.display = "";
-        });
-      } catch (error) {
-        console.warn(`[Crawler] Body style 실패 (스킵): ${url}`, error.message);
-        return;
-      }
+      await page.evaluate(() => {
+        document.body.style.display = "none";
+        void document.body.offsetHeight;
+        document.body.style.display = "";
+      });
 
-      try {
-        await page.waitForTimeout(1000);
-      } catch (error) {
-        console.warn(`[Crawler] waitForTimeout 실패 (스킵): ${url}`, error.message);
-        return;
-      }
+      await page.waitForTimeout(1000);
 
-      try {
-        await page.evaluate(async () => {
+      await page.evaluate(async () => {
           const images = Array.from(document.querySelectorAll("img"));
 
           await Promise.all(
@@ -411,39 +370,15 @@ class WebCrawler {
 
           await new Promise((resolve) => setTimeout(resolve, 500));
         });
-      } catch (error) {
-        console.warn(
-          `[Crawler] 이미지 로딩 실패 (스킵): ${url}`,
-          error.message
-        );
-        return;
-      }
 
-      try {
-        await page.setViewportSize({ width: 1920, height: 1080 });
-      } catch (error) {
-        console.warn(`[Crawler] viewport 설정 실패 (스킵): ${url}`, error.message);
-        return;
-      }
+      await page.setViewportSize({ width: 1920, height: 1080 });
+      await page.waitForTimeout(500);
 
-      try {
-        await page.waitForTimeout(500);
-      } catch (error) {
-        console.warn(`[Crawler] waitForTimeout 실패 (스킵): ${url}`, error.message);
-        return;
-      }
-
-      let screenshot;
-      try {
-        screenshot = await page.screenshot({
-          fullPage: false,
-          type: "jpeg",
-          quality: 80,
-        });
-      } catch (error) {
-        console.warn(`[Crawler] 스크린샷 실패 (스킵): ${url}`, error.message);
-        return;
-      }
+      const screenshot = await page.screenshot({
+        fullPage: false,
+        type: "jpeg",
+        quality: 80,
+      });
 
       // 전체 페이지 스크린샷을 위한 이미지 로딩
       try {
@@ -584,35 +519,14 @@ class WebCrawler {
           window.scrollTo(0, 0);
           await new Promise((resolve) => setTimeout(resolve, 500));
         });
-      } catch (error) {
-        console.warn(
-          `[Crawler] 전체 페이지 이미지 로딩 실패 (스킵): ${url}`,
-          error.message
-        );
-        return;
-      }
 
-      try {
-        await page.waitForTimeout(1000);
-      } catch (error) {
-        console.warn(`[Crawler] waitForTimeout 실패 (스킵): ${url}`, error.message);
-        return;
-      }
+      await page.waitForTimeout(1000);
 
-      let fullPageScreenshot;
-      try {
-        fullPageScreenshot = await page.screenshot({
-          fullPage: true,
-          type: "jpeg",
-          quality: 80,
-        });
-      } catch (error) {
-        console.warn(
-          `[Crawler] 전체 페이지 스크린샷 실패 (스킵): ${url}`,
-          error.message
-        );
-        return;
-      }
+      const fullPageScreenshot = await page.screenshot({
+        fullPage: true,
+        type: "jpeg",
+        quality: 80,
+      });
 
       if (this.crawledPages.length < this.config.maxPages) {
         this.crawledPages.push({
@@ -632,15 +546,9 @@ class WebCrawler {
       }
 
       // 링크 추출 및 재귀 크롤링
-      let links = [];
-      try {
-        links = await page.$$eval("a[href]", (anchors) =>
-          anchors.map((a) => a.href)
-        );
-      } catch (error) {
-        console.warn(`[Crawler] 링크 추출 실패 (스킵): ${url}`, error.message);
-        return;
-      }
+      const links = await page.$$eval("a[href]", (anchors) =>
+        anchors.map((a) => a.href)
+      );
 
       const sameDomainLinks = [...new Set(links)].filter((link) => {
         try {
