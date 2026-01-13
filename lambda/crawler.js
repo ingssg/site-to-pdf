@@ -255,14 +255,30 @@ class WebCrawler {
       page = await this.browser.newPage();
       this.openPages.push(page); // 페이지 추적
 
-      await page.goto(url, {
-        waitUntil: "domcontentloaded",
-        timeout: 15000,
-      });
+      try {
+        await page.goto(url, {
+          waitUntil: "domcontentloaded",
+          timeout: 15000,
+        });
+      } catch (error) {
+        console.warn(`[Crawler] 페이지 로드 실패 (스킵): ${url}`, error.message);
+        return;
+      }
 
-      await page.waitForTimeout(500);
+      try {
+        await page.waitForTimeout(500);
+      } catch (error) {
+        console.warn(`[Crawler] waitForTimeout 실패 (스킵): ${url}`, error.message);
+        return;
+      }
 
-      const title = await page.title();
+      let title;
+      try {
+        title = await page.title();
+      } catch (error) {
+        console.warn(`[Crawler] title 추출 실패 (스킵): ${url}`, error.message);
+        return;
+      }
 
       let content;
       try {
@@ -347,7 +363,12 @@ class WebCrawler {
         return;
       }
 
-      await page.waitForTimeout(1000);
+      try {
+        await page.waitForTimeout(1000);
+      } catch (error) {
+        console.warn(`[Crawler] waitForTimeout 실패 (스킵): ${url}`, error.message);
+        return;
+      }
 
       try {
         await page.evaluate(async () => {
@@ -398,8 +419,19 @@ class WebCrawler {
         return;
       }
 
-      await page.setViewportSize({ width: 1920, height: 1080 });
-      await page.waitForTimeout(500);
+      try {
+        await page.setViewportSize({ width: 1920, height: 1080 });
+      } catch (error) {
+        console.warn(`[Crawler] viewport 설정 실패 (스킵): ${url}`, error.message);
+        return;
+      }
+
+      try {
+        await page.waitForTimeout(500);
+      } catch (error) {
+        console.warn(`[Crawler] waitForTimeout 실패 (스킵): ${url}`, error.message);
+        return;
+      }
 
       let screenshot;
       try {
@@ -560,7 +592,12 @@ class WebCrawler {
         return;
       }
 
-      await page.waitForTimeout(1000);
+      try {
+        await page.waitForTimeout(1000);
+      } catch (error) {
+        console.warn(`[Crawler] waitForTimeout 실패 (스킵): ${url}`, error.message);
+        return;
+      }
 
       let fullPageScreenshot;
       try {
