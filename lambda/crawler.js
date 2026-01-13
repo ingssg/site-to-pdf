@@ -221,11 +221,7 @@ class WebCrawler {
   async crawlPage(url, depth) {
     const normalizedUrl = normalizeUrl(url);
 
-    // 브라우저 상태 확인
     if (!this.browser || !this.browser.isConnected()) {
-      console.warn(
-        `[Crawler] 브라우저가 닫혔습니다. 새 페이지 생성 불가: ${url}`
-      );
       return;
     }
 
@@ -256,12 +252,6 @@ class WebCrawler {
 
     let page = null;
     try {
-      // 브라우저 상태 재확인
-      if (!this.browser || !this.browser.isConnected()) {
-        console.error("[Crawler] 브라우저가 닫혔습니다. 새 페이지 생성 불가.");
-        return;
-      }
-
       page = await this.browser.newPage();
       this.openPages.push(page); // 페이지 추적
 
@@ -272,52 +262,10 @@ class WebCrawler {
 
       await page.waitForTimeout(500);
 
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(`[Crawler] 페이지가 이미 닫혔습니다: ${url}`);
-        return;
-      }
-
-      // 브라우저 상태 확인 (page.evaluate 전)
-      if (!this.browser || !this.browser.isConnected()) {
-        console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
-        return;
-      }
-
       const title = await page.title();
-
-      // 페이지 상태 재확인
-      if (page.isClosed()) {
-        console.warn(`[Crawler] 페이지가 닫혔습니다 (title 후): ${url}`);
-        return;
-      }
-
-      // 브라우저 상태 재확인
-      if (!this.browser || !this.browser.isConnected()) {
-        console.warn(
-          `[Crawler] 브라우저가 닫혔습니다: ${url}. 다음 페이지로 계속 진행.`
-        );
-        return;
-      }
 
       let content;
       try {
-        // 페이지 상태 확인 (evaluate 전)
-        if (page.isClosed()) {
-          console.warn(
-            `[Crawler] 페이지가 닫혔습니다 (content 추출 전): ${url}. 다음 페이지로 계속 진행.`
-          );
-          return; // 해당 페이지만 스킵하고 계속 진행
-        }
-
-        // 브라우저 상태 확인
-        if (!this.browser || !this.browser.isConnected()) {
-          console.warn(
-            `[Crawler] 브라우저가 닫혔습니다 (content 추출 전): ${url}. 다음 페이지로 계속 진행.`
-          );
-          return; // 해당 페이지만 스킵하고 계속 진행
-        }
-
         content = await page.evaluate(() => {
           const unwantedSelectors = [
             "script",
@@ -372,48 +320,8 @@ class WebCrawler {
           return fullText.trim();
         });
       } catch (error) {
-        if (
-          error.message &&
-          (error.message.includes("closed") ||
-            error.message.includes("Target page") ||
-            error.message.includes("browser"))
-        ) {
-          console.warn(
-            `[Crawler] 페이지가 닫혔습니다 (content 추출 실패): ${url}. 다음 페이지로 계속 진행.`,
-            error.message
-          );
-          return; // 해당 페이지만 스킵하고 계속 진행
-        }
-        console.error(
-          `[Crawler] content 추출 중 예상치 못한 에러: ${url}`,
-          error
-        );
-        // 예상치 못한 에러도 해당 페이지만 스킵하고 계속 진행
-        return;
-      }
-
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (content 추출 후): ${url}. 다음 페이지로 계속 진행.`
-        );
-        return;
-      }
-
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (fonts.ready 전): ${url}. 다음 페이지로 계속 진행.`
-        );
-        return;
-      }
-
-      // 브라우저 상태 확인
-      if (!this.browser || !this.browser.isConnected()) {
-        console.warn(
-          `[Crawler] 브라우저가 닫혔습니다 (fonts.ready 전): ${url}. 다음 페이지로 계속 진행.`
-        );
-        return;
+        console.warn(`[Crawler] Content 추출 실패 (스킵): ${url}`, error.message);
+        return; // 해당 페이지만 스킵하고 계속 진행
       }
 
       try {
@@ -421,100 +329,22 @@ class WebCrawler {
           return document.fonts.ready;
         });
       } catch (error) {
-        if (
-          error.message &&
-          (error.message.includes("closed") ||
-            error.message.includes("Target page") ||
-            error.message.includes("browser"))
-        ) {
-          console.warn(
-            `[Crawler] 페이지가 닫혔습니다 (fonts.ready 실패): ${url}. 다음 페이지로 계속 진행.`,
-            error.message
-          );
-          return; // 해당 페이지만 스킵하고 계속 진행
-        }
-        console.error(
-          `[Crawler] fonts.ready 중 예상치 못한 에러: ${url}`,
-          error
-        );
-        // 예상치 못한 에러도 해당 페이지만 스킵하고 계속 진행
-        return;
-      }
-
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (fonts.ready 후): ${url}. 다음 페이지로 계속 진행.`
-        );
-        return;
-      }
-
-      // 브라우저 상태 확인
-      if (!this.browser || !this.browser.isConnected()) {
-        console.warn(
-          `[Crawler] 브라우저가 닫혔습니다 (body style 전): ${url}. 다음 페이지로 계속 진행.`
-        );
+        console.warn(`[Crawler] Fonts 로딩 실패 (스킵): ${url}`, error.message);
         return;
       }
 
       try {
-        if (page.isClosed()) {
-          console.warn(
-            `[Crawler] 페이지가 닫혔습니다 (body style 전): ${url}. 다음 페이지로 계속 진행.`
-          );
-          return;
-        }
         await page.evaluate(() => {
           document.body.style.display = "none";
           void document.body.offsetHeight;
           document.body.style.display = "";
         });
       } catch (error) {
-        if (
-          error.message &&
-          (error.message.includes("closed") ||
-            error.message.includes("Target page") ||
-            error.message.includes("browser"))
-        ) {
-          console.warn(
-            `[Crawler] 페이지가 닫혔습니다 (body style 실패): ${url}. 다음 페이지로 계속 진행.`,
-            error.message
-          );
-          return; // 해당 페이지만 스킵하고 계속 진행
-        }
-        console.error(
-          `[Crawler] body style 중 예상치 못한 에러: ${url}`,
-          error
-        );
-        // 예상치 못한 에러도 해당 페이지만 스킵하고 계속 진행
-        return;
-      }
-
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (body style 후): ${url}. 다음 페이지로 계속 진행.`
-        );
+        console.warn(`[Crawler] Body style 실패 (스킵): ${url}`, error.message);
         return;
       }
 
       await page.waitForTimeout(1000);
-
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (이미지 로딩 전): ${url}. 다음 페이지로 계속 진행.`
-        );
-        return;
-      }
-
-      // 브라우저 상태 확인
-      if (!this.browser || !this.browser.isConnected()) {
-        console.warn(
-          `[Crawler] 브라우저가 닫혔습니다 (이미지 로딩 전): ${url}. 다음 페이지로 계속 진행.`
-        );
-        return;
-      }
 
       try {
         await page.evaluate(async () => {
@@ -558,64 +388,12 @@ class WebCrawler {
           await new Promise((resolve) => setTimeout(resolve, 500));
         });
       } catch (error) {
-        if (
-          error.message &&
-          (error.message.includes("closed") ||
-            error.message.includes("Target page") ||
-            error.message.includes("browser"))
-        ) {
-          console.warn(
-            `[Crawler] 페이지가 닫혔습니다 (이미지 로딩 실패): ${url}. 다음 페이지로 계속 진행.`,
-            error.message
-          );
-          return; // 해당 페이지만 스킵하고 계속 진행
-        }
-        console.error(
-          `[Crawler] 이미지 로딩 중 예상치 못한 에러: ${url}`,
-          error
-        );
-        // 예상치 못한 에러도 해당 페이지만 스킵하고 계속 진행
-        return;
-      }
-
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (이미지 로딩 후): ${url}. 다음 페이지로 계속 진행.`
-        );
-        return;
-      }
-
-      // 브라우저 상태 확인
-      if (!this.browser || !this.browser.isConnected()) {
-        console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
-        return;
-      }
-
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (viewport 설정 전): ${url}`
-        );
+        console.warn(`[Crawler] 이미지 로딩 실패 (스킵): ${url}`, error.message);
         return;
       }
 
       await page.setViewportSize({ width: 1920, height: 1080 });
       await page.waitForTimeout(500);
-
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (viewport 설정 후): ${url}`
-        );
-        return;
-      }
-
-      // 브라우저 상태 확인
-      if (!this.browser || !this.browser.isConnected()) {
-        console.error("[Crawler] 브라우저가 닫혔습니다. 크롤링 중단.");
-        return;
-      }
 
       let screenshot;
       try {
@@ -625,38 +403,7 @@ class WebCrawler {
           quality: 80,
         });
       } catch (error) {
-        if (
-          error.message &&
-          (error.message.includes("closed") ||
-            error.message.includes("Target page"))
-        ) {
-          console.warn(
-            `[Crawler] 페이지가 닫혔습니다 (스크린샷 실패): ${url}. 다음 페이지로 계속 진행.`
-          );
-          return; // 해당 페이지만 스킵하고 계속 진행
-        }
-        throw error;
-      }
-
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(`[Crawler] 페이지가 닫혔습니다 (스크린샷 후): ${url}`);
-        return;
-      }
-
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (전체 페이지 이미지 로딩 전): ${url}. 다음 페이지로 계속 진행.`
-        );
-        return;
-      }
-
-      // 브라우저 상태 확인
-      if (!this.browser || !this.browser.isConnected()) {
-        console.warn(
-          `[Crawler] 브라우저가 닫혔습니다 (전체 페이지 이미지 로딩 전): ${url}. 다음 페이지로 계속 진행.`
-        );
+        console.warn(`[Crawler] 스크린샷 실패 (스킵): ${url}`, error.message);
         return;
       }
 
@@ -800,43 +547,11 @@ class WebCrawler {
           await new Promise((resolve) => setTimeout(resolve, 500));
         });
       } catch (error) {
-        if (
-          error.message &&
-          (error.message.includes("closed") ||
-            error.message.includes("Target page") ||
-            error.message.includes("browser"))
-        ) {
-          console.warn(
-            `[Crawler] 페이지가 닫혔습니다 (전체 페이지 이미지 로딩 실패): ${url}. 다음 페이지로 계속 진행.`,
-            error.message
-          );
-          return; // 해당 페이지만 스킵하고 계속 진행
-        }
-        console.error(
-          `[Crawler] 전체 페이지 이미지 로딩 중 예상치 못한 에러: ${url}`,
-          error
-        );
-        // 예상치 못한 에러도 해당 페이지만 스킵하고 계속 진행
-        return;
-      }
-
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (전체 페이지 이미지 로딩 후): ${url}. 다음 페이지로 계속 진행.`
-        );
+        console.warn(`[Crawler] 전체 페이지 이미지 로딩 실패 (스킵): ${url}`, error.message);
         return;
       }
 
       await page.waitForTimeout(1000);
-
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (전체 페이지 스크린샷 전): ${url}. 다음 페이지로 계속 진행.`
-        );
-        return;
-      }
 
       let fullPageScreenshot;
       try {
@@ -846,111 +561,36 @@ class WebCrawler {
           quality: 80,
         });
       } catch (error) {
-        if (
-          error.message &&
-          (error.message.includes("closed") ||
-            error.message.includes("Target page") ||
-            error.message.includes("browser"))
-        ) {
-          console.warn(
-            `[Crawler] 페이지가 닫혔습니다 (전체 페이지 스크린샷 실패): ${url}. 다음 페이지로 계속 진행.`,
-            error.message
-          );
-          return; // 해당 페이지만 스킵하고 계속 진행
-        }
-        console.error(
-          `[Crawler] 전체 페이지 스크린샷 중 예상치 못한 에러: ${url}`,
-          error
-        );
-        // 예상치 못한 에러도 해당 페이지만 스킵하고 계속 진행
+        console.warn(`[Crawler] 전체 페이지 스크린샷 실패 (스킵): ${url}`, error.message);
         return;
       }
 
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (전체 페이지 스크린샷 후): ${url}. 다음 페이지로 계속 진행.`
-        );
-        return;
-      }
-
-      // 크롤링한 데이터 저장 (에러가 발생해도 가능한 데이터는 저장)
       if (this.crawledPages.length < this.config.maxPages) {
-        try {
-          this.crawledPages.push({
-            url,
-            title: title || url,
-            content: content || "",
-            screenshot: screenshot || null,
-            fullPageScreenshot: fullPageScreenshot || null,
-            timestamp: new Date(),
-            depth,
-            pageType: detectPageType(url), // 페이지 타입 추가
-          });
-        } catch (error) {
-          console.error(`[Crawler] 데이터 저장 중 에러: ${url}`, error);
-          // 데이터 저장 실패해도 계속 진행
-        }
-      } else {
-        // maxPages에 도달했어도 페이지를 닫지 않음
-        // 브라우저가 닫히는 것을 방지하기 위함
-        return;
+        this.crawledPages.push({
+          url,
+          title: title || url,
+          content: content || "",
+          screenshot: screenshot || null,
+          fullPageScreenshot: fullPageScreenshot || null,
+          timestamp: new Date(),
+          depth,
+          pageType: detectPageType(url),
+        });
       }
 
       if (this.onProgress) {
         this.onProgress(this.crawledPages.length, this.config.maxPages, url);
       }
 
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (링크 추출 전): ${url}. 다음 페이지로 계속 진행.`
-        );
-        return;
-      }
-
-      // 브라우저 상태 확인
-      if (!this.browser || !this.browser.isConnected()) {
-        console.warn(
-          `[Crawler] 브라우저가 닫혔습니다 (링크 추출 전): ${url}. 다음 페이지로 계속 진행.`
-        );
-        return;
-      }
-
+      // 링크 추출 및 재귀 크롤링
       let links = [];
       try {
         links = await page.$$eval("a[href]", (anchors) =>
           anchors.map((a) => a.href)
         );
       } catch (error) {
-        if (
-          error.message &&
-          (error.message.includes("closed") ||
-            error.message.includes("Target page") ||
-            error.message.includes("browser"))
-        ) {
-          console.warn(
-            `[Crawler] 페이지가 닫혔습니다 (링크 추출 실패): ${url}. 다음 페이지로 계속 진행.`,
-            error.message
-          );
-          // 링크 추출 실패해도 이미 크롤링한 데이터는 저장
-          links = [];
-        } else {
-          console.error(
-            `[Crawler] 링크 추출 중 예상치 못한 에러: ${url}`,
-            error
-          );
-          links = [];
-        }
-        // 에러가 발생해도 이미 크롤링한 데이터는 저장하고 계속 진행
-      }
-
-      // 페이지 상태 확인
-      if (page.isClosed()) {
-        console.warn(
-          `[Crawler] 페이지가 닫혔습니다 (링크 추출 후): ${url}. 다음 페이지로 계속 진행.`
-        );
-        // 링크 추출 후 페이지가 닫혔어도 이미 크롤링한 데이터는 저장
+        console.warn(`[Crawler] 링크 추출 실패 (스킵): ${url}`, error.message);
+        return;
       }
 
       const sameDomainLinks = [...new Set(links)].filter((link) => {
@@ -969,12 +609,6 @@ class WebCrawler {
         `[Crawler] Found ${links.length} links on ${url} (${sameDomainLinks.length} same domain)`
       );
 
-      // 브라우저 상태 확인
-      if (!this.browser || !this.browser.isConnected()) {
-        console.error("[Crawler] 브라우저가 이미 닫혔습니다. 크롤링 중단.");
-        return;
-      }
-
       // 근본 해결: 페이지를 닫지 않고 계속 사용
       // @sparticuz/chromium의 single-process 모드에서 page.close()가 브라우저를 닫을 수 있음
       // 페이지를 닫지 않으면 브라우저가 안정적으로 유지됨
@@ -987,11 +621,7 @@ class WebCrawler {
           break;
         }
 
-        // 브라우저 상태 확인
         if (!this.browser || !this.browser.isConnected()) {
-          console.warn(
-            `[Crawler] 브라우저가 닫혔습니다. 링크 크롤링 중단: ${url}`
-          );
           break;
         }
 
