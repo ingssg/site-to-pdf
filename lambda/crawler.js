@@ -608,21 +608,9 @@ class WebCrawler {
         anchors.map((a) => a.href)
       );
 
-      // 이전 버전처럼 페이지 작업 완료 후 page.close() 호출
-      // @sparticuz/chromium의 single-process 모드에서도 이전에 작동했던 방식
-      try {
-        await page.close();
-        // openPages 배열에서 제거
-        const index = this.openPages.indexOf(page);
-        if (index > -1) {
-          this.openPages.splice(index, 1);
-        }
-      } catch (error) {
-        console.warn(
-          `[Crawler] 페이지 닫기 실패 (무시): ${url}`,
-          error.message
-        );
-      }
+      // @sparticuz/chromium의 single-process 모드에서는 page.close()가 브라우저를 닫을 수 있음
+      // 따라서 page.close()를 호출하지 않고 페이지를 유지
+      // 모든 크롤링이 완료된 후 close() 메서드에서 일괄 정리
 
       const sameDomainLinks = [...new Set(links)].filter((link) => {
         try {
@@ -639,33 +627,6 @@ class WebCrawler {
       console.log(
         `[Crawler] Found ${links.length} links on ${url} (${sameDomainLinks.length} same domain)`
       );
-
-      // 브라우저 연결 상태 확인 및 재생성
-      if (!this.browser || !this.browser.isConnected()) {
-        console.warn(`[Crawler] 브라우저가 닫혔습니다. 재생성 시도...`);
-        try {
-          const executablePath = await chromium.executablePath();
-          this.browser = await playwright.launch({
-            args: [
-              ...chromium.args,
-              "--disable-gpu",
-              "--disable-dev-shm-usage",
-              "--disable-setuid-sandbox",
-              "--no-sandbox",
-              "--disable-background-timer-throttling",
-              "--disable-backgrounding-occluded-windows",
-              "--disable-renderer-backgrounding",
-            ],
-            executablePath: executablePath,
-            headless: true,
-            ignoreDefaultArgs: ["--disable-extensions"],
-          });
-          console.log(`[Crawler] 브라우저 재생성 완료`);
-        } catch (error) {
-          console.error(`[Crawler] 브라우저 재생성 실패:`, error);
-          return;
-        }
-      }
 
       for (const link of sameDomainLinks) {
         if (this.crawledPages.length >= this.config.maxPages) {
