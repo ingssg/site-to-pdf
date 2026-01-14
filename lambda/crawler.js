@@ -185,6 +185,9 @@ class WebCrawler {
           "--disable-dev-shm-usage",
           "--disable-setuid-sandbox",
           "--no-sandbox",
+          "--disable-background-timer-throttling",
+          "--disable-backgrounding-occluded-windows",
+          "--disable-renderer-backgrounding",
         ],
         executablePath: executablePath,
         headless: true,
@@ -600,10 +603,23 @@ class WebCrawler {
         return;
       }
 
-      // 링크 추출 및 재귀 크롤링
+      // 링크 추출 (페이지 닫기 전에)
       const links = await page.$$eval("a[href]", (anchors) =>
         anchors.map((a) => a.href)
       );
+
+      // 이전 버전처럼 페이지 작업 완료 후 page.close() 호출
+      // @sparticuz/chromium의 single-process 모드에서도 이전에 작동했던 방식
+      try {
+        await page.close();
+        // openPages 배열에서 제거
+        const index = this.openPages.indexOf(page);
+        if (index > -1) {
+          this.openPages.splice(index, 1);
+        }
+      } catch (error) {
+        console.warn(`[Crawler] 페이지 닫기 실패 (무시): ${url}`, error.message);
+      }
 
       const sameDomainLinks = [...new Set(links)].filter((link) => {
         try {
@@ -620,6 +636,12 @@ class WebCrawler {
       console.log(
         `[Crawler] Found ${links.length} links on ${url} (${sameDomainLinks.length} same domain)`
       );
+
+      // 브라우저 연결 상태 확인 후 다음 페이지 크롤링
+      if (!this.browser || !this.browser.isConnected()) {
+        console.warn(`[Crawler] 브라우저가 닫혔습니다. 링크 크롤링 중단: ${url}`);
+        return;
+      }
 
       for (const link of sameDomainLinks) {
         if (this.crawledPages.length >= this.config.maxPages) {
@@ -643,10 +665,21 @@ class WebCrawler {
 
   async close() {
     if (this.browser) {
-      // 페이지를 닫지 않음 - @sparticuz/chromium의 single-process 모드에서
-      // page.close()가 브라우저를 닫을 수 있음
-      // 브라우저가 닫히면 모든 페이지가 자동으로 정리됨
-      this.openPages = [];
+      // 남아있는 페이지 정리 (일부 페이지가 닫히지 않은 경우)
+      try {
+        await Promise.all(
+          this.openPages.map((page) => {
+            try {
+              return page.close();
+            } catch {
+              return Promise.resolve();
+            }
+          })
+        );
+        this.openPages = [];
+      } catch (error) {
+        console.warn("[Crawler] 페이지 정리 중 에러:", error);
+      }
 
       try {
         if (this.browser.isConnected()) {
