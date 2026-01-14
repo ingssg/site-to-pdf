@@ -618,7 +618,10 @@ class WebCrawler {
           this.openPages.splice(index, 1);
         }
       } catch (error) {
-        console.warn(`[Crawler] 페이지 닫기 실패 (무시): ${url}`, error.message);
+        console.warn(
+          `[Crawler] 페이지 닫기 실패 (무시): ${url}`,
+          error.message
+        );
       }
 
       const sameDomainLinks = [...new Set(links)].filter((link) => {
@@ -637,10 +640,31 @@ class WebCrawler {
         `[Crawler] Found ${links.length} links on ${url} (${sameDomainLinks.length} same domain)`
       );
 
-      // 브라우저 연결 상태 확인 후 다음 페이지 크롤링
+      // 브라우저 연결 상태 확인 및 재생성
       if (!this.browser || !this.browser.isConnected()) {
-        console.warn(`[Crawler] 브라우저가 닫혔습니다. 링크 크롤링 중단: ${url}`);
-        return;
+        console.warn(`[Crawler] 브라우저가 닫혔습니다. 재생성 시도...`);
+        try {
+          const executablePath = await chromium.executablePath();
+          this.browser = await playwright.launch({
+            args: [
+              ...chromium.args,
+              "--disable-gpu",
+              "--disable-dev-shm-usage",
+              "--disable-setuid-sandbox",
+              "--no-sandbox",
+              "--disable-background-timer-throttling",
+              "--disable-backgrounding-occluded-windows",
+              "--disable-renderer-backgrounding",
+            ],
+            executablePath: executablePath,
+            headless: true,
+            ignoreDefaultArgs: ["--disable-extensions"],
+          });
+          console.log(`[Crawler] 브라우저 재생성 완료`);
+        } catch (error) {
+          console.error(`[Crawler] 브라우저 재생성 실패:`, error);
+          return;
+        }
       }
 
       for (const link of sameDomainLinks) {
