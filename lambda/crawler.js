@@ -315,9 +315,21 @@ class WebCrawler {
         return fullText.trim();
       });
 
+      // 브라우저 연결 상태 확인
+      if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
+        console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
+        return;
+      }
+
       await page.evaluate(() => {
         return document.fonts.ready;
       });
+
+      // 브라우저 연결 상태 확인
+      if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
+        console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
+        return;
+      }
 
       await page.evaluate(() => {
         document.body.style.display = "none";
@@ -326,6 +338,12 @@ class WebCrawler {
       });
 
       await page.waitForTimeout(1000);
+
+      // 브라우저 연결 상태 확인
+      if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
+        console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
+        return;
+      }
 
       await page.evaluate(async () => {
         const images = Array.from(document.querySelectorAll("img"));
@@ -368,8 +386,20 @@ class WebCrawler {
         await new Promise((resolve) => setTimeout(resolve, 500));
       });
 
+      // 브라우저 연결 상태 확인
+      if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
+        console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
+        return;
+      }
+
       await page.setViewportSize({ width: 1920, height: 1080 });
       await page.waitForTimeout(500);
+
+      // 브라우저 연결 상태 확인
+      if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
+        console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
+        return;
+      }
 
       const screenshot = await page.screenshot({
         fullPage: false,
@@ -517,6 +547,12 @@ class WebCrawler {
 
       await page.waitForTimeout(1000);
 
+      // 브라우저 연결 상태 확인
+      if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
+        console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
+        return;
+      }
+
       const fullPageScreenshot = await page.screenshot({
         fullPage: true,
         type: "jpeg",
@@ -538,6 +574,12 @@ class WebCrawler {
 
       if (this.onProgress) {
         this.onProgress(this.crawledPages.length, this.config.maxPages, url);
+      }
+
+      // 브라우저 연결 상태 확인
+      if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
+        console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
+        return;
       }
 
       // 링크 추출 및 재귀 크롤링
