@@ -249,6 +249,12 @@ class WebCrawler {
 
     let page = null;
     try {
+      // 브라우저 연결 상태 확인
+      if (!this.browser || !this.browser.isConnected()) {
+        console.warn(`[Crawler] 브라우저가 닫혔습니다. 스킵: ${url}`);
+        return;
+      }
+
       page = await this.browser.newPage();
       this.openPages.push(page);
 
@@ -259,7 +265,19 @@ class WebCrawler {
 
       await page.waitForTimeout(500);
 
+      // 브라우저/페이지 연결 상태 확인
+      if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
+        console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
+        return;
+      }
+
       const title = await page.title();
+
+      // 브라우저/페이지 연결 상태 확인
+      if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
+        console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
+        return;
+      }
 
       const content = await page.evaluate(() => {
         const unwantedSelectors = [
