@@ -625,20 +625,10 @@ class WebCrawler {
 
   async close() {
     if (this.browser) {
-      try {
-        await Promise.all(
-          this.openPages.map((page) => {
-            try {
-              return page.close();
-            } catch {
-              return Promise.resolve();
-            }
-          })
-        );
-        this.openPages = [];
-      } catch (error) {
-        console.warn("[Crawler] 페이지 정리 중 에러:", error);
-      }
+      // 페이지를 닫지 않음 - @sparticuz/chromium의 single-process 모드에서
+      // page.close()가 브라우저를 닫을 수 있음
+      // 브라우저가 닫히면 모든 페이지가 자동으로 정리됨
+      this.openPages = [];
 
       try {
         if (this.browser.isConnected()) {
