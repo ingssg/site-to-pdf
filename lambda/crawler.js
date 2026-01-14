@@ -262,58 +262,58 @@ class WebCrawler {
       const title = await page.title();
 
       const content = await page.evaluate(() => {
-          const unwantedSelectors = [
-            "script",
-            "style",
-            "noscript",
-            "iframe",
-            "svg",
-            "path",
-            "img",
-            "video",
-            "audio",
-            "canvas",
-            "nav",
-            "footer",
-            'header[role="banner"]',
-            ".ad",
-            ".advertisement",
-            '[class*="cookie"]',
-            '[class*="popup"]',
-            '[class*="modal"]',
-          ];
+        const unwantedSelectors = [
+          "script",
+          "style",
+          "noscript",
+          "iframe",
+          "svg",
+          "path",
+          "img",
+          "video",
+          "audio",
+          "canvas",
+          "nav",
+          "footer",
+          'header[role="banner"]',
+          ".ad",
+          ".advertisement",
+          '[class*="cookie"]',
+          '[class*="popup"]',
+          '[class*="modal"]',
+        ];
 
-          const bodyClone = document.body.cloneNode(true);
+        const bodyClone = document.body.cloneNode(true);
 
-          unwantedSelectors.forEach((selector) => {
-            bodyClone.querySelectorAll(selector).forEach((el) => el.remove());
-          });
-
-          const blockElements = bodyClone.querySelectorAll(
-            "p, h1, h2, h3, h4, h5, h6, div, section, article, li, td, th, blockquote, pre"
-          );
-
-          const textParts = [];
-          const processedElements = new Set();
-
-          blockElements.forEach((el) => {
-            if (processedElements.has(el)) return;
-
-            const text = el.innerText?.trim();
-            if (text && text.length > 0) {
-              textParts.push(text);
-              el.querySelectorAll("*").forEach((child) => {
-                processedElements.add(child);
-              });
-              processedElements.add(el);
-            }
-          });
-
-          let fullText = textParts.join("\n\n");
-          fullText = fullText.replace(/[ \t]+/g, " ");
-          fullText = fullText.replace(/\n{3,}/g, "\n\n");
-          return fullText.trim();
+        unwantedSelectors.forEach((selector) => {
+          bodyClone.querySelectorAll(selector).forEach((el) => el.remove());
         });
+
+        const blockElements = bodyClone.querySelectorAll(
+          "p, h1, h2, h3, h4, h5, h6, div, section, article, li, td, th, blockquote, pre"
+        );
+
+        const textParts = [];
+        const processedElements = new Set();
+
+        blockElements.forEach((el) => {
+          if (processedElements.has(el)) return;
+
+          const text = el.innerText?.trim();
+          if (text && text.length > 0) {
+            textParts.push(text);
+            el.querySelectorAll("*").forEach((child) => {
+              processedElements.add(child);
+            });
+            processedElements.add(el);
+          }
+        });
+
+        let fullText = textParts.join("\n\n");
+        fullText = fullText.replace(/[ \t]+/g, " ");
+        fullText = fullText.replace(/\n{3,}/g, "\n\n");
+        return fullText.trim();
+      });
 
       await page.evaluate(() => {
         return document.fonts.ready;
@@ -328,45 +328,45 @@ class WebCrawler {
       await page.waitForTimeout(1000);
 
       await page.evaluate(async () => {
-          const images = Array.from(document.querySelectorAll("img"));
+        const images = Array.from(document.querySelectorAll("img"));
 
-          await Promise.all(
-            images.map((img) => {
+        await Promise.all(
+          images.map((img) => {
+            if (img.complete && img.naturalHeight !== 0) {
+              return Promise.resolve();
+            }
+
+            if (img.loading === "lazy") {
+              img.loading = "eager";
+            }
+
+            if (img.srcset) {
+              img.srcset = img.srcset;
+            } else if (img.src) {
+              img.src = img.src;
+            }
+
+            return new Promise((resolve) => {
+              const timeout = setTimeout(() => resolve(), 5000);
               if (img.complete && img.naturalHeight !== 0) {
-                return Promise.resolve();
-              }
-
-              if (img.loading === "lazy") {
-                img.loading = "eager";
-              }
-
-              if (img.srcset) {
-                img.srcset = img.srcset;
-              } else if (img.src) {
-                img.src = img.src;
-              }
-
-              return new Promise((resolve) => {
-                const timeout = setTimeout(() => resolve(), 5000);
-                if (img.complete && img.naturalHeight !== 0) {
+                clearTimeout(timeout);
+                resolve();
+              } else {
+                img.onload = () => {
                   clearTimeout(timeout);
                   resolve();
-                } else {
-                  img.onload = () => {
-                    clearTimeout(timeout);
-                    resolve();
-                  };
-                  img.onerror = () => {
-                    clearTimeout(timeout);
-                    resolve();
-                  };
-                }
-              });
-            })
-          );
+                };
+                img.onerror = () => {
+                  clearTimeout(timeout);
+                  resolve();
+                };
+              }
+            });
+          })
+        );
 
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        });
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      });
 
       await page.setViewportSize({ width: 1920, height: 1080 });
       await page.waitForTimeout(500);
@@ -378,111 +378,59 @@ class WebCrawler {
       });
 
       await page.evaluate(async () => {
-          const allImages = Array.from(document.querySelectorAll("img"));
-          allImages.forEach((img) => {
-            if (img.loading === "lazy") {
-              img.loading = "eager";
-            }
-            if (img.srcset) {
-              const currentSrcset = img.srcset;
-              img.srcset = "";
-              img.srcset = currentSrcset;
-            } else if (img.src) {
-              const currentSrc = img.src;
-              img.src = "";
-              img.src = currentSrc;
-            }
-          });
-
-          const elementsWithBlur = Array.from(document.querySelectorAll("*"));
-          elementsWithBlur.forEach((el) => {
-            const style = window.getComputedStyle(el);
-            if (
-              style.filter &&
-              style.filter !== "none" &&
-              style.filter.includes("blur")
-            ) {
-              el.style.filter = "none";
-            }
-          });
-
-          const viewportHeight = window.innerHeight;
-          let totalHeight = document.documentElement.scrollHeight;
-          const scrollStep = viewportHeight * 0.8;
-          let scrollPosition = 0;
-          let lastHeight = 0;
-          let stableCount = 0;
-
-          while (scrollPosition < totalHeight || stableCount < 2) {
-            window.scrollTo(0, scrollPosition);
-            await new Promise((resolve) => setTimeout(resolve, 300));
-
-            const visibleImages = Array.from(
-              document.querySelectorAll("img")
-            ).filter((img) => {
-              const rect = img.getBoundingClientRect();
-              return (
-                rect.top < window.innerHeight &&
-                rect.bottom > 0 &&
-                rect.left < window.innerWidth &&
-                rect.right > 0
-              );
-            });
-
-            await Promise.all(
-              visibleImages.map((img) => {
-                return new Promise((resolve) => {
-                  if (
-                    img.complete &&
-                    img.naturalWidth > 0 &&
-                    img.naturalHeight > 0
-                  ) {
-                    resolve();
-                    return;
-                  }
-
-                  const timeout = setTimeout(() => resolve(), 3000);
-                  const onLoad = () => {
-                    clearTimeout(timeout);
-                    img.removeEventListener("load", onLoad);
-                    img.removeEventListener("error", onError);
-                    resolve();
-                  };
-                  const onError = () => {
-                    clearTimeout(timeout);
-                    img.removeEventListener("load", onLoad);
-                    img.removeEventListener("error", onError);
-                    resolve();
-                  };
-                  img.addEventListener("load", onLoad);
-                  img.addEventListener("error", onError);
-                  if (img.src) {
-                    const currentSrc = img.src;
-                    img.src = "";
-                    img.src = currentSrc;
-                  }
-                });
-              })
-            );
-
-            const currentHeight = document.documentElement.scrollHeight;
-            if (currentHeight === lastHeight) {
-              stableCount++;
-            } else {
-              stableCount = 0;
-              lastHeight = currentHeight;
-              totalHeight = currentHeight;
-            }
-
-            scrollPosition += scrollStep;
+        const allImages = Array.from(document.querySelectorAll("img"));
+        allImages.forEach((img) => {
+          if (img.loading === "lazy") {
+            img.loading = "eager";
           }
+          if (img.srcset) {
+            const currentSrcset = img.srcset;
+            img.srcset = "";
+            img.srcset = currentSrcset;
+          } else if (img.src) {
+            const currentSrc = img.src;
+            img.src = "";
+            img.src = currentSrc;
+          }
+        });
 
-          window.scrollTo(0, document.documentElement.scrollHeight);
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+        const elementsWithBlur = Array.from(document.querySelectorAll("*"));
+        elementsWithBlur.forEach((el) => {
+          const style = window.getComputedStyle(el);
+          if (
+            style.filter &&
+            style.filter !== "none" &&
+            style.filter.includes("blur")
+          ) {
+            el.style.filter = "none";
+          }
+        });
 
-          const finalImages = Array.from(document.querySelectorAll("img"));
+        const viewportHeight = window.innerHeight;
+        let totalHeight = document.documentElement.scrollHeight;
+        const scrollStep = viewportHeight * 0.8;
+        let scrollPosition = 0;
+        let lastHeight = 0;
+        let stableCount = 0;
+
+        while (scrollPosition < totalHeight || stableCount < 2) {
+          window.scrollTo(0, scrollPosition);
+          await new Promise((resolve) => setTimeout(resolve, 300));
+
+          const visibleImages = Array.from(
+            document.querySelectorAll("img")
+          ).filter((img) => {
+            const rect = img.getBoundingClientRect();
+            return (
+              rect.top < window.innerHeight &&
+              rect.bottom > 0 &&
+              rect.left < window.innerWidth &&
+              rect.right > 0
+            );
+          });
+
           await Promise.all(
-            finalImages.map((img) => {
+            visibleImages.map((img) => {
               return new Promise((resolve) => {
                 if (
                   img.complete &&
@@ -492,7 +440,8 @@ class WebCrawler {
                   resolve();
                   return;
                 }
-                const timeout = setTimeout(() => resolve(), 2000);
+
+                const timeout = setTimeout(() => resolve(), 3000);
                 const onLoad = () => {
                   clearTimeout(timeout);
                   img.removeEventListener("load", onLoad);
@@ -507,13 +456,64 @@ class WebCrawler {
                 };
                 img.addEventListener("load", onLoad);
                 img.addEventListener("error", onError);
+                if (img.src) {
+                  const currentSrc = img.src;
+                  img.src = "";
+                  img.src = currentSrc;
+                }
               });
             })
           );
 
-          window.scrollTo(0, 0);
-          await new Promise((resolve) => setTimeout(resolve, 500));
-        });
+          const currentHeight = document.documentElement.scrollHeight;
+          if (currentHeight === lastHeight) {
+            stableCount++;
+          } else {
+            stableCount = 0;
+            lastHeight = currentHeight;
+            totalHeight = currentHeight;
+          }
+
+          scrollPosition += scrollStep;
+        }
+
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+        const finalImages = Array.from(document.querySelectorAll("img"));
+        await Promise.all(
+          finalImages.map((img) => {
+            return new Promise((resolve) => {
+              if (
+                img.complete &&
+                img.naturalWidth > 0 &&
+                img.naturalHeight > 0
+              ) {
+                resolve();
+                return;
+              }
+              const timeout = setTimeout(() => resolve(), 2000);
+              const onLoad = () => {
+                clearTimeout(timeout);
+                img.removeEventListener("load", onLoad);
+                img.removeEventListener("error", onError);
+                resolve();
+              };
+              const onError = () => {
+                clearTimeout(timeout);
+                img.removeEventListener("load", onLoad);
+                img.removeEventListener("error", onError);
+                resolve();
+              };
+              img.addEventListener("load", onLoad);
+              img.addEventListener("error", onError);
+            });
+          })
+        );
+
+        window.scrollTo(0, 0);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      });
 
       await page.waitForTimeout(1000);
 
