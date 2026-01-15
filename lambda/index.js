@@ -291,16 +291,51 @@ async function handleCrawl(job) {
 
     const lambdaUrl = job.config?.lambdaUrl || process.env.LAMBDA_FUNCTION_URL;
     if (lambdaUrl) {
-      fetch(lambdaUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: job.id, action: 'crawl' }),
-      }).catch((error) => {
-        console.error('[Jobs] Lambda 재호출 실패:', error);
-      });
-      console.log(`[Lambda] 다음 배치 재호출 요청 완료: ${job.id}`);
+      try {
+        const response = await fetch(lambdaUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobId: job.id, action: 'crawl' }),
+        });
+        const responseText = await response.text().catch(() => '');
+        if (!response.ok) {
+          throw new Error(`status=${response.status} body=${responseText}`);
+        }
+        console.log(`[Lambda] 다음 배치 재호출 요청 완료: ${job.id}, status=${response.status}`);
+      } catch (error) {
+        console.error('[Lambda] 다음 배치 재호출 실패:', error);
+        await updateJobStatus(job.id, {
+          status: 'failed',
+          error: `Lambda self-invocation failed: ${error.message}`,
+          completed_at: new Date().toISOString(),
+        });
+        return {
+          statusCode: 500,
+          body: JSON.stringify({
+            success: false,
+            jobId: job.id,
+            action: 'crawl',
+            message: `Lambda self-invocation failed: ${error.message}`,
+          }),
+        };
+      }
     } else {
-      console.error('[Lambda] 다음 배치 재호출 실패: lambdaUrl 없음');
+      const errorMessage = 'Lambda function URL is not configured for self-invocation.';
+      console.error(`[Lambda] 다음 배치 재호출 실패: ${errorMessage}`);
+      await updateJobStatus(job.id, {
+        status: 'failed',
+        error: errorMessage,
+        completed_at: new Date().toISOString(),
+      });
+      return {
+        statusCode: 500,
+        body: JSON.stringify({
+          success: false,
+          jobId: job.id,
+          action: 'crawl',
+          message: errorMessage,
+        }),
+      };
     }
 
     return {
@@ -680,13 +715,13 @@ exports.handler = async (event) => {
 
     // action에 따라 처리
     if (action === 'crawl') {
-      // 크롤링은 pending 상태에서만 가능
-      if (job.status !== 'pending') {
+      // 크롤링은 pending 또는 crawling 상태에서 가능 (배치 이어가기)
+      if (!['pending', 'crawling'].includes(job.status)) {
         return {
           statusCode: 400,
           body: JSON.stringify({
             success: false,
-            error: `Job is already ${job.status}. Crawling requires pending status.`,
+            error: `Job is already ${job.status}. Crawling requires pending or crawling status.`,
           }),
         };
       }

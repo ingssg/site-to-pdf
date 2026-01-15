@@ -421,7 +421,7 @@ class WebCrawler {
         const request = route.request();
         const resourceType = request.resourceType();
         const requestUrl = request.url();
-        const blockedResourceTypes = new Set(["media", "font"]);
+        const blockedResourceTypes = new Set(["media"]);
         const blockedUrlPatterns = [
           /doubleclick\.net/i,
           /googletagmanager\.com/i,
@@ -448,6 +448,15 @@ class WebCrawler {
       });
 
       await page.waitForTimeout(500);
+      await page.evaluate(async () => {
+        if (document.fonts && document.fonts.ready) {
+          try {
+            await document.fonts.ready;
+          } catch {
+            // 폰트 로딩 실패 시에도 크롤링 진행
+          }
+        }
+      });
 
       // 브라우저/페이지 연결 상태 확인
       if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
@@ -606,7 +615,7 @@ class WebCrawler {
       const screenshot = await page.screenshot({
         fullPage: false,
         type: "jpeg",
-        quality: 50,
+        quality: 70,
       });
 
       await page.evaluate(async () => {
