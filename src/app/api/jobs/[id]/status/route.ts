@@ -26,10 +26,10 @@ export async function GET(
       );
     }
 
-    // Supabase에서 작업 상태 조회
+    // Supabase에서 작업 상태 조회 (큰 payload 제외)
     const { data: job, error } = await supabase
       .from('jobs')
-      .select('*')
+      .select('id,status,progress,error,created_at,updated_at,completed_at')
       .eq('id', jobId)
       .single();
 
@@ -50,6 +50,21 @@ export async function GET(
       throw new Error(`작업 상태 조회 실패: ${error.message}`);
     }
 
+    let result = null;
+    if (job.status === 'crawl_completed' || job.status === 'completed') {
+      const { data: resultRow, error: resultError } = await supabase
+        .from('jobs')
+        .select('result')
+        .eq('id', jobId)
+        .single();
+
+      if (resultError) {
+        console.error('[Jobs] 결과 조회 에러:', resultError);
+      } else {
+        result = resultRow?.result ?? null;
+      }
+    }
+
     // 작업 상태 반환
     return NextResponse.json({
       success: true,
@@ -57,7 +72,7 @@ export async function GET(
         jobId: job.id,
         status: job.status,
         progress: job.progress,
-        result: job.result,
+        result,
         error: job.error,
         createdAt: job.created_at,
         updatedAt: job.updated_at,
