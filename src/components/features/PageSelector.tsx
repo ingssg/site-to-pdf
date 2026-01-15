@@ -217,7 +217,26 @@ export default function PageSelector({
           throw new Error(errorData.error?.userMessage || 'PDF 생성 트리거 실패');
         }
 
-        // 2. 폴링 함수 정의
+        // 2. 폴링 함수 정의 (백오프 적용)
+        const backoffSteps = [2000, 4000, 6000, 8000];
+        let backoffIndex = 0;
+        let lastPercentage = -1;
+        let lastStatus: string | null = null;
+        let pollTimer: ReturnType<typeof setTimeout> | null = null;
+        let isPolling = true;
+
+        const resetBackoff = () => {
+          backoffIndex = 0;
+        };
+
+        const scheduleNext = () => {
+          if (!isPolling) return;
+          if (pollTimer) {
+            clearTimeout(pollTimer);
+          }
+          pollTimer = setTimeout(pollStatus, backoffSteps[backoffIndex]);
+        };
+
         const pollStatus = async () => {
           try {
             const statusResponse = await fetch(`/api/jobs/${jobId}/status`);
@@ -228,6 +247,11 @@ export default function PageSelector({
             }
 
             const { status, progress: jobProgress, result, error: jobError } = statusData.data;
+            const progressPercentage =
+              typeof jobProgress?.percentage === 'number' ? jobProgress.percentage : null;
+            const statusChanged = status && status !== lastStatus;
+            const progressIncreased =
+              progressPercentage !== null && progressPercentage > lastPercentage;
 
             // 디버깅: 상태 확인
             console.log('[PageSelector] 상태 확인:', { status, hasResult: !!result, result, jobProgress });
@@ -247,9 +271,18 @@ export default function PageSelector({
               
               if (!result) {
                 console.error('[PageSelector] 완료되었지만 result가 없습니다');
-                clearInterval(pollInterval);
+                isPolling = false;
+                if (pollTimer) {
+                  clearTimeout(pollTimer);
+                  pollTimer = null;
+                }
                 setGenerating(false);
-                setError(getErrorInfo(ErrorCode.UNKNOWN_ERROR, 'PDF 생성은 완료되었지만 결과를 가져올 수 없습니다.'));
+                setError(
+                  getErrorInfo(
+                    ErrorCode.UNKNOWN_ERROR,
+                    'PDF 생성은 완료되었지만 결과를 가져올 수 없습니다.'
+                  )
+                );
                 return;
               }
 
@@ -258,7 +291,11 @@ export default function PageSelector({
               console.log('[PageSelector] resultData:', resultData);
               console.log('[PageSelector] pdfUrl:', resultData.pdfUrl, 'zipUrl:', resultData.zipUrl);
 
-              clearInterval(pollInterval);
+              isPolling = false;
+              if (pollTimer) {
+                clearTimeout(pollTimer);
+                pollTimer = null;
+              }
               setProgress(null);
               setGenerating(false);
               setCompleted(true);
@@ -287,15 +324,39 @@ export default function PageSelector({
               };
               console.log('[PageSelector] pdfResult 생성 완료:', pdfResult);
               setPdfResult(pdfResult);
+              return;
             }
 
             // 실패 처리
             if (status === 'failed') {
-              clearInterval(pollInterval);
+              isPolling = false;
+              if (pollTimer) {
+                clearTimeout(pollTimer);
+                pollTimer = null;
+              }
               throw new Error(jobError || '작업 실패');
             }
+
+            // 백오프 업데이트
+            if (progressIncreased || statusChanged) {
+              resetBackoff();
+            } else {
+              backoffIndex = Math.min(backoffIndex + 1, backoffSteps.length - 1);
+            }
+            if (progressPercentage !== null) {
+              lastPercentage = progressPercentage;
+            }
+            if (status) {
+              lastStatus = status;
+            }
+
+            scheduleNext();
           } catch (err) {
-            clearInterval(pollInterval);
+            isPolling = false;
+            if (pollTimer) {
+              clearTimeout(pollTimer);
+              pollTimer = null;
+            }
             const errorMessage = err instanceof Error ? err.message : '상태 확인 실패';
             const errorData = getErrorInfo(inferErrorCode(errorMessage), errorMessage);
             setError(errorData);
@@ -303,9 +364,8 @@ export default function PageSelector({
           }
         };
 
-        // Lambda 이전 버전과 동일: 즉시 첫 폴링 실행 후 2초마다 반복
-        pollStatus(); // 즉시 실행
-        const pollInterval = setInterval(pollStatus, 2000); // 2초마다 반복
+        // 즉시 첫 폴링 실행, 이후 백오프 적용
+        pollStatus();
 
         // UI는 백엔드 상태에 따라 갱신되며, 클라이언트 임의 타임아웃은 두지 않음
 

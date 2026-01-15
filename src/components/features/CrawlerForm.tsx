@@ -104,7 +104,26 @@ export default function CrawlerForm({
       console.log(`[Frontend] 작업 등록 완료: ${jobId}`);
       setCurrentJobId(jobId);
 
-      // 2. 폴링 함수 정의
+      // 2. 폴링 함수 정의 (백오프 적용)
+      const backoffSteps = [2000, 4000, 6000, 8000];
+      let backoffIndex = 0;
+      let lastPercentage = -1;
+      let lastStatus: string | null = null;
+      let pollTimer: ReturnType<typeof setTimeout> | null = null;
+      let isPolling = true;
+
+      const resetBackoff = () => {
+        backoffIndex = 0;
+      };
+
+      const scheduleNext = () => {
+        if (!isPolling) return;
+        if (pollTimer) {
+          clearTimeout(pollTimer);
+        }
+        pollTimer = setTimeout(pollStatus, backoffSteps[backoffIndex]);
+      };
+
       const pollStatus = async () => {
         try {
           const statusResponse = await fetch(`/api/jobs/${jobId}/status`);
@@ -115,6 +134,11 @@ export default function CrawlerForm({
           }
 
           const { status, progress: jobProgress, result, error: jobError } = statusData.data;
+          const progressPercentage =
+            typeof jobProgress?.percentage === 'number' ? jobProgress.percentage : null;
+          const statusChanged = status && status !== lastStatus;
+          const progressIncreased =
+            progressPercentage !== null && progressPercentage > lastPercentage;
 
           // 진행률 업데이트 (jobProgress가 있으면 업데이트, 없으면 기존 progress 유지)
           if (jobProgress) {
@@ -129,9 +153,10 @@ export default function CrawlerForm({
 
           // 크롤링 완료 처리 (Step 1 완료 → Step 2 페이지 선택으로 이동)
           if (status === "crawl_completed" && result) {
-            if (pollInterval) {
-              clearInterval(pollInterval);
-              pollInterval = null;
+            isPolling = false;
+            if (pollTimer) {
+              clearTimeout(pollTimer);
+              pollTimer = null;
             }
             setProgress(null);
             setLoading(false);
@@ -169,13 +194,15 @@ export default function CrawlerForm({
             };
             setCrawlResult(crawlResult);
             // pdfResult는 아직 없음 - PageSelector에서 PDF 생성 후 설정됨
+            return;
           }
 
           // PDF 생성 완료 처리 (Step 3 완료)
           if (status === "completed" && result) {
-            if (pollInterval) {
-              clearInterval(pollInterval);
-              pollInterval = null;
+            isPolling = false;
+            if (pollTimer) {
+              clearTimeout(pollTimer);
+              pollTimer = null;
             }
             setProgress(null);
             setLoading(false);
@@ -204,21 +231,39 @@ export default function CrawlerForm({
               },
             };
             setPdfResult(pdfResult);
+            return;
           }
 
           // 실패 처리
           if (status === "failed") {
-            if (pollInterval) {
-              clearInterval(pollInterval);
-              pollInterval = null;
+            isPolling = false;
+            if (pollTimer) {
+              clearTimeout(pollTimer);
+              pollTimer = null;
             }
             setProgress(null);
             throw new Error(jobError || "작업 실패");
           }
+
+          // 백오프 업데이트
+          if (progressIncreased || statusChanged) {
+            resetBackoff();
+          } else {
+            backoffIndex = Math.min(backoffIndex + 1, backoffSteps.length - 1);
+          }
+          if (progressPercentage !== null) {
+            lastPercentage = progressPercentage;
+          }
+          if (status) {
+            lastStatus = status;
+          }
+
+          scheduleNext();
         } catch (err) {
-          if (pollInterval) {
-            clearInterval(pollInterval);
-            pollInterval = null;
+          isPolling = false;
+          if (pollTimer) {
+            clearTimeout(pollTimer);
+            pollTimer = null;
           }
           setProgress(null);
           const errorMessage = err instanceof Error ? err.message : "상태 확인 실패";
@@ -227,9 +272,8 @@ export default function CrawlerForm({
         }
       };
 
-      // Lambda 이전 버전과 동일: 즉시 첫 폴링 실행 후 2초마다 반복
-      pollStatus(); // 즉시 실행
-      let pollInterval: NodeJS.Timeout | null = setInterval(pollStatus, 2000); // 2초마다 반복
+      // 즉시 첫 폴링 실행, 이후 백오프 적용
+      pollStatus();
 
       // UI는 백엔드 상태에 따라 갱신되며, 클라이언트 임의 타임아웃은 두지 않음
 
