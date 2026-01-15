@@ -21,7 +21,21 @@ export default function CrawlingProgressModal({
   onClose,
 }: CrawlingProgressModalProps) {
   const [showGuide, setShowGuide] = useState(false);
-  const percentage = progress?.percentage || 0;
+  const [maxPercentage, setMaxPercentage] = useState(0);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setMaxPercentage(0);
+      return;
+    }
+    if (!progress) return;
+    const nextValue = Number.isFinite(progress.percentage)
+      ? progress.percentage
+      : 0;
+    setMaxPercentage((prev) => Math.max(prev, nextValue));
+  }, [isOpen, progress?.percentage]);
+
+  const percentage = maxPercentage;
 
   // URL에서 경로만 추출
   const getUrlPath = (url: string | undefined): string => {

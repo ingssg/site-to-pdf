@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Modal from "@/components/ui/modal";
 
 interface PDFGenerationProgressModalProps {
@@ -17,17 +17,12 @@ export default function PDFGenerationProgressModal({
   progress,
   onClose,
 }: PDFGenerationProgressModalProps) {
-  const startTimeRef = useRef<number | null>(null);
   const [pdfProgressValue, setPdfProgressValue] = useState<number>(0);
   const [aiProgressValue, setAiProgressValue] = useState<number>(0);
 
   // 모달이 열릴 때 시작 시간 기록
   useEffect(() => {
-    if (isOpen && !startTimeRef.current) {
-      startTimeRef.current = Date.now();
-    }
     if (!isOpen) {
-      startTimeRef.current = null;
       setPdfProgressValue(0);
       setAiProgressValue(0);
     }
@@ -48,7 +43,11 @@ export default function PDFGenerationProgressModal({
 
     if (message.includes("요약") || message.includes("AI")) {
       setAiProgressValue((prev) => Math.max(prev, percentage));
+      return;
     }
+
+    // 분류되지 않은 메시지는 PDF 진행률로 취급
+    setPdfProgressValue((prev) => Math.max(prev, percentage));
   }, [isOpen, progress?.message, progress?.percentage]);
 
   const isAIGenerating =
