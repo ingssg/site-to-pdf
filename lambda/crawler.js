@@ -252,6 +252,23 @@ class WebCrawler {
 
     let page = null;
     let context = null;
+    const cleanupContext = async () => {
+      if (page) {
+        const index = this.openPages.indexOf(page);
+        if (index > -1) {
+          this.openPages.splice(index, 1);
+        }
+        page = null;
+      }
+      if (context) {
+        try {
+          await context.close();
+        } catch (error) {
+          console.warn("[Crawler] 컨텍스트 닫기 중 에러:", error);
+        }
+        context = null;
+      }
+    };
     try {
       // 브라우저 연결 상태 확인
       if (!this.browser || !this.browser.isConnected()) {
@@ -610,7 +627,7 @@ class WebCrawler {
         anchors.map((a) => a.href)
       );
 
-      // 컨텍스트는 finally에서 정리 (페이지 누적 방지)
+      // 컨텍스트는 링크 추출 이후 즉시 정리 (페이지 누적 방지)
 
       const sameDomainLinks = [...new Set(links)].filter((link) => {
         try {
@@ -623,6 +640,8 @@ class WebCrawler {
           return false;
         }
       });
+
+      await cleanupContext();
 
       console.log(
         `[Crawler] Found ${links.length} links on ${url} (${sameDomainLinks.length} same domain)`
@@ -646,19 +665,7 @@ class WebCrawler {
     } catch (error) {
       console.error(`[Crawler] Failed to crawl ${url}:`, error);
     } finally {
-      if (page) {
-        const index = this.openPages.indexOf(page);
-        if (index > -1) {
-          this.openPages.splice(index, 1);
-        }
-      }
-      if (context) {
-        try {
-          await context.close();
-        } catch (error) {
-          console.warn("[Crawler] 컨텍스트 닫기 중 에러:", error);
-        }
-      }
+      await cleanupContext();
     }
   }
 
