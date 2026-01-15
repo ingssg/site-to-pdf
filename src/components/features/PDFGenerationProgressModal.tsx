@@ -18,7 +18,8 @@ export default function PDFGenerationProgressModal({
   onClose,
 }: PDFGenerationProgressModalProps) {
   const startTimeRef = useRef<number | null>(null);
-  const [estimatedTime, setEstimatedTime] = useState<number>(30);
+  const [pdfProgressValue, setPdfProgressValue] = useState<number>(0);
+  const [aiProgressValue, setAiProgressValue] = useState<number>(0);
 
   // 모달이 열릴 때 시작 시간 기록
   useEffect(() => {
@@ -27,51 +28,31 @@ export default function PDFGenerationProgressModal({
     }
     if (!isOpen) {
       startTimeRef.current = null;
-      setEstimatedTime(30);
+      setPdfProgressValue(0);
+      setAiProgressValue(0);
     }
   }, [isOpen]);
 
-  // PDF 생성과 AI 요약 진행률 분리
-  const pdfProgress = progress?.message.includes("PDF") 
-    ? progress.percentage 
-    : progress?.message.includes("요약") || progress?.message.includes("AI")
-    ? 0
-    : progress?.percentage || 0;
-  
-  const aiProgress = progress?.message.includes("요약") || progress?.message.includes("AI")
-    ? progress.percentage
-    : progress?.message.includes("PDF")
-    ? 100
-    : 0;
-
-  const isAIGenerating = progress?.message.includes("요약") || progress?.message.includes("AI");
-
-  // 실제 경과 시간 기반 예상 남은 시간 계산
   useEffect(() => {
-    if (!isOpen || !startTimeRef.current || !progress) return;
+    if (!isOpen || !progress) return;
 
-    const currentPercentage = progress.percentage;
-    if (currentPercentage <= 0) {
-      setEstimatedTime(30);
+    const message = progress.message || "";
+    const percentage = Number.isFinite(progress.percentage)
+      ? progress.percentage
+      : 0;
+
+    if (message.includes("PDF")) {
+      setPdfProgressValue((prev) => Math.max(prev, percentage));
       return;
     }
 
-    // 실제 경과 시간 계산
-    const elapsedTime = (Date.now() - startTimeRef.current) / 1000; // 초 단위
-    
-    // 진행률 기반 선형 보간으로 전체 예상 시간 계산
-    // elapsedTime / currentPercentage = totalTime / 100
-    // totalTime = (elapsedTime / currentPercentage) * 100
-    const estimatedTotalTime = (elapsedTime / currentPercentage) * 100;
-    
-    // 남은 시간 = 전체 예상 시간 - 경과 시간
-    const remainingTime = estimatedTotalTime - elapsedTime;
-    
-    // 최소 3초, 최대 120초로 제한 (너무 작거나 큰 값 방지)
-    const clampedTime = Math.max(3, Math.min(120, Math.ceil(remainingTime)));
-    
-    setEstimatedTime(clampedTime);
-  }, [isOpen, progress?.percentage]);
+    if (message.includes("요약") || message.includes("AI")) {
+      setAiProgressValue((prev) => Math.max(prev, percentage));
+    }
+  }, [isOpen, progress?.message, progress?.percentage]);
+
+  const isAIGenerating =
+    progress?.message.includes("요약") || progress?.message.includes("AI");
 
   return (
     <Modal isOpen={isOpen} onClose={onClose || (() => {})} showCloseButton={false}>
@@ -120,13 +101,13 @@ export default function PDFGenerationProgressModal({
                 PDF 컴파일
               </div>
               <span className="text-primary font-bold tabular-nums text-xs sm:text-sm">
-                {pdfProgress}%
+                {pdfProgressValue}%
               </span>
             </div>
             <div className="h-1.5 sm:h-2 w-full bg-[#f6f6f8] dark:bg-gray-700 rounded-full overflow-hidden">
               <div
                 className="h-full bg-primary rounded-full shadow-[0_0_10px_rgba(19,55,236,0.5)] transition-all duration-300"
-                style={{ width: `${pdfProgress}%` }}
+                style={{ width: `${pdfProgressValue}%` }}
               ></div>
             </div>
             <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 font-medium pl-5 sm:pl-7">
@@ -147,7 +128,7 @@ export default function PDFGenerationProgressModal({
                 <div className="h-3 w-3 sm:h-4 sm:w-4 border-2 border-slate-200 dark:border-slate-600 border-t-primary rounded-full animate-spin"></div>
               ) : (
                 <span className="text-primary font-bold tabular-nums text-xs sm:text-sm">
-                  {aiProgress}%
+                  {aiProgressValue}%
                 </span>
               )}
             </div>
@@ -163,7 +144,7 @@ export default function PDFGenerationProgressModal({
               ) : (
                 <div
                   className="h-full bg-primary rounded-full shadow-[0_0_10px_rgba(19,55,236,0.5)] transition-all duration-300"
-                  style={{ width: `${aiProgress}%` }}
+                  style={{ width: `${aiProgressValue}%` }}
                 ></div>
               )}
             </div>
@@ -176,15 +157,6 @@ export default function PDFGenerationProgressModal({
 
         {/* Spacer */}
         <div className="h-4 sm:h-6 md:h-8"></div>
-
-        {/* Footer Status */}
-        <div className="bg-[#f6f6f8] dark:bg-[#1a1d2d] rounded-lg sm:rounded-xl p-2 sm:p-3 flex items-center justify-center gap-1.5 sm:gap-2 w-full">
-          <span className="material-symbols-outlined text-slate-400 text-xs sm:text-sm">timer</span>
-          <p className="text-slate-500 dark:text-slate-400 text-[10px] sm:text-xs font-semibold">
-            예상 남은 시간:{" "}
-            <span className="text-slate-800 dark:text-slate-200">~{estimatedTime}초</span>
-          </p>
-        </div>
       </div>
     </Modal>
   );
