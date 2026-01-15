@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
     }
 
     // 3. Lambda 워커 비동기 호출 - 크롤링만 수행 (action: 'crawl')
-    const lambdaUrl = process.env.LAMBDA_FUNCTION_URL;
     if (lambdaUrl) {
       fetch(lambdaUrl, {
         method: 'POST',
