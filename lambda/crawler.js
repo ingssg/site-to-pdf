@@ -228,7 +228,7 @@ class WebCrawler {
   }
 
   async crawlQueue(startUrl, crawlState) {
-    const concurrency = Math.max(1, this.config.concurrentPages || 3);
+    const concurrency = Math.max(1, this.config.concurrentPages || 2);
     if (crawlState?.visitedUrls) {
       this.visitedUrls = new Set(crawlState.visitedUrls);
     }

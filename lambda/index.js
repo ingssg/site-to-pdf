@@ -100,14 +100,15 @@ async function uploadToStorage(bucket, filePath, fileBuffer, contentType) {
 }
 
 function computeCrawlPlan(totalPages) {
-  if (totalPages <= 80) {
+  const baseBatch = 60;
+  if (totalPages <= baseBatch) {
     return [totalPages];
   }
-  if (totalPages <= 160) {
+  if (totalPages <= baseBatch * 2) {
     const first = Math.ceil(totalPages / 2);
     return [first, totalPages - first];
   }
-  if (totalPages <= 240) {
+  if (totalPages <= baseBatch * 3) {
     const first = Math.ceil(totalPages * 0.4);
     const second = Math.ceil(totalPages * 0.4);
     const remaining = totalPages - first - second;
@@ -116,7 +117,7 @@ function computeCrawlPlan(totalPages) {
   const plan = [];
   let remaining = totalPages;
   while (remaining > 0) {
-    const batch = Math.min(100, remaining);
+    const batch = Math.min(baseBatch, remaining);
     plan.push(batch);
     remaining -= batch;
   }
