@@ -99,6 +99,15 @@ async function uploadToStorage(bucket, filePath, fileBuffer, contentType) {
   return urlData.publicUrl;
 }
 
+async function fetchBufferFromUrl(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`파일 다운로드 실패: ${response.status}`);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
 /**
  * Step 1: 크롤링만 수행
  */
@@ -142,17 +151,50 @@ async function handleCrawl(job) {
 
   const crawlResult = await crawler.crawl();
 
-  // 크롤링 결과 저장 (스크린샷은 base64로 변환)
-  const pagesForStorage = crawlResult.pages.map((page) => ({
-    url: page.url,
-    title: page.title,
-    content: page.content || '',
-    depth: page.depth,
-    pageType: page.pageType,
-    screenshot: page.screenshot ? page.screenshot.toString('base64') : null,
-    fullPageScreenshot: page.fullPageScreenshot ? page.fullPageScreenshot.toString('base64') : null,
-    timestamp: page.timestamp,
-  }));
+  // 크롤링 결과 저장 (스크린샷은 Storage에 업로드하고 URL만 저장)
+  const pagesForStorage = await Promise.all(
+    crawlResult.pages.map(async (page, index) => {
+      let screenshotUrl = null;
+      let fullPageScreenshotUrl = null;
+
+      try {
+        if (page.screenshot) {
+          screenshotUrl = await uploadToStorage(
+            'job-results',
+            `${job.id}/screenshots/viewport_${index + 1}.jpg`,
+            page.screenshot,
+            'image/jpeg'
+          );
+        }
+      } catch (error) {
+        console.warn('[Lambda] 스크린샷 업로드 실패:', error);
+      }
+
+      try {
+        if (page.fullPageScreenshot) {
+          fullPageScreenshotUrl = await uploadToStorage(
+            'job-results',
+            `${job.id}/screenshots/full_${index + 1}.jpg`,
+            page.fullPageScreenshot,
+            'image/jpeg'
+          );
+        }
+      } catch (error) {
+        console.warn('[Lambda] 전체 스크린샷 업로드 실패:', error);
+      }
+
+      return {
+        url: page.url,
+        title: page.title,
+        content: page.content || '',
+        depth: page.depth,
+        pageType: page.pageType,
+        screenshotUrl,
+        fullPageScreenshotUrl,
+        timestamp: page.timestamp,
+      };
+    })
+  );
 
   // 크롤링 완료 - 페이지 선택 대기 상태로 변경
   await updateJobStatus(job.id, {
@@ -221,13 +263,40 @@ async function handleGeneratePDF(job) {
     throw new Error('처리할 페이지가 없습니다.');
   }
 
-  // base64 스크린샷을 Buffer로 복원
-  const pagesWithBuffers = pagesToProcess.map((page) => ({
-    ...page,
-    screenshot: page.screenshot ? Buffer.from(page.screenshot, 'base64') : null,
-    fullPageScreenshot: page.fullPageScreenshot ? Buffer.from(page.fullPageScreenshot, 'base64') : null,
-    timestamp: page.timestamp ? new Date(page.timestamp) : new Date(),
-  }));
+  // 스크린샷 복원 (Storage URL 또는 base64)
+  const pagesWithBuffers = await Promise.all(
+    pagesToProcess.map(async (page) => {
+      let screenshotBuffer = null;
+      let fullPageScreenshotBuffer = null;
+
+      try {
+        if (page.screenshot) {
+          screenshotBuffer = Buffer.from(page.screenshot, 'base64');
+        } else if (page.screenshotUrl) {
+          screenshotBuffer = await fetchBufferFromUrl(page.screenshotUrl);
+        }
+      } catch (error) {
+        console.warn('[Lambda] 스크린샷 다운로드 실패:', error);
+      }
+
+      try {
+        if (page.fullPageScreenshot) {
+          fullPageScreenshotBuffer = Buffer.from(page.fullPageScreenshot, 'base64');
+        } else if (page.fullPageScreenshotUrl) {
+          fullPageScreenshotBuffer = await fetchBufferFromUrl(page.fullPageScreenshotUrl);
+        }
+      } catch (error) {
+        console.warn('[Lambda] 전체 스크린샷 다운로드 실패:', error);
+      }
+
+      return {
+        ...page,
+        screenshot: screenshotBuffer,
+        fullPageScreenshot: fullPageScreenshotBuffer,
+        timestamp: page.timestamp ? new Date(page.timestamp) : new Date(),
+      };
+    })
+  );
 
   // 작업 상태 업데이트
   await updateJobStatus(job.id, { status: 'summarizing' });
