@@ -231,15 +231,7 @@ export default function CrawlerForm({
       pollStatus(); // 즉시 실행
       let pollInterval: NodeJS.Timeout | null = setInterval(pollStatus, 2000); // 2초마다 반복
 
-      // Lambda 15분 타임아웃을 넘기지 않도록 15분 후 강제 종료
-      setTimeout(() => {
-        if (pollInterval) {
-          clearInterval(pollInterval);
-          pollInterval = null;
-          setLoading(false);
-          setError(getErrorInfo(inferErrorCode("작업 시간이 초과되었습니다."), "작업 시간이 초과되었습니다."));
-        }
-      }, 15 * 60 * 1000);
+      // UI는 백엔드 상태에 따라 갱신되며, 클라이언트 임의 타임아웃은 두지 않음
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "알 수 없는 에러가 발생했습니다";

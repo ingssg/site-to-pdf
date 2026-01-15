@@ -307,14 +307,7 @@ export default function PageSelector({
         pollStatus(); // 즉시 실행
         const pollInterval = setInterval(pollStatus, 2000); // 2초마다 반복
 
-        // 15분 타임아웃
-        setTimeout(() => {
-          clearInterval(pollInterval);
-          if (generating) {
-            setGenerating(false);
-            setError(getErrorInfo(inferErrorCode('작업 시간이 초과되었습니다.'), '작업 시간이 초과되었습니다.'));
-          }
-        }, 15 * 60 * 1000);
+        // UI는 백엔드 상태에 따라 갱신되며, 클라이언트 임의 타임아웃은 두지 않음
 
         return;
       }
