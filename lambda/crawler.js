@@ -164,6 +164,7 @@ class WebCrawler {
     this.config = config;
     this.onProgress = onProgress;
     this.browser = null;
+    this.browserDisconnected = false;
     this.visitedUrls = new Set();
     this.crawledPages = [];
     this.skippedUrls = new Set();
@@ -199,10 +200,21 @@ class WebCrawler {
       });
 
       this.browser.on("disconnected", () => {
+        this.browserDisconnected = true;
         console.warn("[Crawler] 브라우저 연결 끊김");
       });
 
-      const nextState = await this.crawlQueue(this.config.url, crawlState);
+      let nextState = null;
+      try {
+        nextState = await this.crawlQueue(this.config.url, crawlState);
+      } catch (error) {
+        console.error("[Crawler] 큐 처리 중 에러:", error);
+        nextState = {
+          queue: [],
+          visitedUrls: Array.from(this.visitedUrls),
+          skippedUrls: Array.from(this.skippedUrls),
+        };
+      }
 
       const endTime = new Date();
 
@@ -270,6 +282,10 @@ class WebCrawler {
       (queue.length > 0 || inFlight.size > 0) &&
       this.crawledPages.length < this.config.maxPages
     ) {
+      if (this.browserDisconnected || !this.browser || !this.browser.isConnected()) {
+        console.warn("[Crawler] 브라우저 연결 끊김 감지, 큐 처리 중단");
+        break;
+      }
       while (
         queue.length > 0 &&
         inFlight.size < concurrency &&
@@ -308,7 +324,7 @@ class WebCrawler {
   async crawlPage(url, depth) {
     const normalizedUrl = normalizeUrl(url);
 
-    if (!this.browser || !this.browser.isConnected()) {
+    if (this.browserDisconnected || !this.browser || !this.browser.isConnected()) {
       return [];
     }
 
