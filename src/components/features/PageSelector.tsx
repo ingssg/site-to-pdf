@@ -176,6 +176,7 @@ export default function PageSelector({
   };
 
   const handleGeneratePDF = async () => {
+    let shouldFinalize = true;
     if (selectedUrls.size === 0) {
       setError(getErrorInfo(ErrorCode.NO_PAGES_SELECTED));
       return;
@@ -199,6 +200,7 @@ export default function PageSelector({
 
       // Lambda 방식 (jobId가 있는 경우)
       if (jobId) {
+        shouldFinalize = false;
         console.log(`[PageSelector] Lambda PDF 생성 트리거...`);
 
         // 1. PDF 생성 트리거
@@ -390,8 +392,11 @@ export default function PageSelector({
       const errorMessage = err instanceof Error ? err.message : "알 수 없는 에러가 발생했습니다";
       const errorData = getErrorInfo(inferErrorCode(errorMessage), errorMessage);
       setError(errorData);
-    } finally {
       setGenerating(false);
+    } finally {
+      if (shouldFinalize) {
+        setGenerating(false);
+      }
     }
   };
 
@@ -400,7 +405,7 @@ export default function PageSelector({
       {/* 헤더 섹션 */}
       <header className="px-4 sm:px-6 pt-6 sm:pt-8 pb-2 flex flex-col shrink-0 z-20 relative">
         {/* X 버튼 */}
-        {onClose && (
+        {onClose && !generating && (
           <button
             onClick={onClose}
             className="absolute top-2 sm:top-0 right-2 sm:right-0 p-1.5 sm:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200 z-10"
@@ -692,7 +697,7 @@ export default function PageSelector({
         <PDFGenerationProgressModal
           isOpen={true}
           progress={progress}
-          onClose={onClose}
+          onClose={undefined}
         />
       )}
 
