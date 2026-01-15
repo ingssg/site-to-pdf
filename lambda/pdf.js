@@ -4,9 +4,9 @@
  * 절대 간소화하지 않음 - 모든 기능 포함
  */
 
-const chromium = require('@sparticuz/chromium');
-const { chromium: playwright } = require('playwright-core');
-const { PDFDocument } = require('pdf-lib');
+const chromium = require("@sparticuz/chromium");
+const { chromium: playwright } = require("playwright-core");
+const { PDFDocument } = require("pdf-lib");
 
 // HTML 템플릿 (인라인으로 포함 - Lambda는 파일 시스템 접근 제한적)
 const ALL_IN_ONE_TEMPLATE = `<!DOCTYPE html>
@@ -863,15 +863,6 @@ const SCREENSHOT_PDF_TEMPLATE = `<!DOCTYPE html>
       opacity: 0.7;
     }
 
-    .cover-page-number {
-      position: absolute;
-      bottom: 10mm;
-      right: 20mm;
-      font-size: 9px;
-      font-weight: 700;
-      color: rgba(255, 255, 255, 0.8);
-    }
-
     /* Screenshot Page Styles */
     .screenshot-page {
       padding: 15mm 15mm 20mm;
@@ -978,10 +969,7 @@ const SCREENSHOT_PDF_TEMPLATE = `<!DOCTYPE html>
         <span>Confidential Evidence Document</span>
       </div>
     </div>
-    <div class="cover-footer">
-      Powered by SiteToPDF | AI-Enhanced Website Archiving
-    </div>
-    <div class="cover-page-number">Page 1</div>
+    <!-- cover footer removed (no page numbering on cover) -->
   </div>
 
   <!-- Screenshot Pages -->
@@ -1001,33 +989,33 @@ class HTMLPDFGenerator {
   getDomainFromUrl(url) {
     try {
       const urlObj = new URL(url);
-      return urlObj.hostname.replace('www.', '');
+      return urlObj.hostname.replace("www.", "");
     } catch {
-      return 'Website';
+      return "Website";
     }
   }
 
   replaceTemplateVars(template, vars) {
     let result = template;
     for (const [key, value] of Object.entries(vars)) {
-      result = result.replace(new RegExp(`{{${key}}}`, 'g'), value);
+      result = result.replace(new RegExp(`{{${key}}}`, "g"), value);
     }
     return result;
   }
 
   formatTimestamp(timestamp) {
-    if (!timestamp) return 'N/A';
+    if (!timestamp) return "N/A";
     try {
       const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
       const year = date.getUTCFullYear();
-      const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(date.getUTCDate()).padStart(2, '0');
-      const hours = String(date.getUTCHours()).padStart(2, '0');
-      const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-      const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+      const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(date.getUTCDate()).padStart(2, "0");
+      const hours = String(date.getUTCHours()).padStart(2, "0");
+      const minutes = String(date.getUTCMinutes()).padStart(2, "0");
+      const seconds = String(date.getUTCSeconds()).padStart(2, "0");
       return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} UTC`;
     } catch {
-      return 'N/A';
+      return "N/A";
     }
   }
 
@@ -1038,26 +1026,26 @@ class HTMLPDFGenerator {
         try {
           await this.browser.close();
         } catch (e) {
-          console.warn('[PDF] 기존 브라우저 정리 중 에러:', e.message);
+          console.warn("[PDF] 기존 브라우저 정리 중 에러:", e.message);
         }
         this.browser = null;
       }
 
       // Lambda 환경용 @sparticuz/chromium 설정
       const executablePath = await chromium.executablePath();
-      console.log('[PDF] Chromium 경로:', executablePath);
+      console.log("[PDF] Chromium 경로:", executablePath);
 
       this.browser = await playwright.launch({
         args: [
           ...chromium.args,
-          '--disable-gpu',
-          '--disable-dev-shm-usage',
-          '--disable-setuid-sandbox',
-          '--no-sandbox',
+          "--disable-gpu",
+          "--disable-dev-shm-usage",
+          "--disable-setuid-sandbox",
+          "--no-sandbox",
         ],
         executablePath: executablePath,
         headless: true,
-        ignoreDefaultArgs: ['--disable-extensions'],
+        ignoreDefaultArgs: ["--disable-extensions"],
       });
     }
   }
@@ -1068,20 +1056,20 @@ class HTMLPDFGenerator {
     const browser = await playwright.launch({
       args: [
         ...chromium.args,
-        '--disable-gpu',
-        '--disable-dev-shm-usage',
-        '--disable-setuid-sandbox',
-        '--no-sandbox',
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--disable-setuid-sandbox",
+        "--no-sandbox",
       ],
       executablePath: executablePath,
       headless: true,
-      ignoreDefaultArgs: ['--disable-extensions'],
+      ignoreDefaultArgs: ["--disable-extensions"],
     });
 
     try {
       const page = await browser.newPage();
 
-      await page.setContent(html, { waitUntil: 'networkidle' });
+      await page.setContent(html, { waitUntil: "networkidle" });
 
       await page.evaluate(() => {
         return document.fonts.ready;
@@ -1090,13 +1078,13 @@ class HTMLPDFGenerator {
       await page.waitForTimeout(1000);
 
       const pdfBuffer = await page.pdf({
-        format: 'A4',
+        format: "A4",
         printBackground: true,
         margin: {
-          top: '0mm',
-          right: '0mm',
-          bottom: '0mm',
-          left: '0mm',
+          top: "0mm",
+          right: "0mm",
+          bottom: "0mm",
+          left: "0mm",
         },
       });
 
@@ -1108,13 +1096,13 @@ class HTMLPDFGenerator {
   }
 
   escapeHtml(text) {
-    if (!text) return '';
+    if (!text) return "";
     const map = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#039;',
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
     };
     return String(text).replace(/[&<>"']/g, (m) => map[m]);
   }
@@ -1124,37 +1112,68 @@ class HTMLPDFGenerator {
       const urlObj = new URL(url);
       const pathname = urlObj.pathname.toLowerCase();
 
-      if (pathname === '/' || pathname === '/index' || pathname === '/home' || pathname === '/index.html') {
-        return { type: 'Homepage', color: '#eff6ff' };
+      if (
+        pathname === "/" ||
+        pathname === "/index" ||
+        pathname === "/home" ||
+        pathname === "/index.html"
+      ) {
+        return { type: "Homepage", color: "#eff6ff" };
       }
 
-      if (pathname.includes('/product') || pathname.includes('/shop') || pathname.includes('/buy') || pathname.includes('/store')) {
-        return { type: 'Product', color: '#f0fdf4' };
+      if (
+        pathname.includes("/product") ||
+        pathname.includes("/shop") ||
+        pathname.includes("/buy") ||
+        pathname.includes("/store")
+      ) {
+        return { type: "Product", color: "#f0fdf4" };
       }
 
-      if (pathname.includes('/contact') || pathname.includes('/support') || pathname.includes('/help')) {
-        return { type: 'Contact', color: '#fef3c7' };
+      if (
+        pathname.includes("/contact") ||
+        pathname.includes("/support") ||
+        pathname.includes("/help")
+      ) {
+        return { type: "Contact", color: "#fef3c7" };
       }
 
-      if (pathname.includes('/about') || pathname.includes('/team') || pathname.includes('/company')) {
-        return { type: 'About', color: '#fce7f3' };
+      if (
+        pathname.includes("/about") ||
+        pathname.includes("/team") ||
+        pathname.includes("/company")
+      ) {
+        return { type: "About", color: "#fce7f3" };
       }
 
-      if (pathname.includes('/blog') || pathname.includes('/news') || pathname.includes('/article') || pathname.includes('/post')) {
-        return { type: 'Blog/News', color: '#f3e8ff' };
+      if (
+        pathname.includes("/blog") ||
+        pathname.includes("/news") ||
+        pathname.includes("/article") ||
+        pathname.includes("/post")
+      ) {
+        return { type: "Blog/News", color: "#f3e8ff" };
       }
 
-      if (pathname.includes('/pricing') || pathname.includes('/plans') || pathname.includes('/price')) {
-        return { type: 'Pricing', color: '#dbeafe' };
+      if (
+        pathname.includes("/pricing") ||
+        pathname.includes("/plans") ||
+        pathname.includes("/price")
+      ) {
+        return { type: "Pricing", color: "#dbeafe" };
       }
 
-      if (pathname.includes('/docs') || pathname.includes('/documentation') || pathname.includes('/guide')) {
-        return { type: 'Documentation', color: '#e0f2fe' };
+      if (
+        pathname.includes("/docs") ||
+        pathname.includes("/documentation") ||
+        pathname.includes("/guide")
+      ) {
+        return { type: "Documentation", color: "#e0f2fe" };
       }
 
-      return { type: 'General', color: '#f1f5f9' };
+      return { type: "General", color: "#f1f5f9" };
     } catch {
-      return { type: 'General', color: '#f1f5f9' };
+      return { type: "General", color: "#f1f5f9" };
     }
   }
 
@@ -1191,7 +1210,7 @@ class HTMLPDFGenerator {
           </div>
         `
       )
-      .join('');
+      .join("");
   }
 
   buildTargetCustomers(aiSummary) {
@@ -1200,12 +1219,18 @@ class HTMLPDFGenerator {
     }
 
     return aiSummary.targetCustomers
-      .map((customer) => `<span class="customer-tag">${this.escapeHtml(customer)}</span>`)
-      .join('');
+      .map(
+        (customer) =>
+          `<span class="customer-tag">${this.escapeHtml(customer)}</span>`
+      )
+      .join("");
   }
 
   buildGrowthOpportunities(aiSummary) {
-    if (!aiSummary?.growthOpportunities || aiSummary.growthOpportunities.length === 0) {
+    if (
+      !aiSummary?.growthOpportunities ||
+      aiSummary.growthOpportunities.length === 0
+    ) {
       return '<p style="color: #64748b; font-size: 12px;">정보 없음</p>';
     }
 
@@ -1220,7 +1245,7 @@ class HTMLPDFGenerator {
           </li>
         `
           )
-          .join('')}
+          .join("")}
       </ul>
     `;
   }
@@ -1237,12 +1262,12 @@ class HTMLPDFGenerator {
           </div>
         `;
       })
-      .join('');
+      .join("");
   }
 
   buildPageSections(pages, domain, generatedDate) {
     if (pages.length === 0) {
-      return '';
+      return "";
     }
 
     let pageNumber = 2;
@@ -1252,10 +1277,11 @@ class HTMLPDFGenerator {
       const page = pages[i];
 
       const screenshotBase64 = page.screenshot
-        ? `data:image/jpeg;base64,${page.screenshot.toString('base64')}`
-        : '';
+        ? `data:image/jpeg;base64,${page.screenshot.toString("base64")}`
+        : "";
 
-      const aiInsight = page.pageSummary || '비즈니스 인사이트를 생성할 수 없습니다.';
+      const aiInsight =
+        page.pageSummary || "비즈니스 인사이트를 생성할 수 없습니다.";
 
       const pageType = this.detectPageType(page.url);
 
@@ -1275,19 +1301,23 @@ class HTMLPDFGenerator {
           </div>
           <article class="page-section-article">
             <div class="page-title-section">
-              <h2>${this.escapeHtml(page.title || 'Untitled')}</h2>
+              <h2>${this.escapeHtml(page.title || "Untitled")}</h2>
               <div class="page-url">${this.escapeHtml(page.url)}</div>
               <div style="font-size: 7px; color: #9ca3af; margin-top: 2px; font-family: monospace;">Captured: ${captureTimestamp}</div>
             </div>
 
             <!-- 스크린샷 -->
             <div class="screenshot-container">
-              <img src="${screenshotBase64}" alt="${this.escapeHtml(page.title || 'Screenshot')}">
+              <img src="${screenshotBase64}" alt="${this.escapeHtml(
+        page.title || "Screenshot"
+      )}">
             </div>
 
             <!-- 페이지 타입 배지 -->
             <div class="page-type-container">
-              <span class="page-type-badge" style="background: ${pageType.color};">${pageType.type}</span>
+              <span class="page-type-badge" style="background: ${
+                pageType.color
+              };">${pageType.type}</span>
             </div>
 
             <!-- AI 비즈니스 인사이트 -->
@@ -1312,7 +1342,7 @@ class HTMLPDFGenerator {
       pageNumber++;
     }
 
-    return sections.join('\n');
+    return sections.join("\n");
   }
 
   async generateScreenshotPDF(pages, domain, generatedDate, crawlMode) {
@@ -1334,23 +1364,35 @@ class HTMLPDFGenerator {
         const hasScreenshot = !!page.screenshot;
         const screenshotBuffer = page.fullPageScreenshot || page.screenshot;
         const screenshotBase64 = screenshotBuffer
-          ? `data:image/jpeg;base64,${screenshotBuffer.toString('base64')}`
-          : '';
+          ? `data:image/jpeg;base64,${screenshotBuffer.toString("base64")}`
+          : "";
 
-        console.log(`[스크린샷 PDF] 페이지 ${index + 1}: fullPage=${hasFullPage}, screenshot=${hasScreenshot}, using=${hasFullPage ? 'fullPage' : 'viewport'}`);
+        console.log(
+          `[스크린샷 PDF] 페이지 ${
+            index + 1
+          }: fullPage=${hasFullPage}, screenshot=${hasScreenshot}, using=${
+            hasFullPage ? "fullPage" : "viewport"
+          }`
+        );
 
-        const pageNumber = index + 2;
+        const pageNumber = index + 1;
         const captureTimestamp = this.formatTimestamp(page.timestamp);
 
         return `
           <div class="page screenshot-page">
             <div class="screenshot-header">
-              <div class="screenshot-page-number">Screenshot ${index + 1} of ${filteredPages.length}</div>
-              <h2 class="screenshot-title">${this.escapeHtml(page.title || 'Untitled')}</h2>
+              <div class="screenshot-page-number">Screenshot ${index + 1} of ${
+          filteredPages.length
+        }</div>
+              <h2 class="screenshot-title">${this.escapeHtml(
+                page.title || "Untitled"
+              )}</h2>
               <div class="screenshot-url">${this.escapeHtml(page.url)}</div>
             </div>
             <div class="screenshot-container">
-              <img src="${screenshotBase64}" alt="${this.escapeHtml(page.title || 'Screenshot')}" class="screenshot-image">
+              <img src="${screenshotBase64}" alt="${this.escapeHtml(
+          page.title || "Screenshot"
+        )}" class="screenshot-image">
             </div>
             <div class="screenshot-footer">
               <div class="screenshot-footer-left">
@@ -1361,7 +1403,7 @@ class HTMLPDFGenerator {
           </div>
         `;
       })
-      .join('');
+      .join("");
 
     const html = this.replaceTemplateVars(SCREENSHOT_PDF_TEMPLATE, {
       DOMAIN_NAME: domain,
@@ -1373,32 +1415,50 @@ class HTMLPDFGenerator {
     return await this.htmlToPDF(html);
   }
 
-  async extractIndividualPDFsFromMerged(mergedPdfBuffer, pageCount, pageStructure, creationDate) {
+  async extractIndividualPDFsFromMerged(
+    mergedPdfBuffer,
+    pageCount,
+    pageStructure,
+    creationDate
+  ) {
     const individualPdfs = [];
 
     const sourcePdf = await PDFDocument.load(mergedPdfBuffer);
     const totalPages = sourcePdf.getPageCount();
 
-    const sourceCreationDate = creationDate || sourcePdf.getCreationDate() || new Date();
+    const sourceCreationDate =
+      creationDate || sourcePdf.getCreationDate() || new Date();
 
     console.log(`[PDF] 통합 PDF 총 페이지 수: ${totalPages}`);
     console.log(`[PDF] 페이지 구조 정보 사용:`);
     console.log(`  - 표지: ${pageStructure.coverPages}페이지 (index 0)`);
-    console.log(`  - 목차: ${pageStructure.tocPages}페이지 (index 1~${pageStructure.tocPages})`);
-    console.log(`  - 종합 분석 요약: ${pageStructure.summaryPages}페이지 (index ${pageStructure.summaryPageIndex})`);
-    console.log(`  - 개별 페이지들: ${pageCount}페이지 (index ${pageStructure.individualPagesStartIndex}~)`);
+    console.log(
+      `  - 목차: ${pageStructure.tocPages}페이지 (index 1~${pageStructure.tocPages})`
+    );
+    console.log(
+      `  - 종합 분석 요약: ${pageStructure.summaryPages}페이지 (index ${pageStructure.summaryPageIndex})`
+    );
+    console.log(
+      `  - 개별 페이지들: ${pageCount}페이지 (index ${pageStructure.individualPagesStartIndex}~)`
+    );
 
     if (pageStructure.summaryPageIndex < totalPages) {
       const summaryPdf = await PDFDocument.create();
       summaryPdf.setCreationDate(sourceCreationDate);
       summaryPdf.setModificationDate(sourceCreationDate);
-      const summaryPages = await summaryPdf.copyPages(sourcePdf, [pageStructure.summaryPageIndex]);
+      const summaryPages = await summaryPdf.copyPages(sourcePdf, [
+        pageStructure.summaryPageIndex,
+      ]);
       summaryPages.forEach((page) => summaryPdf.addPage(page));
       const summaryPdfBytes = await summaryPdf.save();
       individualPdfs.push(Buffer.from(summaryPdfBytes));
-      console.log(`[PDF] 전체 요약 PDF 추출: 페이지 ${pageStructure.summaryPageIndex}`);
+      console.log(
+        `[PDF] 전체 요약 PDF 추출: 페이지 ${pageStructure.summaryPageIndex}`
+      );
     } else {
-      console.warn(`[PDF] 종합 분석 요약 페이지 추출 실패: 인덱스 ${pageStructure.summaryPageIndex}가 총 페이지 수 ${totalPages}를 초과`);
+      console.warn(
+        `[PDF] 종합 분석 요약 페이지 추출 실패: 인덱스 ${pageStructure.summaryPageIndex}가 총 페이지 수 ${totalPages}를 초과`
+      );
     }
 
     for (let i = 0; i < pageCount; i++) {
@@ -1414,7 +1474,11 @@ class HTMLPDFGenerator {
         individualPdfs.push(Buffer.from(pagePdfBytes));
         console.log(`[PDF] 페이지 ${i + 1} PDF 추출: 페이지 ${pageIndex}`);
       } else {
-        console.warn(`[PDF] 페이지 ${i + 1} 추출 실패: 인덱스 ${pageIndex}가 총 페이지 수 ${totalPages}를 초과`);
+        console.warn(
+          `[PDF] 페이지 ${
+            i + 1
+          } 추출 실패: 인덱스 ${pageIndex}가 총 페이지 수 ${totalPages}를 초과`
+        );
       }
     }
 
@@ -1425,12 +1489,12 @@ class HTMLPDFGenerator {
     try {
       await this.initBrowser();
 
-      const firstPageUrl = pages[0]?.url || '';
+      const firstPageUrl = pages[0]?.url || "";
       const domain = this.getDomainFromUrl(firstPageUrl);
-      const generatedDate = new Date().toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
+      const generatedDate = new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
       });
       const reportId = `SPD-${Date.now().toString().slice(-8)}`;
 
@@ -1439,7 +1503,11 @@ class HTMLPDFGenerator {
       const tocItems = [];
 
       if (aiSummary) {
-        tocItems.push({ title: '종합 분석 요약', url: 'AI Summary', pageNumber: 1 });
+        tocItems.push({
+          title: "종합 분석 요약",
+          url: "AI Summary",
+          pageNumber: 1,
+        });
       }
 
       let pageNumber = 2;
@@ -1459,17 +1527,21 @@ class HTMLPDFGenerator {
         DOMAIN_NAME: domain,
         REPORT_ID: reportId,
         COMPANY_OVERVIEW: this.escapeHtml(
-          aiSummary?.overview || aiSummary?.oneLineSummary || 'N/A'
+          aiSummary?.overview || aiSummary?.oneLineSummary || "N/A"
         ),
         PROBLEM_SOLVED_ITEMS: this.buildProblemSolvedItems(aiSummary),
         KEY_DIFFERENTIATORS: this.escapeHtml(
-          (aiSummary?.uniqueFeatures || []).join(', ') || 'N/A'
+          (aiSummary?.uniqueFeatures || []).join(", ") || "N/A"
         ),
         PRODUCTS_SERVICES: this.buildProductsServices(aiSummary),
         TARGET_CUSTOMERS: this.buildTargetCustomers(aiSummary),
         GROWTH_OPPORTUNITIES: this.buildGrowthOpportunities(aiSummary),
         TOC_ITEMS: this.buildTocItems(tocItems),
-        PAGE_SECTIONS: this.buildPageSections(pagesWithScreenshots, domain, generatedDate),
+        PAGE_SECTIONS: this.buildPageSections(
+          pagesWithScreenshots,
+          domain,
+          generatedDate
+        ),
       };
 
       const html = this.replaceTemplateVars(ALL_IN_ONE_TEMPLATE, vars);
@@ -1490,7 +1562,10 @@ class HTMLPDFGenerator {
       const sourceCreationDate = sourcePdfForStructure.getCreationDate();
 
       const coverPages = 1;
-      const tocPages = Math.max(1, totalPages - pagesWithScreenshots.length - 2);
+      const tocPages = Math.max(
+        1,
+        totalPages - pagesWithScreenshots.length - 2
+      );
       const summaryPages = 1;
 
       const pageStructure = {
@@ -1502,27 +1577,35 @@ class HTMLPDFGenerator {
       };
 
       console.log(`[PDF] 통합 PDF 생성 완료: ${totalPages}페이지`);
-      console.log(`[PDF] 페이지 구조: 표지(${coverPages}) + 목차(${tocPages}) + 종합분석(${summaryPages}) + 개별페이지(${pagesWithScreenshots.length})`);
-      console.log(`[PDF] 종합 분석 요약 인덱스: ${pageStructure.summaryPageIndex}`);
-      console.log(`[PDF] 개별 페이지 시작 인덱스: ${pageStructure.individualPagesStartIndex}`);
+      console.log(
+        `[PDF] 페이지 구조: 표지(${coverPages}) + 목차(${tocPages}) + 종합분석(${summaryPages}) + 개별페이지(${pagesWithScreenshots.length})`
+      );
+      console.log(
+        `[PDF] 종합 분석 요약 인덱스: ${pageStructure.summaryPageIndex}`
+      );
+      console.log(
+        `[PDF] 개별 페이지 시작 인덱스: ${pageStructure.individualPagesStartIndex}`
+      );
 
-      console.log('[PDF] 스크린샷 PDF 생성 시작...');
+      console.log("[PDF] 스크린샷 PDF 생성 시작...");
       const screenshotPdf = await this.generateScreenshotPDF(
         pages,
         domain,
         generatedDate,
         crawlMode
       );
-      console.log('[PDF] 스크린샷 PDF 생성 완료');
+      console.log("[PDF] 스크린샷 PDF 생성 완료");
 
-      console.log('[PDF] 통합 PDF에서 개별 PDF 추출 시작...');
+      console.log("[PDF] 통합 PDF에서 개별 PDF 추출 시작...");
       const individualPdfs = await this.extractIndividualPDFsFromMerged(
         finalPdfBuffer,
         pagesWithScreenshots.length,
         pageStructure,
         sourceCreationDate
       );
-      console.log(`[PDF] 총 ${individualPdfs.length}개 PDF 추출 완료 (전체요약 1개 + 페이지 ${pagesWithScreenshots.length}개)`);
+      console.log(
+        `[PDF] 총 ${individualPdfs.length}개 PDF 추출 완료 (전체요약 1개 + 페이지 ${pagesWithScreenshots.length}개)`
+      );
 
       return {
         mergedPdf: finalPdfBuffer,
