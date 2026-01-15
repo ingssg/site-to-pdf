@@ -179,15 +179,6 @@ function computeCrawlPlan(totalPages) {
   return plan;
 }
 
-async function fetchBufferFromUrl(url) {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`파일 다운로드 실패: ${response.status}`);
-  }
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
-}
-
 /**
  * Step 1: 크롤링만 수행
  */
@@ -436,7 +427,9 @@ async function handleCrawl(job) {
 async function handleGeneratePDF(job) {
   logDebug(`[Lambda] generate-pdf 시작: ${job.id}`);
   logDebug(
-    `[Lambda] 메모리 시작: ${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`
+    `[Lambda] 메모리 시작: ${Math.round(
+      process.memoryUsage().rss / 1024 / 1024
+    )}MB`
   );
   try {
     await updateProgress(job.id, {
@@ -470,44 +463,19 @@ async function handleGeneratePDF(job) {
     throw new Error("처리할 페이지가 없습니다.");
   }
 
-  // 스크린샷 복원 (Storage URL 또는 base64)
-  const pagesWithBuffers = await Promise.all(
-    pagesToProcess.map(async (page) => {
-      let screenshotBuffer = null;
-      let fullPageScreenshotBuffer = null;
+  const pagesForPdf = pagesToProcess.map((page) => ({
+    ...page,
+    timestamp: page.timestamp ? new Date(page.timestamp) : new Date(),
+  }));
 
-      try {
-        if (page.screenshot) {
-          screenshotBuffer = Buffer.from(page.screenshot, "base64");
-        } else if (page.screenshotUrl) {
-          screenshotBuffer = await fetchBufferFromUrl(page.screenshotUrl);
-        }
-      } catch (error) {
-        console.warn("[Lambda] 스크린샷 다운로드 실패:", error);
-      }
-
-      try {
-        if (page.fullPageScreenshot) {
-          fullPageScreenshotBuffer = Buffer.from(
-            page.fullPageScreenshot,
-            "base64"
-          );
-        } else if (page.fullPageScreenshotUrl) {
-          fullPageScreenshotBuffer = await fetchBufferFromUrl(
-            page.fullPageScreenshotUrl
-          );
-        }
-      } catch (error) {
-        console.warn("[Lambda] 전체 스크린샷 다운로드 실패:", error);
-      }
-
-      return {
-        ...page,
-        screenshot: screenshotBuffer,
-        fullPageScreenshot: fullPageScreenshotBuffer,
-        timestamp: page.timestamp ? new Date(page.timestamp) : new Date(),
-      };
-    })
+  const pagesForAi = pagesForPdf.map(
+    ({
+      screenshot,
+      fullPageScreenshot,
+      screenshotUrl,
+      fullPageScreenshotUrl,
+      ...rest
+    }) => rest
   );
 
   // 작업 상태 업데이트
@@ -525,39 +493,31 @@ async function handleGeneratePDF(job) {
   if (!openai) {
     throw new Error("OpenAI API 키가 설정되지 않았습니다.");
   }
-  const aiSummary = await generateAISummary(
-    pagesWithBuffers,
-    openai,
-    "detailed"
-  );
-  logDebug(
-    `[Lambda] AI 요약 완료: ${job.id} (${pagesWithBuffers.length} pages)`
-  );
+  const aiSummary = await generateAISummary(pagesForAi, openai, "detailed");
+  logDebug(`[Lambda] AI 요약 완료: ${job.id} (${pagesForAi.length} pages)`);
 
   // 개별 페이지 AI 요약 생성
   await updateProgress(job.id, {
     current: 0,
-    total: pagesWithBuffers.length,
+    total: pagesForAi.length,
     message: "개별 페이지 AI 요약 생성 중...",
     percentage: 0,
   });
 
-  for (let i = 0; i < pagesWithBuffers.length; i++) {
-    const page = pagesWithBuffers[i];
+  for (let i = 0; i < pagesForAi.length; i++) {
+    const page = pagesForAi[i];
     try {
-      page.pageSummary = await generatePageSummary(page, openai);
+      pagesForPdf[i].pageSummary = await generatePageSummary(page, openai);
     } catch (error) {
       console.error(`[Lambda] 페이지 요약 생성 실패 (${page.url}):`, error);
-      page.pageSummary = "비즈니스 인사이트를 추출할 수 없습니다.";
+      pagesForPdf[i].pageSummary = "비즈니스 인사이트를 추출할 수 없습니다.";
     }
 
     await updateProgress(job.id, {
       current: i + 1,
-      total: pagesWithBuffers.length,
-      message: `개별 페이지 AI 요약 생성 중... (${i + 1}/${
-        pagesWithBuffers.length
-      })`,
-      percentage: Math.round(((i + 1) / pagesWithBuffers.length) * 100),
+      total: pagesForAi.length,
+      message: `개별 페이지 AI 요약 생성 중... (${i + 1}/${pagesForAi.length})`,
+      percentage: Math.round(((i + 1) / pagesForAi.length) * 100),
     });
   }
 
@@ -570,7 +530,7 @@ async function handleGeneratePDF(job) {
   try {
     logDebug(`[Lambda] PDF 컴파일 시작: ${job.id}`);
     pdfResult = await generator.generatePDFs(
-      pagesWithBuffers,
+      pagesForPdf,
       aiSummary,
       job.config.crawlMode || "smart"
     );
@@ -618,7 +578,7 @@ async function handleGeneratePDF(job) {
 
     // 개별 페이지 PDF
     const pageIndex = index - 1;
-    const page = pagesWithBuffers[pageIndex];
+    const page = pagesForPdf[pageIndex];
     if (!page) {
       return;
     }
@@ -693,7 +653,7 @@ async function handleGeneratePDF(job) {
   const mergedPdfPageCount = pdfResult.totalPages || 0;
 
   // 스크린샷 PDF 개수 (처리된 페이지 수)
-  const screenshotPdfCount = pagesWithBuffers.length;
+  const screenshotPdfCount = pagesForPdf.length;
 
   // 작업 완료
   await updateJobStatus(job.id, {
@@ -704,7 +664,7 @@ async function handleGeneratePDF(job) {
       zipUrl,
       pdfUrl,
       screenshotPdfUrl,
-      processedPages: pagesWithBuffers.length,
+      processedPages: pagesForPdf.length,
       // Lambda 이전 버전과 동일한 형식으로 파일 크기 및 개수 전달
       totalSize: mergedPdfSize,
       totalSizeMB: (mergedPdfSize / 1024 / 1024).toFixed(2),

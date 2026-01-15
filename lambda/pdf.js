@@ -649,6 +649,7 @@ const ALL_IN_ONE_TEMPLATE = `<!DOCTYPE html>
       font-weight: 700;
       color: #9ca3af;
     }
+    {{EXTRA_CSS}}
   </style>
 </head>
 <body>
@@ -955,6 +956,7 @@ const SCREENSHOT_PDF_TEMPLATE = `<!DOCTYPE html>
       font-size: 8px;
       color: #9ca3af;
     }
+    {{EXTRA_CSS}}
   </style>
 </head>
 <body>
@@ -990,6 +992,7 @@ class HTMLPDFGenerator {
   constructor(options = {}) {
     this.options = {
       includeTableOfContents: true,
+      pageChunkSize: 8,
       ...options,
     };
     this.browser = null;
@@ -1010,6 +1013,39 @@ class HTMLPDFGenerator {
       result = result.replace(new RegExp(`{{${key}}}`, "g"), value);
     }
     return result;
+  }
+
+  normalizeImageSrc(value) {
+    if (!value) return "";
+    if (Buffer.isBuffer(value)) {
+      return `data:image/jpeg;base64,${value.toString("base64")}`;
+    }
+    if (typeof value === "string") {
+      if (value.startsWith("data:image")) return value;
+      if (value.startsWith("http://") || value.startsWith("https://")) {
+        return value;
+      }
+      return `data:image/jpeg;base64,${value}`;
+    }
+    return "";
+  }
+
+  getScreenshotSrc(page, preferFullPage) {
+    if (preferFullPage) {
+      return (
+        this.normalizeImageSrc(page.fullPageScreenshotUrl) ||
+        this.normalizeImageSrc(page.fullPageScreenshot) ||
+        this.normalizeImageSrc(page.screenshotUrl) ||
+        this.normalizeImageSrc(page.screenshot)
+      );
+    }
+
+    return (
+      this.normalizeImageSrc(page.screenshotUrl) ||
+      this.normalizeImageSrc(page.screenshot) ||
+      this.normalizeImageSrc(page.fullPageScreenshotUrl) ||
+      this.normalizeImageSrc(page.fullPageScreenshot)
+    );
   }
 
   formatTimestamp(timestamp) {
@@ -1079,8 +1115,19 @@ class HTMLPDFGenerator {
 
       await page.setContent(html, { waitUntil: "networkidle" });
 
-      await page.evaluate(() => {
-        return document.fonts.ready;
+      await page.evaluate(() => document.fonts.ready);
+      await page.evaluate(async () => {
+        const images = Array.from(document.images || []);
+        await Promise.all(
+          images.map((img) =>
+            img.complete
+              ? Promise.resolve()
+              : new Promise((resolve) => {
+                  img.onload = resolve;
+                  img.onerror = resolve;
+                })
+          )
+        );
       });
 
       await page.waitForTimeout(1000);
@@ -1273,20 +1320,18 @@ class HTMLPDFGenerator {
       .join("");
   }
 
-  buildPageSections(pages, domain, generatedDate) {
+  buildPageSections(pages, domain, generatedDate, startingPageNumber = 2) {
     if (pages.length === 0) {
       return "";
     }
 
-    let pageNumber = 2;
+    let pageNumber = startingPageNumber;
     const sections = [];
 
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
 
-      const screenshotBase64 = page.screenshot
-        ? `data:image/jpeg;base64,${page.screenshot.toString("base64")}`
-        : "";
+      const screenshotSrc = this.getScreenshotSrc(page, false);
 
       const aiInsight =
         page.pageSummary || "비즈니스 인사이트를 생성할 수 없습니다.";
@@ -1316,7 +1361,7 @@ class HTMLPDFGenerator {
 
             <!-- 스크린샷 -->
             <div class="screenshot-container">
-              <img src="${screenshotBase64}" alt="${this.escapeHtml(
+              <img src="${screenshotSrc}" alt="${this.escapeHtml(
         page.title || "Screenshot"
       )}">
             </div>
@@ -1353,42 +1398,27 @@ class HTMLPDFGenerator {
     return sections.join("\n");
   }
 
-  async generateScreenshotPDF(pages, domain, generatedDate, crawlMode) {
-    if (pages.length === 0) {
-      return Buffer.alloc(0);
-    }
-
-    const filteredPages = pages;
-
-    if (filteredPages.length === 0) {
-      return Buffer.alloc(0);
-    }
-
-    const screenshotPages = filteredPages
-      .map((page, index) => {
-        const hasFullPage = !!page.fullPageScreenshot;
-        const hasScreenshot = !!page.screenshot;
-        const screenshotBuffer = page.fullPageScreenshot || page.screenshot;
-        const screenshotBase64 = screenshotBuffer
-          ? `data:image/jpeg;base64,${screenshotBuffer.toString("base64")}`
-          : "";
-
+  buildScreenshotPages(pages, startIndex = 0, totalPages = pages.length) {
+    return pages
+      .map((page, offset) => {
+        const index = startIndex + offset;
+        const screenshotSrc = this.getScreenshotSrc(page, true);
         const pageNumber = index + 1;
         const captureTimestamp = this.formatTimestamp(page.timestamp);
 
         return `
           <div class="page screenshot-page">
             <div class="screenshot-header">
-              <div class="screenshot-page-number">Screenshot ${index + 1} of ${
-          filteredPages.length
-        }</div>
+              <div class="screenshot-page-number">Screenshot ${
+                index + 1
+              } of ${totalPages}</div>
               <h2 class="screenshot-title">${this.escapeHtml(
                 page.title || "Untitled"
               )}</h2>
               <div class="screenshot-url">${this.escapeHtml(page.url)}</div>
             </div>
             <div class="screenshot-container">
-              <img src="${screenshotBase64}" alt="${this.escapeHtml(
+              <img src="${screenshotSrc}" alt="${this.escapeHtml(
           page.title || "Screenshot"
         )}" class="screenshot-image">
             </div>
@@ -1402,36 +1432,81 @@ class HTMLPDFGenerator {
         `;
       })
       .join("");
-
-    const html = this.replaceTemplateVars(SCREENSHOT_PDF_TEMPLATE, {
-      DOMAIN_NAME: domain,
-      TOTAL_PAGES: filteredPages.length.toString(),
-      GENERATED_DATE: generatedDate,
-      SCREENSHOT_PAGES: screenshotPages,
-    });
-
-    return await this.htmlToPDF(html);
   }
 
-  async extractIndividualPDFsFromMerged(
-    mergedPdfBuffer,
+  async appendPdfPages(targetDoc, pdfBuffer) {
+    if (!pdfBuffer || pdfBuffer.length === 0) {
+      return;
+    }
+    const sourceDoc = await PDFDocument.load(pdfBuffer);
+    const pages = await targetDoc.copyPages(
+      sourceDoc,
+      sourceDoc.getPageIndices()
+    );
+    pages.forEach((page) => targetDoc.addPage(page));
+  }
+
+  async generateScreenshotPDF(pages, domain, generatedDate, crawlMode) {
+    if (pages.length === 0) {
+      return Buffer.alloc(0);
+    }
+
+    const filteredPages = pages;
+
+    if (filteredPages.length === 0) {
+      return Buffer.alloc(0);
+    }
+
+    const coverPdf = await this.htmlToPDF(
+      this.replaceTemplateVars(SCREENSHOT_PDF_TEMPLATE, {
+        DOMAIN_NAME: domain,
+        TOTAL_PAGES: filteredPages.length.toString(),
+        GENERATED_DATE: generatedDate,
+        SCREENSHOT_PAGES: "",
+        EXTRA_CSS: "",
+      })
+    );
+
+    const mergedDoc = await PDFDocument.create();
+    await this.appendPdfPages(mergedDoc, coverPdf);
+
+    const chunkSize = Math.max(1, this.options.pageChunkSize || 8);
+    for (let i = 0; i < filteredPages.length; i += chunkSize) {
+      const chunk = filteredPages.slice(i, i + chunkSize);
+      const chunkHtml = this.replaceTemplateVars(SCREENSHOT_PDF_TEMPLATE, {
+        DOMAIN_NAME: domain,
+        TOTAL_PAGES: filteredPages.length.toString(),
+        GENERATED_DATE: generatedDate,
+        SCREENSHOT_PAGES: this.buildScreenshotPages(
+          chunk,
+          i,
+          filteredPages.length
+        ),
+        EXTRA_CSS: ".cover-page { display: none !important; }",
+      });
+      const chunkPdf = await this.htmlToPDF(chunkHtml);
+      await this.appendPdfPages(mergedDoc, chunkPdf);
+    }
+
+    const mergedBytes = await mergedDoc.save();
+    return Buffer.from(mergedBytes);
+  }
+
+  async extractIndividualPDFsFromDocument(
+    mergedDoc,
     pageCount,
     pageStructure,
     creationDate
   ) {
     const individualPdfs = [];
-
-    const sourcePdf = await PDFDocument.load(mergedPdfBuffer);
-    const totalPages = sourcePdf.getPageCount();
-
-    const sourceCreationDate =
-      creationDate || sourcePdf.getCreationDate() || new Date();
+    const totalPages = mergedDoc.getPageCount();
+    const sourceCreationDate = creationDate || new Date();
 
     if (pageStructure.summaryPageIndex < totalPages) {
       const summaryPdf = await PDFDocument.create();
       summaryPdf.setCreationDate(sourceCreationDate);
       summaryPdf.setModificationDate(sourceCreationDate);
-      const summaryPages = await summaryPdf.copyPages(sourcePdf, [
+      const summaryPages = await summaryPdf.copyPages(mergedDoc, [
         pageStructure.summaryPageIndex,
       ]);
       summaryPages.forEach((page) => summaryPdf.addPage(page));
@@ -1450,7 +1525,7 @@ class HTMLPDFGenerator {
         const pagePdf = await PDFDocument.create();
         pagePdf.setCreationDate(sourceCreationDate);
         pagePdf.setModificationDate(sourceCreationDate);
-        const pages = await pagePdf.copyPages(sourcePdf, [pageIndex]);
+        const pages = await pagePdf.copyPages(mergedDoc, [pageIndex]);
         pages.forEach((page) => pagePdf.addPage(page));
         const pagePdfBytes = await pagePdf.save();
         individualPdfs.push(Buffer.from(pagePdfBytes));
@@ -1479,7 +1554,13 @@ class HTMLPDFGenerator {
       });
       const reportId = `SPD-${Date.now().toString().slice(-8)}`;
 
-      const pagesWithScreenshots = pages.filter((page) => page.screenshot);
+      const pagesWithScreenshots = pages.filter(
+        (page) =>
+          page.screenshot ||
+          page.screenshotUrl ||
+          page.fullPageScreenshot ||
+          page.fullPageScreenshotUrl
+      );
 
       const tocItems = [];
 
@@ -1518,29 +1599,44 @@ class HTMLPDFGenerator {
         TARGET_CUSTOMERS: this.buildTargetCustomers(aiSummary),
         GROWTH_OPPORTUNITIES: this.buildGrowthOpportunities(aiSummary),
         TOC_ITEMS: this.buildTocItems(tocItems),
-        PAGE_SECTIONS: this.buildPageSections(
-          pagesWithScreenshots,
-          domain,
-          generatedDate
-        ),
+        PAGE_SECTIONS: "",
+        EXTRA_CSS: "",
       };
 
-      const html = this.replaceTemplateVars(ALL_IN_ONE_TEMPLATE, vars);
+      const frontHtml = this.replaceTemplateVars(ALL_IN_ONE_TEMPLATE, vars);
+      const frontPdf = await this.htmlToPDF(frontHtml);
 
-      const pdfBuffer = await this.htmlToPDF(html);
+      const mergedDoc = await PDFDocument.create();
+      await this.appendPdfPages(mergedDoc, frontPdf);
 
-      const sourcePdf = await PDFDocument.load(pdfBuffer);
+      const chunkSize = Math.max(1, this.options.pageChunkSize || 8);
+      let nextPageNumber = 2;
+      for (let i = 0; i < pagesWithScreenshots.length; i += chunkSize) {
+        const chunk = pagesWithScreenshots.slice(i, i + chunkSize);
+        const chunkHtml = this.replaceTemplateVars(ALL_IN_ONE_TEMPLATE, {
+          ...vars,
+          PAGE_SECTIONS: this.buildPageSections(
+            chunk,
+            domain,
+            generatedDate,
+            nextPageNumber
+          ),
+          EXTRA_CSS:
+            ".cover-page, .toc-page, .exec-summary-page { display: none !important; }",
+        });
+        const chunkPdf = await this.htmlToPDF(chunkHtml);
+        await this.appendPdfPages(mergedDoc, chunkPdf);
+        nextPageNumber += chunk.length;
+      }
+
       const creationDate = new Date();
-      sourcePdf.setCreationDate(creationDate);
-      sourcePdf.setModificationDate(creationDate);
-      const pdfWithMetadata = await sourcePdf.save();
-      const finalPdfBuffer = Buffer.from(pdfWithMetadata);
+      mergedDoc.setCreationDate(creationDate);
+      mergedDoc.setModificationDate(creationDate);
+      const mergedBytes = await mergedDoc.save();
+      const finalPdfBuffer = Buffer.from(mergedBytes);
       const totalSize = finalPdfBuffer.length;
 
-      const sourcePdfForStructure = await PDFDocument.load(finalPdfBuffer);
-      const totalPages = sourcePdfForStructure.getPageCount();
-
-      const sourceCreationDate = sourcePdfForStructure.getCreationDate();
+      const totalPages = mergedDoc.getPageCount();
 
       const coverPages = 1;
       const tocPages = Math.max(
@@ -1563,11 +1659,11 @@ class HTMLPDFGenerator {
         generatedDate,
         crawlMode
       );
-      const individualPdfs = await this.extractIndividualPDFsFromMerged(
-        finalPdfBuffer,
+      const individualPdfs = await this.extractIndividualPDFsFromDocument(
+        mergedDoc,
         pagesWithScreenshots.length,
         pageStructure,
-        sourceCreationDate
+        creationDate
       );
 
       return {
