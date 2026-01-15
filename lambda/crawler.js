@@ -178,9 +178,11 @@ class WebCrawler {
       const executablePath = await chromium.executablePath();
       console.log("[Crawler] Chromium 경로:", executablePath);
 
+      const launchArgs = chromium.args.filter((arg) => arg !== "--single-process");
+
       this.browser = await playwright.launch({
         args: [
-          ...chromium.args,
+          ...launchArgs,
           "--disable-gpu",
           "--disable-dev-shm-usage",
           "--disable-setuid-sandbox",
@@ -192,6 +194,10 @@ class WebCrawler {
         executablePath: executablePath,
         headless: true,
         ignoreDefaultArgs: ["--disable-extensions"],
+      });
+
+      this.browser.on("disconnected", () => {
+        console.warn("[Crawler] 브라우저 연결 끊김");
       });
 
       await this.crawlPage(this.config.url, 0);
