@@ -251,6 +251,9 @@ export default function PageSelector({
             setJobStatus(status || null);
             const progressPercentage =
               typeof jobProgress?.percentage === 'number' ? jobProgress.percentage : null;
+            const isPdfPhase = ['summarizing', 'generating_pdf', 'completed', 'failed'].includes(
+              status || ''
+            );
             const statusChanged = status && status !== lastStatus;
             const progressIncreased =
               progressPercentage !== null && progressPercentage > lastPercentage;
@@ -258,8 +261,8 @@ export default function PageSelector({
             // 디버깅: 상태 확인
             console.log('[PageSelector] 상태 확인:', { status, hasResult: !!result, result, jobProgress });
 
-            // 진행률 업데이트 (jobProgress가 있으면 업데이트)
-            if (jobProgress) {
+            // 진행률 업데이트 (PDF 단계에서만 백엔드 진행률 반영)
+            if (jobProgress && isPdfPhase) {
               setProgress({
                 message: jobProgress.message || 'PDF 생성 중...',
                 percentage: jobProgress.percentage || 0,
@@ -340,12 +343,12 @@ export default function PageSelector({
             }
 
             // 백오프 업데이트
-            if (progressIncreased || statusChanged) {
+            if ((isPdfPhase && progressIncreased) || statusChanged) {
               resetBackoff();
             } else {
               backoffIndex = Math.min(backoffIndex + 1, backoffSteps.length - 1);
             }
-            if (progressPercentage !== null) {
+            if (isPdfPhase && progressPercentage !== null) {
               lastPercentage = progressPercentage;
             }
             if (status) {
