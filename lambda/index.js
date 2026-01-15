@@ -99,6 +99,30 @@ async function uploadToStorage(bucket, filePath, fileBuffer, contentType) {
   return urlData.publicUrl;
 }
 
+function computeCrawlPlan(totalPages) {
+  if (totalPages <= 80) {
+    return [totalPages];
+  }
+  if (totalPages <= 160) {
+    const first = Math.ceil(totalPages / 2);
+    return [first, totalPages - first];
+  }
+  if (totalPages <= 240) {
+    const first = Math.ceil(totalPages * 0.4);
+    const second = Math.ceil(totalPages * 0.4);
+    const remaining = totalPages - first - second;
+    return [first, second, remaining];
+  }
+  const plan = [];
+  let remaining = totalPages;
+  while (remaining > 0) {
+    const batch = Math.min(100, remaining);
+    plan.push(batch);
+    remaining -= batch;
+  }
+  return plan;
+}
+
 async function fetchBufferFromUrl(url) {
   const response = await fetch(url);
   if (!response.ok) {
@@ -117,6 +141,15 @@ async function handleCrawl(job) {
   // 작업 상태를 'crawling'으로 업데이트
   await updateJobStatus(job.id, { status: 'crawling' });
 
+  const totalTargetPages = job.config.maxPages || 50;
+  const existingPages = job.result?.crawlResult?.pages || [];
+  const baseCount = existingPages.length;
+  const crawlPlan = job.result?.crawlPlan || computeCrawlPlan(totalTargetPages);
+  const batchIndex = job.result?.crawlBatchIndex || 0;
+  const batchLimit = crawlPlan[batchIndex] || totalTargetPages;
+  const remainingPages = Math.max(0, totalTargetPages - baseCount);
+  const runMaxPages = Math.min(batchLimit, remainingPages);
+
   // Lambda 이전 버전과 동일: 크롤링 시작 시 즉시 진행률 업데이트
   // 첫 페이지 크롤링 시작 전까지는 입력한 URL의 경로 표시
   const initialUrl = job.config.url;
@@ -124,35 +157,42 @@ async function handleCrawl(job) {
     const urlObj = new URL(initialUrl);
     const initialPath = urlObj.pathname || "/";
     await updateProgress(job.id, {
-      current: 0,
-      total: job.config.maxPages || 50,
+      current: baseCount,
+      total: totalTargetPages,
       message: initialPath, // 입력한 URL의 경로만 표시
-      percentage: 0,
+      percentage: totalTargetPages > 0 ? Math.round((baseCount / totalTargetPages) * 100) : 0,
     });
   } catch (error) {
     // URL 파싱 실패 시 전체 URL 사용
     await updateProgress(job.id, {
-      current: 0,
-      total: job.config.maxPages || 50,
+      current: baseCount,
+      total: totalTargetPages,
       message: initialUrl,
-      percentage: 0,
+      percentage: totalTargetPages > 0 ? Math.round((baseCount / totalTargetPages) * 100) : 0,
     });
   }
 
   // 크롤링 실행
-  const crawler = new WebCrawler(job.config, async (current, total, url) => {
+  const crawlerConfig = {
+    ...job.config,
+    maxPages: runMaxPages,
+  };
+  const crawler = new WebCrawler(crawlerConfig, async (current, total, url) => {
+    const overallCurrent = baseCount + current;
     await updateProgress(job.id, {
-      current,
-      total,
+      current: overallCurrent,
+      total: totalTargetPages,
       message: url, // Lambda 이전 버전과 동일: URL만 전달 (접두사 없음)
-      percentage: Math.round((current / total) * 100),
+      percentage: totalTargetPages > 0
+        ? Math.round((overallCurrent / totalTargetPages) * 100)
+        : 0,
     });
   });
 
-  const crawlResult = await crawler.crawl();
+  const crawlResult = await crawler.crawl(job.result?.crawlState || null);
 
   // 크롤링 결과 저장 (스크린샷은 Storage에 업로드하고 URL만 저장)
-  const pagesForStorage = await Promise.all(
+  const newPagesForStorage = await Promise.all(
     crawlResult.pages.map(async (page, index) => {
       let screenshotUrl = null;
       let fullPageScreenshotUrl = null;
@@ -196,19 +236,79 @@ async function handleCrawl(job) {
     })
   );
 
-  // 크롤링 완료 - 페이지 선택 대기 상태로 변경
+  const mergedPages = [...existingPages, ...newPagesForStorage].reduce(
+    (acc, page) => {
+      if (!acc.map.has(page.url)) {
+        acc.map.set(page.url, true);
+        acc.list.push(page);
+      }
+      return acc;
+    },
+    { map: new Map(), list: [] }
+  ).list;
+
+  const remainingAfter = Math.max(0, totalTargetPages - mergedPages.length);
+  const crawlState = crawlResult.crawlState || {};
+  const shouldContinue =
+    remainingAfter > 0 && crawlState.queue && crawlState.queue.length > 0;
+  const nextBatchIndex = shouldContinue ? batchIndex + 1 : batchIndex;
+
+  if (shouldContinue) {
+    await updateJobStatus(job.id, {
+      status: 'crawling',
+      result: {
+        ...job.result,
+        crawlPlan,
+        crawlBatchIndex: nextBatchIndex,
+        crawlState,
+        crawlResult: {
+          pages: mergedPages,
+          totalPages: mergedPages.length,
+          failedUrls: job.result?.crawlResult?.failedUrls || [],
+        },
+      },
+    });
+
+    const lambdaUrl = process.env.LAMBDA_FUNCTION_URL;
+    if (lambdaUrl) {
+      fetch(lambdaUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id, action: 'crawl' }),
+      }).catch((error) => {
+        console.error('[Jobs] Lambda 재호출 실패:', error);
+      });
+    }
+
+    return {
+      statusCode: 202,
+      body: JSON.stringify({
+        success: true,
+        jobId: job.id,
+        action: 'crawl',
+        message: 'Crawling batch completed. Continuing...',
+        totalPages: mergedPages.length,
+        remaining: remainingAfter,
+      }),
+    };
+  }
+
   await updateJobStatus(job.id, {
     status: 'crawl_completed',
     result: {
+      ...job.result,
+      crawlPlan,
+      crawlBatchIndex: nextBatchIndex,
+      crawlState,
       crawlResult: {
-        pages: pagesForStorage,
-        totalPages: crawlResult.totalPages,
-        failedUrls: crawlResult.failedUrls || [],
+        pages: mergedPages,
+        totalPages: mergedPages.length,
+        failedUrls: job.result?.crawlResult?.failedUrls || [],
       },
     },
   });
 
-  console.log(`[Lambda] 크롤링 완료: ${job.id}, ${crawlResult.totalPages}페이지`);
+  console.log(`[Lambda] 크롤링 완료: ${job.id}, ${mergedPages.length}페이지`);
 
   return {
     statusCode: 200,
@@ -217,7 +317,7 @@ async function handleCrawl(job) {
       jobId: job.id,
       action: 'crawl',
       message: 'Crawling completed. Waiting for page selection.',
-      totalPages: crawlResult.totalPages,
+      totalPages: mergedPages.length,
     }),
   };
 }

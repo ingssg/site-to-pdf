@@ -170,7 +170,7 @@ class WebCrawler {
     this.openPages = [];
   }
 
-  async crawl() {
+  async crawl(crawlState) {
     const startTime = new Date();
 
     try {
@@ -202,7 +202,7 @@ class WebCrawler {
         console.warn("[Crawler] 브라우저 연결 끊김");
       });
 
-      await this.crawlQueue(this.config.url);
+      const nextState = await this.crawlQueue(this.config.url, crawlState);
 
       const endTime = new Date();
 
@@ -217,6 +217,7 @@ class WebCrawler {
         totalPages: this.crawledPages.length,
         startTime,
         endTime,
+        crawlState: nextState,
       };
     } catch (error) {
       console.error("Crawl error:", error);
@@ -226,10 +227,19 @@ class WebCrawler {
     }
   }
 
-  async crawlQueue(startUrl) {
+  async crawlQueue(startUrl, crawlState) {
     const concurrency = Math.max(1, this.config.concurrentPages || 3);
-    const queue = [{ url: startUrl, depth: 0 }];
-    const queuedUrls = new Set([normalizeUrl(startUrl)]);
+    if (crawlState?.visitedUrls) {
+      this.visitedUrls = new Set(crawlState.visitedUrls);
+    }
+    if (crawlState?.skippedUrls) {
+      this.skippedUrls = new Set(crawlState.skippedUrls);
+    }
+    const queue =
+      crawlState?.queue && crawlState.queue.length > 0
+        ? crawlState.queue
+        : [{ url: startUrl, depth: 0 }];
+    const queuedUrls = new Set(queue.map((item) => normalizeUrl(item.url)));
     const inFlight = new Set();
 
     const enqueueLinks = (links, nextDepth) => {
@@ -241,7 +251,10 @@ class WebCrawler {
       }
       for (const link of links) {
         const normalizedLink = normalizeUrl(link);
-        if (this.visitedUrls.has(normalizedLink) || queuedUrls.has(normalizedLink)) {
+        if (
+          this.visitedUrls.has(normalizedLink) ||
+          queuedUrls.has(normalizedLink)
+        ) {
           continue;
         }
         if (this.config.crawlMode === "smart" && shouldExcludeByDefault(link)) {
@@ -284,6 +297,12 @@ class WebCrawler {
     if (inFlight.size > 0) {
       await Promise.allSettled(inFlight);
     }
+
+    return {
+      queue,
+      visitedUrls: Array.from(this.visitedUrls),
+      skippedUrls: Array.from(this.skippedUrls),
+    };
   }
 
   async crawlPage(url, depth) {
