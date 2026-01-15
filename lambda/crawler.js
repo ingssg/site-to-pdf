@@ -202,7 +202,7 @@ class WebCrawler {
         console.warn("[Crawler] 브라우저 연결 끊김");
       });
 
-      await this.crawlPage(this.config.url, 0);
+      await this.crawlQueue(this.config.url);
 
       const endTime = new Date();
 
@@ -226,11 +226,71 @@ class WebCrawler {
     }
   }
 
+  async crawlQueue(startUrl) {
+    const concurrency = Math.max(1, this.config.concurrentPages || 3);
+    const queue = [{ url: startUrl, depth: 0 }];
+    const queuedUrls = new Set([normalizeUrl(startUrl)]);
+    const inFlight = new Set();
+
+    const enqueueLinks = (links, nextDepth) => {
+      if (!links || links.length === 0) {
+        return;
+      }
+      if (this.config.maxDepth && nextDepth > this.config.maxDepth) {
+        return;
+      }
+      for (const link of links) {
+        const normalizedLink = normalizeUrl(link);
+        if (this.visitedUrls.has(normalizedLink) || queuedUrls.has(normalizedLink)) {
+          continue;
+        }
+        if (this.config.crawlMode === "smart" && shouldExcludeByDefault(link)) {
+          this.skippedUrls.add(normalizedLink);
+          continue;
+        }
+        queuedUrls.add(normalizedLink);
+        queue.push({ url: link, depth: nextDepth });
+      }
+    };
+
+    while (
+      (queue.length > 0 || inFlight.size > 0) &&
+      this.crawledPages.length < this.config.maxPages
+    ) {
+      while (
+        queue.length > 0 &&
+        inFlight.size < concurrency &&
+        this.crawledPages.length < this.config.maxPages
+      ) {
+        const { url, depth } = queue.shift();
+        const promise = this.crawlPage(url, depth)
+          .then((links) => {
+            enqueueLinks(links, depth + 1);
+          })
+          .catch((error) => {
+            console.error(`[Crawler] Failed to crawl ${url}:`, error);
+          })
+          .finally(() => {
+            inFlight.delete(promise);
+          });
+        inFlight.add(promise);
+      }
+
+      if (inFlight.size > 0) {
+        await Promise.race(inFlight);
+      }
+    }
+
+    if (inFlight.size > 0) {
+      await Promise.allSettled(inFlight);
+    }
+  }
+
   async crawlPage(url, depth) {
     const normalizedUrl = normalizeUrl(url);
 
     if (!this.browser || !this.browser.isConnected()) {
-      return;
+      return [];
     }
 
     if (
@@ -238,17 +298,17 @@ class WebCrawler {
       this.crawledPages.length >= this.config.maxPages ||
       (this.config.maxDepth && depth > this.config.maxDepth)
     ) {
-      return;
+      return [];
     }
 
     if (this.config.sameDomainOnly && !isSameDomain(this.config.url, url)) {
-      return;
+      return [];
     }
 
     if (this.config.crawlMode === "smart" && shouldExcludeByDefault(url)) {
       this.skippedUrls.add(normalizedUrl);
       console.log(`[Crawler] Skipped (Smart Mode): ${url}`);
-      return;
+      return [];
     }
 
     this.visitedUrls.add(normalizedUrl);
@@ -281,12 +341,37 @@ class WebCrawler {
       // 브라우저 연결 상태 확인
       if (!this.browser || !this.browser.isConnected()) {
         console.warn(`[Crawler] 브라우저가 닫혔습니다. 스킵: ${url}`);
-        return;
+        return [];
       }
 
       context = await this.browser.newContext();
       page = await context.newPage();
       this.openPages.push(page);
+
+      await page.route("**/*", (route) => {
+        const request = route.request();
+        const resourceType = request.resourceType();
+        const requestUrl = request.url();
+        const blockedResourceTypes = new Set(["media", "font"]);
+        const blockedUrlPatterns = [
+          /doubleclick\.net/i,
+          /googletagmanager\.com/i,
+          /google-analytics\.com/i,
+          /analytics\.google\.com/i,
+          /facebook\.net/i,
+          /hotjar\.com/i,
+          /clarity\.ms/i,
+          /sentry\.io/i,
+        ];
+
+        if (
+          blockedResourceTypes.has(resourceType) ||
+          blockedUrlPatterns.some((pattern) => pattern.test(requestUrl))
+        ) {
+          return route.abort();
+        }
+        return route.continue();
+      });
 
       await page.goto(url, {
         waitUntil: "domcontentloaded",
@@ -298,7 +383,7 @@ class WebCrawler {
       // 브라우저/페이지 연결 상태 확인
       if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
         console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
-        return;
+        return [];
       }
 
       const title = await page.title();
@@ -306,7 +391,7 @@ class WebCrawler {
       // 브라우저/페이지 연결 상태 확인
       if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
         console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
-        return;
+        return [];
       }
 
       const content = await page.evaluate(() => {
@@ -366,7 +451,7 @@ class WebCrawler {
       // 브라우저 연결 상태 확인
       if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
         console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
-        return;
+        return [];
       }
 
       await page.evaluate(() => {
@@ -376,7 +461,7 @@ class WebCrawler {
       // 브라우저 연결 상태 확인
       if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
         console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
-        return;
+        return [];
       }
 
       await page.evaluate(() => {
@@ -390,7 +475,7 @@ class WebCrawler {
       // 브라우저 연결 상태 확인
       if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
         console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
-        return;
+        return [];
       }
 
       await page.evaluate(async () => {
@@ -437,7 +522,7 @@ class WebCrawler {
       // 브라우저 연결 상태 확인
       if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
         console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
-        return;
+        return [];
       }
 
       await page.setViewportSize({ width: 1920, height: 1080 });
@@ -446,13 +531,13 @@ class WebCrawler {
       // 브라우저 연결 상태 확인
       if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
         console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
-        return;
+        return [];
       }
 
       const screenshot = await page.screenshot({
         fullPage: false,
         type: "jpeg",
-        quality: 80,
+        quality: 50,
       });
 
       await page.evaluate(async () => {
@@ -598,7 +683,7 @@ class WebCrawler {
       // 브라우저 연결 상태 확인
       if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
         console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
-        return;
+        return [];
       }
 
       const fullPageScreenshot = await page.screenshot({
@@ -627,7 +712,7 @@ class WebCrawler {
       // 브라우저 연결 상태 확인
       if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
         console.warn(`[Crawler] 브라우저/페이지가 닫혔습니다. 스킵: ${url}`);
-        return;
+        return [];
       }
 
       // 링크 추출 (페이지 닫기 전에)
@@ -655,23 +740,10 @@ class WebCrawler {
         `[Crawler] Found ${links.length} links on ${url} (${sameDomainLinks.length} same domain)`
       );
 
-      for (const link of sameDomainLinks) {
-        if (this.crawledPages.length >= this.config.maxPages) {
-          break;
-        }
-
-        if (!this.browser || !this.browser.isConnected()) {
-          break;
-        }
-
-        await this.crawlPage(link, depth + 1);
-
-        console.log(
-          `[Crawler] Progress: ${this.crawledPages.length}/${this.config.maxPages} pages`
-        );
-      }
+      return sameDomainLinks;
     } catch (error) {
       console.error(`[Crawler] Failed to crawl ${url}:`, error);
+      return [];
     } finally {
       await cleanupContext();
     }
