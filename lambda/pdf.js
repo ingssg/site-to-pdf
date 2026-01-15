@@ -8,6 +8,15 @@ const chromium = require("@sparticuz/chromium");
 const { chromium: playwright } = require("playwright-core");
 const { PDFDocument } = require("pdf-lib");
 
+const LOG_LEVEL = process.env.LOG_LEVEL || "info";
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+const CURRENT_LOG_LEVEL = LOG_LEVELS[LOG_LEVEL] ?? LOG_LEVELS.info;
+const logDebug = (...args) => {
+  if (CURRENT_LOG_LEVEL >= LOG_LEVELS.debug) {
+    console.log(...args);
+  }
+};
+
 // HTML 템플릿 (인라인으로 포함 - Lambda는 파일 시스템 접근 제한적)
 const ALL_IN_ONE_TEMPLATE = `<!DOCTYPE html>
 <html lang="ko">
@@ -1351,7 +1360,6 @@ class HTMLPDFGenerator {
 
     const filteredPages = pages;
 
-
     if (filteredPages.length === 0) {
       return Buffer.alloc(0);
     }
@@ -1364,7 +1372,6 @@ class HTMLPDFGenerator {
         const screenshotBase64 = screenshotBuffer
           ? `data:image/jpeg;base64,${screenshotBuffer.toString("base64")}`
           : "";
-
 
         const pageNumber = index + 1;
         const captureTimestamp = this.formatTimestamp(page.timestamp);
@@ -1419,7 +1426,6 @@ class HTMLPDFGenerator {
 
     const sourceCreationDate =
       creationDate || sourcePdf.getCreationDate() || new Date();
-
 
     if (pageStructure.summaryPageIndex < totalPages) {
       const summaryPdf = await PDFDocument.create();

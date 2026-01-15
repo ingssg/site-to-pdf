@@ -124,7 +124,6 @@ export default function PageSelector({
     setShowReasoning(false); // 초기에 접혀있게 (명시적으로 false 설정)
 
     try {
-
       // API 호출용 데이터 준비 (콘텐츠 1500자로 증가 - 맥락 개선)
       const requestData = {
         pages: pages.map((page) => ({
@@ -152,7 +151,6 @@ export default function PageSelector({
         throw new Error(result.error?.userMessage || "AI 필터링 실패");
       }
 
-
       // 선택된 URL들이 실제 pages 배열에 있는지 확인
       const selectedUrlsFromAI = Array.isArray(result.data.selectedUrls)
         ? (result.data.selectedUrls as string[])
@@ -177,7 +175,6 @@ export default function PageSelector({
       // AI 선택 이유 저장 (기본 접힌 상태 유지)
       setAiReasoning(result.data.reasoning);
       // setShowReasoning(false); // 이미 위에서 false로 설정됨
-
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "AI 자동 선택 실패";
@@ -207,7 +204,6 @@ export default function PageSelector({
     });
 
     try {
-
       const selectedPages = pages.filter((p) => selectedUrls.has(p.url));
       setSelectedPagesForResult(selectedPages);
 

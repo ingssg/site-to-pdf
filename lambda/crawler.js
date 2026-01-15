@@ -6,6 +6,15 @@
 const chromium = require("@sparticuz/chromium");
 const { chromium: playwright } = require("playwright-core");
 
+const LOG_LEVEL = process.env.LOG_LEVEL || "info";
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+const CURRENT_LOG_LEVEL = LOG_LEVELS[LOG_LEVEL] ?? LOG_LEVELS.info;
+const logDebug = (...args) => {
+  if (CURRENT_LOG_LEVEL >= LOG_LEVELS.debug) {
+    console.log(...args);
+  }
+};
+
 // 페이지 타입 감지 (로컬 환경의 page-filter.ts와 동일)
 function detectPageType(url) {
   try {
@@ -177,7 +186,7 @@ class WebCrawler {
     try {
       // Lambda 환경용 @sparticuz/chromium 설정
       const executablePath = await chromium.executablePath();
-      console.log("[Crawler] Chromium 경로:", executablePath);
+      logDebug("[Crawler] Chromium 경로:", executablePath);
 
       const launchArgs = chromium.args.filter(
         (arg) => arg !== "--single-process"
@@ -219,7 +228,7 @@ class WebCrawler {
       const endTime = new Date();
 
       if (this.config.crawlMode === "smart" && this.skippedUrls.size > 0) {
-        console.log(
+        logDebug(
           `[Crawler] Smart Mode: Skipped ${this.skippedUrls.size} filtered URLs, Crawled ${this.crawledPages.length} important pages`
         );
       }
@@ -376,12 +385,12 @@ class WebCrawler {
 
     if (this.config.crawlMode === "smart" && shouldExcludeByDefault(url)) {
       this.skippedUrls.add(normalizedUrl);
-      console.log(`[Crawler] Skipped (Smart Mode): ${url}`);
+      logDebug(`[Crawler] Skipped (Smart Mode): ${url}`);
       return [];
     }
 
     this.visitedUrls.add(normalizedUrl);
-    console.log(
+    logDebug(
       `[Crawler] Crawling (${this.crawledPages.length + 1}/${
         this.config.maxPages
       }): ${url}`
@@ -814,7 +823,7 @@ class WebCrawler {
 
       await cleanupContext();
 
-      console.log(
+      logDebug(
         `[Crawler] Found ${links.length} links on ${url} (${sameDomainLinks.length} same domain)`
       );
 

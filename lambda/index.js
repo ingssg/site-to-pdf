@@ -180,7 +180,6 @@ async function fetchBufferFromUrl(url) {
  * Step 1: 크롤링만 수행
  */
 async function handleCrawl(job) {
-
   // 작업 상태를 'crawling'으로 업데이트
   await updateJobStatus(job.id, { status: "crawling" });
 
@@ -406,7 +405,6 @@ async function handleCrawl(job) {
       },
     },
   });
-
 
   return {
     statusCode: 200,
@@ -672,7 +670,6 @@ async function handleGeneratePDF(job) {
   // 스크린샷 PDF 개수 (처리된 페이지 수)
   const screenshotPdfCount = pagesWithBuffers.length;
 
-
   // 작업 완료
   await updateJobStatus(job.id, {
     status: "completed",
@@ -695,7 +692,6 @@ async function handleGeneratePDF(job) {
     completed_at: new Date().toISOString(),
   });
 
-
   return {
     statusCode: 200,
     body: JSON.stringify({
@@ -714,7 +710,6 @@ async function handleGeneratePDF(job) {
  * Lambda 핸들러
  */
 exports.handler = async (event) => {
-
   // 클라이언트 초기화
   initClients();
 

@@ -3,7 +3,16 @@
  * 기존 src/lib/ai/index.ts를 Lambda 환경에 맞게 포팅
  */
 
-const { OpenAI } = require('openai');
+const { OpenAI } = require("openai");
+
+const LOG_LEVEL = process.env.LOG_LEVEL || "info";
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+const CURRENT_LOG_LEVEL = LOG_LEVELS[LOG_LEVEL] ?? LOG_LEVELS.info;
+const logDebug = (...args) => {
+  if (CURRENT_LOG_LEVEL >= LOG_LEVELS.debug) {
+    console.log(...args);
+  }
+};
 
 function getTypeSpecificGuidance(pageType) {
   const type = (pageType || 'general').toLowerCase();
