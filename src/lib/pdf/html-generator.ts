@@ -822,7 +822,7 @@ export class HTMLPDFGenerator {
 
         console.log(`[스크린샷 PDF] 페이지 ${index + 1}: fullPage=${hasFullPage}, screenshot=${hasScreenshot}, using=${hasFullPage ? 'fullPage' : 'viewport'}`);
 
-        const pageNumber = index + 2; // Cover is page 1
+        const pageNumber = index + 1; // Cover는 페이지 번호 제외
         const captureTimestamp = this.formatTimestamp(page.timestamp);
 
         return `
