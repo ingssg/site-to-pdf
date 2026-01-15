@@ -13,15 +13,22 @@ const { HTMLPDFGenerator } = require('./pdf');
 const { createClient } = require('@supabase/supabase-js');
 const { OpenAI } = require('openai');
 const JSZip = require('jszip');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 
 // 환경 변수
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME;
+const S3_REGION = process.env.AWS_REGION || process.env.S3_REGION || 'ap-northeast-2';
+const S3_PUBLIC_BASE_URL = process.env.S3_PUBLIC_BASE_URL || null;
+const S3_PRESIGNED_EXPIRES_SECONDS = Number(process.env.S3_PRESIGNED_EXPIRES_SECONDS || 604800);
 
 // 클라이언트 초기화 (지연 초기화 - handler에서 검증)
 let supabase = null;
 let openai = null;
+let s3 = null;
 
 function initClients() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -36,6 +43,10 @@ function initClients() {
     openai = new OpenAI({ apiKey: OPENAI_API_KEY });
   } else if (!OPENAI_API_KEY) {
     console.warn('[Lambda] OPENAI_API_KEY가 설정되지 않았습니다. AI 기능이 작동하지 않을 수 있습니다.');
+  }
+
+  if (!s3) {
+    s3 = new S3Client({ region: S3_REGION });
   }
 }
 
@@ -79,24 +90,36 @@ async function updateProgress(jobId, progress) {
 }
 
 /**
- * Supabase Storage에 파일 업로드
+ * S3에 파일 업로드
  */
-async function uploadToStorage(bucket, filePath, fileBuffer, contentType) {
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .upload(filePath, fileBuffer, {
-      contentType,
-      upsert: true,
-    });
+async function uploadToStorage(filePath, fileBuffer, contentType) {
+  if (!S3_BUCKET_NAME) {
+    throw new Error('S3_BUCKET_NAME이 설정되지 않았습니다.');
+  }
 
-  if (error) {
-    console.error('[Lambda] Storage 업로드 에러:', error);
+  const command = new PutObjectCommand({
+    Bucket: S3_BUCKET_NAME,
+    Key: filePath,
+    Body: fileBuffer,
+    ContentType: contentType,
+  });
+
+  try {
+    await s3.send(command);
+  } catch (error) {
+    console.error('[Lambda] S3 업로드 에러:', error);
     throw error;
   }
 
-  // 공개 URL 생성
-  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
-  return urlData.publicUrl;
+  if (S3_PUBLIC_BASE_URL) {
+    return `${S3_PUBLIC_BASE_URL.replace(/\/$/, '')}/${filePath}`;
+  }
+
+  const signedCommand = new GetObjectCommand({
+    Bucket: S3_BUCKET_NAME,
+    Key: filePath,
+  });
+  return getSignedUrl(s3, signedCommand, { expiresIn: S3_PRESIGNED_EXPIRES_SECONDS });
 }
 
 function computeCrawlPlan(totalPages) {
@@ -216,7 +239,6 @@ async function handleCrawl(job) {
       try {
         if (page.screenshot) {
           screenshotUrl = await uploadToStorage(
-            'job-results',
             `${job.id}/screenshots/viewport_${index + 1}.jpg`,
             page.screenshot,
             'image/jpeg'
@@ -229,7 +251,6 @@ async function handleCrawl(job) {
       try {
         if (page.fullPageScreenshot) {
           fullPageScreenshotUrl = await uploadToStorage(
-            'job-results',
             `${job.id}/screenshots/full_${index + 1}.jpg`,
             page.fullPageScreenshot,
             'image/jpeg'
@@ -575,14 +596,12 @@ async function handleGeneratePDF(job) {
   // Supabase Storage에 업로드 (파일명 포함)
   const timestamp = Date.now();
   const zipUrl = await uploadToStorage(
-    'job-results',
     `${job.id}/${zipFilename}`,
     zipBuffer,
     'application/zip'
   );
 
   const pdfUrl = await uploadToStorage(
-    'job-results',
     `${job.id}/merged_${timestamp}.pdf`,
     pdfResult.mergedPdf,
     'application/pdf'
@@ -591,7 +610,6 @@ async function handleGeneratePDF(job) {
   let screenshotPdfUrl = null;
   if (pdfResult.screenshotPdf && pdfResult.screenshotPdf.length > 0) {
     screenshotPdfUrl = await uploadToStorage(
-      'job-results',
       `${job.id}/screenshots_${timestamp}.pdf`,
       pdfResult.screenshotPdf,
       'application/pdf'
