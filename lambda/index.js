@@ -20,6 +20,15 @@ const {
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
+const LOG_LEVEL = process.env.LOG_LEVEL || "info";
+const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
+const CURRENT_LOG_LEVEL = LOG_LEVELS[LOG_LEVEL] ?? LOG_LEVELS.info;
+const logDebug = (...args) => {
+  if (CURRENT_LOG_LEVEL >= LOG_LEVELS.debug) {
+    console.log(...args);
+  }
+};
+
 // 환경 변수
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -92,6 +101,9 @@ async function updateProgress(jobId, progress) {
         percentage: progress.percentage,
       },
     });
+    logDebug(
+      `[Lambda][Progress] ${jobId} ${progress.message} (${progress.percentage}%)`
+    );
   } catch (error) {
     console.error(`[Lambda] 진행률 업데이트 실패: ${jobId}`, error);
     // 진행률 업데이트 실패해도 계속 진행
@@ -422,6 +434,10 @@ async function handleCrawl(job) {
  * Step 3: 선택된 페이지로 PDF 생성
  */
 async function handleGeneratePDF(job) {
+  logDebug(`[Lambda] generate-pdf 시작: ${job.id}`);
+  logDebug(
+    `[Lambda] 메모리 시작: ${Math.round(process.memoryUsage().rss / 1024 / 1024)}MB`
+  );
   try {
     await updateProgress(job.id, {
       current: 0,
@@ -514,6 +530,9 @@ async function handleGeneratePDF(job) {
     openai,
     "detailed"
   );
+  logDebug(
+    `[Lambda] AI 요약 완료: ${job.id} (${pagesWithBuffers.length} pages)`
+  );
 
   // 개별 페이지 AI 요약 생성
   await updateProgress(job.id, {
@@ -549,11 +568,13 @@ async function handleGeneratePDF(job) {
   const generator = new HTMLPDFGenerator();
   let pdfResult;
   try {
+    logDebug(`[Lambda] PDF 컴파일 시작: ${job.id}`);
     pdfResult = await generator.generatePDFs(
       pagesWithBuffers,
       aiSummary,
       job.config.crawlMode || "smart"
     );
+    logDebug(`[Lambda] PDF 컴파일 완료: ${job.id}`);
   } finally {
     await generator.close();
   }
@@ -613,6 +634,7 @@ async function handleGeneratePDF(job) {
   });
 
   const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
+  logDebug(`[Lambda] ZIP 생성 완료: ${zipBuffer.length} bytes`);
 
   await updateProgress(job.id, {
     current: 100,
@@ -636,6 +658,7 @@ async function handleGeneratePDF(job) {
     "application/zip",
     zipFilename
   );
+  logDebug(`[Lambda] ZIP 업로드 완료`);
 
   const pdfUrl = await uploadToStorage(
     `${job.id}/merged_${timestamp}.pdf`,
@@ -643,6 +666,7 @@ async function handleGeneratePDF(job) {
     "application/pdf",
     mergedFilename
   );
+  logDebug(`[Lambda] 통합 PDF 업로드 완료`);
 
   let screenshotPdfUrl = null;
   if (pdfResult.screenshotPdf && pdfResult.screenshotPdf.length > 0) {
@@ -652,6 +676,7 @@ async function handleGeneratePDF(job) {
       "application/pdf",
       screenshotFilename
     );
+    logDebug(`[Lambda] 스크린샷 PDF 업로드 완료`);
   }
 
   // 파일 크기 및 개수 계산 (Lambda 이전 버전과 동일)
