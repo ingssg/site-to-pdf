@@ -566,13 +566,13 @@ async function handleGeneratePDF(job) {
     });
   }
 
-  // PDF 생성
-  await updateJobStatus(job.id, { status: "generating_pdf" });
-  const domain = new URL(job.config.url).hostname.replace("www.", "");
+    // PDF 생성
+    await updateJobStatus(job.id, { status: "generating_pdf" });
+    const domain = new URL(job.config.url).hostname.replace("www.", "");
 
   const generator = new HTMLPDFGenerator();
   let pdfResult;
-  try {
+    try {
     pdfResult = await generator.generatePDFs(
       pagesWithBuffers,
       aiSummary,
@@ -582,6 +582,14 @@ async function handleGeneratePDF(job) {
     await generator.close();
   }
 
+    // PDF 컴파일 완료 (중간 진행률 반영)
+    await updateProgress(job.id, {
+      current: 0,
+      total: 100,
+      message: "PDF 컴파일 완료",
+      percentage: 70,
+    });
+
   // ZIP 파일 생성 (Lambda 이전 버전과 동일한 구조)
   // Lambda 이전 버전: src/app/api/generate-pdf/route.ts 참고
   console.log(
@@ -589,6 +597,14 @@ async function handleGeneratePDF(job) {
       (pdfResult.individualPdfs || []).length
     }`
   );
+
+    // 개별 PDF 구성 단계
+    await updateProgress(job.id, {
+      current: 0,
+      total: 100,
+      message: "개별 PDF 구성 중...",
+      percentage: 80,
+    });
 
   // Lambda 이전 버전과 동일: ZIP 파일 생성 시작 진행률 업데이트
   await updateProgress(job.id, {
