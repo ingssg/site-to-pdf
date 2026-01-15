@@ -1033,7 +1033,6 @@ class HTMLPDFGenerator {
 
       // Lambda 환경용 @sparticuz/chromium 설정
       const executablePath = await chromium.executablePath();
-      console.log("[PDF] Chromium 경로:", executablePath);
 
       this.browser = await playwright.launch({
         args: [
@@ -1352,7 +1351,6 @@ class HTMLPDFGenerator {
 
     const filteredPages = pages;
 
-    console.log(`[PDF] 스크린샷 PDF 생성: ${filteredPages.length}페이지`);
 
     if (filteredPages.length === 0) {
       return Buffer.alloc(0);
@@ -1367,13 +1365,6 @@ class HTMLPDFGenerator {
           ? `data:image/jpeg;base64,${screenshotBuffer.toString("base64")}`
           : "";
 
-        console.log(
-          `[스크린샷 PDF] 페이지 ${
-            index + 1
-          }: fullPage=${hasFullPage}, screenshot=${hasScreenshot}, using=${
-            hasFullPage ? "fullPage" : "viewport"
-          }`
-        );
 
         const pageNumber = index + 1;
         const captureTimestamp = this.formatTimestamp(page.timestamp);
@@ -1429,18 +1420,6 @@ class HTMLPDFGenerator {
     const sourceCreationDate =
       creationDate || sourcePdf.getCreationDate() || new Date();
 
-    console.log(`[PDF] 통합 PDF 총 페이지 수: ${totalPages}`);
-    console.log(`[PDF] 페이지 구조 정보 사용:`);
-    console.log(`  - 표지: ${pageStructure.coverPages}페이지 (index 0)`);
-    console.log(
-      `  - 목차: ${pageStructure.tocPages}페이지 (index 1~${pageStructure.tocPages})`
-    );
-    console.log(
-      `  - 종합 분석 요약: ${pageStructure.summaryPages}페이지 (index ${pageStructure.summaryPageIndex})`
-    );
-    console.log(
-      `  - 개별 페이지들: ${pageCount}페이지 (index ${pageStructure.individualPagesStartIndex}~)`
-    );
 
     if (pageStructure.summaryPageIndex < totalPages) {
       const summaryPdf = await PDFDocument.create();
@@ -1452,9 +1431,6 @@ class HTMLPDFGenerator {
       summaryPages.forEach((page) => summaryPdf.addPage(page));
       const summaryPdfBytes = await summaryPdf.save();
       individualPdfs.push(Buffer.from(summaryPdfBytes));
-      console.log(
-        `[PDF] 전체 요약 PDF 추출: 페이지 ${pageStructure.summaryPageIndex}`
-      );
     } else {
       console.warn(
         `[PDF] 종합 분석 요약 페이지 추출 실패: 인덱스 ${pageStructure.summaryPageIndex}가 총 페이지 수 ${totalPages}를 초과`
@@ -1472,7 +1448,6 @@ class HTMLPDFGenerator {
         pages.forEach((page) => pagePdf.addPage(page));
         const pagePdfBytes = await pagePdf.save();
         individualPdfs.push(Buffer.from(pagePdfBytes));
-        console.log(`[PDF] 페이지 ${i + 1} PDF 추출: 페이지 ${pageIndex}`);
       } else {
         console.warn(
           `[PDF] 페이지 ${
@@ -1576,35 +1551,17 @@ class HTMLPDFGenerator {
         individualPagesStartIndex: coverPages + tocPages + summaryPages,
       };
 
-      console.log(`[PDF] 통합 PDF 생성 완료: ${totalPages}페이지`);
-      console.log(
-        `[PDF] 페이지 구조: 표지(${coverPages}) + 목차(${tocPages}) + 종합분석(${summaryPages}) + 개별페이지(${pagesWithScreenshots.length})`
-      );
-      console.log(
-        `[PDF] 종합 분석 요약 인덱스: ${pageStructure.summaryPageIndex}`
-      );
-      console.log(
-        `[PDF] 개별 페이지 시작 인덱스: ${pageStructure.individualPagesStartIndex}`
-      );
-
-      console.log("[PDF] 스크린샷 PDF 생성 시작...");
       const screenshotPdf = await this.generateScreenshotPDF(
         pages,
         domain,
         generatedDate,
         crawlMode
       );
-      console.log("[PDF] 스크린샷 PDF 생성 완료");
-
-      console.log("[PDF] 통합 PDF에서 개별 PDF 추출 시작...");
       const individualPdfs = await this.extractIndividualPDFsFromMerged(
         finalPdfBuffer,
         pagesWithScreenshots.length,
         pageStructure,
         sourceCreationDate
-      );
-      console.log(
-        `[PDF] 총 ${individualPdfs.length}개 PDF 추출 완료 (전체요약 1개 + 페이지 ${pagesWithScreenshots.length}개)`
       );
 
       return {

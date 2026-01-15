@@ -78,8 +78,6 @@ export default function CrawlerForm({
     setError(null);
     setCrawlResult(null);
     setPdfResult(null);
-    // Lambda 이전 버전과 동일: 초기 진행률 즉시 설정
-    // 첫 페이지 크롤링 시작 전까지는 입력한 URL의 경로 표시
     setProgress({
       current: 0,
       total: maxPages,
@@ -101,7 +99,6 @@ export default function CrawlerForm({
       }
 
       const { data: { jobId } } = await createJobResponse.json();
-      console.log(`[Frontend] 작업 등록 완료: ${jobId}`);
       setCurrentJobId(jobId);
 
       // 2. 폴링 함수 정의 (백오프 적용)

@@ -124,7 +124,6 @@ export default function PageSelector({
     setShowReasoning(false); // 초기에 접혀있게 (명시적으로 false 설정)
 
     try {
-      console.log("[PageSelector] AI 필터링 시작...");
 
       // API 호출용 데이터 준비 (콘텐츠 1500자로 증가 - 맥락 개선)
       const requestData = {
@@ -153,11 +152,6 @@ export default function PageSelector({
         throw new Error(result.error?.userMessage || "AI 필터링 실패");
       }
 
-      console.log(`[AI Filter] API 응답:`, result.data.selectedUrls);
-      console.log(
-        `[AI Filter] pages 배열 URLs:`,
-        pages.map((p) => p.url)
-      );
 
       // 선택된 URL들이 실제 pages 배열에 있는지 확인
       const selectedUrlsFromAI = Array.isArray(result.data.selectedUrls)
@@ -172,15 +166,8 @@ export default function PageSelector({
       );
 
       if (invalidUrls.length > 0) {
-        console.error(
-          `[AI Filter] ⚠️ pages 배열에 없는 URL이 선택됨:`,
-          invalidUrls
-        );
+        console.error("[AI Filter] 페이지 배열에 없는 URL:", invalidUrls);
       }
-
-      console.log(
-        `[AI Filter] 유효한 URL: ${validUrls.length}개, 무효한 URL: ${invalidUrls.length}개`
-      );
 
       // 선택된 URL들로 상태 업데이트 (유효한 URL만)
       const nextSelected = new Set(validUrls);
@@ -191,10 +178,6 @@ export default function PageSelector({
       setAiReasoning(result.data.reasoning);
       // setShowReasoning(false); // 이미 위에서 false로 설정됨
 
-      console.log(
-        `[AI Filter] ${validUrls.length}개 선택 (${result.data.selectedUrls.length}개 중)`
-      );
-      console.log(`[AI Filter] 이유: ${result.data.reasoning}`);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "AI 자동 선택 실패";
@@ -218,16 +201,12 @@ export default function PageSelector({
 
     setGenerating(true);
     setError(null);
-    // Lambda 이전 버전과 동일: 초기 진행률 즉시 설정
     setProgress({
       message: "PDF 생성 준비 중...",
       percentage: 0,
     });
 
     try {
-      console.log(`[PageSelector] ========== PDF 생성 시작 ==========`);
-      console.log(`[PageSelector] 선택된 URL 개수: ${selectedUrls.size}`);
-      console.log(`[PageSelector] jobId: ${jobId}`);
 
       const selectedPages = pages.filter((p) => selectedUrls.has(p.url));
       setSelectedPagesForResult(selectedPages);
@@ -235,7 +214,6 @@ export default function PageSelector({
       // Lambda 방식 (jobId가 있는 경우)
       if (jobId) {
         shouldFinalize = false;
-        console.log(`[PageSelector] Lambda PDF 생성 트리거...`);
 
         // 1. PDF 생성 트리거
         const triggerResponse = await fetch(`/api/jobs/${jobId}/generate-pdf`, {
@@ -306,14 +284,6 @@ export default function PageSelector({
               progressPercentage !== null &&
               progressPercentage > lastPercentage;
 
-            // 디버깅: 상태 확인
-            console.log("[PageSelector] 상태 확인:", {
-              status,
-              hasResult: !!result,
-              result,
-              jobProgress,
-            });
-
             // 진행률 업데이트 (PDF 단계에서만 백엔드 진행률 반영)
             if (jobProgress && isPdfPhase) {
               setProgress({
@@ -325,13 +295,6 @@ export default function PageSelector({
 
             // 완료 처리
             if (status === "completed") {
-              console.log(
-                "[PageSelector] PDF 생성 완료, status:",
-                status,
-                "result:",
-                result
-              );
-
               if (!result) {
                 console.error("[PageSelector] 완료되었지만 result가 없습니다");
                 isPolling = false;
@@ -352,13 +315,6 @@ export default function PageSelector({
               // result가 문자열인 경우 파싱
               const resultData =
                 typeof result === "string" ? JSON.parse(result) : result;
-              console.log("[PageSelector] resultData:", resultData);
-              console.log(
-                "[PageSelector] pdfUrl:",
-                resultData.pdfUrl,
-                "zipUrl:",
-                resultData.zipUrl
-              );
 
               isPolling = false;
               if (pollTimer) {
@@ -378,7 +334,6 @@ export default function PageSelector({
                     zipDownloadUrl: resultData.zipUrl,
                     screenshotPdfUrl: resultData.screenshotPdfUrl || null,
                     warnings: [],
-                    // Lambda 이전 버전과 동일: 실제 값 사용
                     pageCount:
                       resultData.pageCount ||
                       resultData.processedPages ||
@@ -387,7 +342,6 @@ export default function PageSelector({
                     totalSizeMB: resultData.totalSizeMB
                       ? `${resultData.totalSizeMB}`
                       : "0",
-                    // ZIP 파일 정보 (Lambda 이전 버전과 동일)
                     zipSize: resultData.zipSize || 0,
                     zipSizeMB: resultData.zipSizeMB
                       ? `${resultData.zipSizeMB}`
@@ -404,7 +358,6 @@ export default function PageSelector({
                   summary: resultData.summary,
                 },
               };
-              console.log("[PageSelector] pdfResult 생성 완료:", pdfResult);
               setPdfResult(pdfResult);
               return;
             }
@@ -462,7 +415,6 @@ export default function PageSelector({
       }
 
       // 기존 방식 (jobId가 없는 경우 - 로컬 개발용)
-      console.log(`[PageSelector] 로컬 PDF 생성 (SSE)...`);
 
       const requestBody: GeneratePDFRequest = {
         pages: selectedPages,

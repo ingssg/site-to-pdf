@@ -83,9 +83,6 @@ async function updateJobStatus(jobId, updates) {
  * 진행률 업데이트
  */
 async function updateProgress(jobId, progress) {
-  console.log(
-    `[Lambda] 진행률 업데이트: ${jobId}, ${progress.message}, ${progress.percentage}%`
-  );
   try {
     await updateJobStatus(jobId, {
       progress: {
@@ -95,7 +92,6 @@ async function updateProgress(jobId, progress) {
         percentage: progress.percentage,
       },
     });
-    console.log(`[Lambda] 진행률 업데이트 완료: ${jobId}`);
   } catch (error) {
     console.error(`[Lambda] 진행률 업데이트 실패: ${jobId}`, error);
     // 진행률 업데이트 실패해도 계속 진행
@@ -184,7 +180,6 @@ async function fetchBufferFromUrl(url) {
  * Step 1: 크롤링만 수행
  */
 async function handleCrawl(job) {
-  console.log(`[Lambda] 크롤링 시작: ${job.id}`);
 
   // 작업 상태를 'crawling'으로 업데이트
   await updateJobStatus(job.id, { status: "crawling" });
@@ -198,8 +193,6 @@ async function handleCrawl(job) {
   const remainingPages = Math.max(0, totalTargetPages - baseCount);
   const runMaxPages = Math.min(batchLimit, remainingPages);
 
-  // Lambda 이전 버전과 동일: 크롤링 시작 시 즉시 진행률 업데이트
-  // 첫 페이지 크롤링 시작 전까지는 입력한 URL의 경로 표시
   const initialUrl = job.config.url;
   try {
     const urlObj = new URL(initialUrl);
@@ -322,12 +315,6 @@ async function handleCrawl(job) {
   const nextBatchIndex = shouldContinue ? batchIndex + 1 : batchIndex;
 
   if (shouldContinue) {
-    console.log(
-      `[Lambda] 배치 완료, 다음 배치로 이어짐: ${job.id}, ` +
-        `batch=${batchIndex + 1}/${
-          crawlPlan.length
-        }, remaining=${remainingAfter}, queue=${crawlState.queue.length}`
-    );
     await updateJobStatus(job.id, {
       status: "crawling",
       result: {
@@ -355,9 +342,6 @@ async function handleCrawl(job) {
         if (!response.ok) {
           throw new Error(`status=${response.status} body=${responseText}`);
         }
-        console.log(
-          `[Lambda] 다음 배치 재호출 요청 완료: ${job.id}, status=${response.status}`
-        );
       } catch (error) {
         console.error("[Lambda] 다음 배치 재호출 실패:", error);
         await updateJobStatus(job.id, {
@@ -423,7 +407,6 @@ async function handleCrawl(job) {
     },
   });
 
-  console.log(`[Lambda] 크롤링 완료: ${job.id}, ${mergedPages.length}페이지`);
 
   return {
     statusCode: 200,
@@ -441,10 +424,6 @@ async function handleCrawl(job) {
  * Step 3: 선택된 페이지로 PDF 생성
  */
 async function handleGeneratePDF(job) {
-  console.log(`[Lambda] PDF 생성 시작: ${job.id}`);
-
-  // Lambda 이전 버전과 동일: 시작 시 즉시 진행률 업데이트
-  console.log(`[Lambda] 초기 진행률 업데이트 시작...`);
   try {
     await updateProgress(job.id, {
       current: 0,
@@ -452,7 +431,6 @@ async function handleGeneratePDF(job) {
       message: "페이지 데이터 처리 중...",
       percentage: 10,
     });
-    console.log(`[Lambda] 초기 진행률 업데이트 완료`);
   } catch (error) {
     console.error(`[Lambda] 초기 진행률 업데이트 실패:`, error);
     // 진행률 업데이트 실패해도 계속 진행
@@ -566,13 +544,13 @@ async function handleGeneratePDF(job) {
     });
   }
 
-    // PDF 생성
-    await updateJobStatus(job.id, { status: "generating_pdf" });
-    const domain = new URL(job.config.url).hostname.replace("www.", "");
+  // PDF 생성
+  await updateJobStatus(job.id, { status: "generating_pdf" });
+  const domain = new URL(job.config.url).hostname.replace("www.", "");
 
   const generator = new HTMLPDFGenerator();
   let pdfResult;
-    try {
+  try {
     pdfResult = await generator.generatePDFs(
       pagesWithBuffers,
       aiSummary,
@@ -582,31 +560,24 @@ async function handleGeneratePDF(job) {
     await generator.close();
   }
 
-    // PDF 컴파일 완료 (중간 진행률 반영)
-    await updateProgress(job.id, {
-      current: 0,
-      total: 100,
-      message: "PDF 컴파일 완료",
-      percentage: 70,
-    });
+  // PDF 컴파일 완료 (중간 진행률 반영)
+  await updateProgress(job.id, {
+    current: 0,
+    total: 100,
+    message: "PDF 컴파일 완료",
+    percentage: 70,
+  });
 
-  // ZIP 파일 생성 (Lambda 이전 버전과 동일한 구조)
-  // Lambda 이전 버전: src/app/api/generate-pdf/route.ts 참고
-  console.log(
-    `[ZIP] ZIP 파일 생성 시작: individualPdfs 개수 = ${
-      (pdfResult.individualPdfs || []).length
-    }`
-  );
+  // ZIP 파일 생성
 
-    // 개별 PDF 구성 단계
-    await updateProgress(job.id, {
-      current: 0,
-      total: 100,
-      message: "개별 PDF 구성 중...",
-      percentage: 80,
-    });
+  // 개별 PDF 구성 단계
+  await updateProgress(job.id, {
+    current: 0,
+    total: 100,
+    message: "개별 PDF 구성 중...",
+    percentage: 80,
+  });
 
-  // Lambda 이전 버전과 동일: ZIP 파일 생성 시작 진행률 업데이트
   await updateProgress(job.id, {
     current: 0,
     total: 100,
@@ -616,18 +587,12 @@ async function handleGeneratePDF(job) {
 
   const zip = new JSZip();
 
-  // Lambda 이전 버전과 동일: individualPdfs만 ZIP에 추가
-  // - 통합 PDF 전체는 추가하지 않음
-  // - 스크린샷 PDF도 ZIP에 포함하지 않음 (별도 다운로드 URL로 제공)
   (pdfResult.individualPdfs || []).forEach((pdfBuffer, index) => {
     const pageNumber = index + 1;
 
     if (index === 0) {
       // 첫 번째 PDF는 종합 분석 요약
       const filename = `${String(pageNumber).padStart(2, "0")}_전체_요약.pdf`;
-      console.log(
-        `[ZIP] 파일 추가: ${filename} (index=${index}, pageNumber=${pageNumber})`
-      );
       zip.file(filename, pdfBuffer);
       return;
     }
@@ -636,7 +601,6 @@ async function handleGeneratePDF(job) {
     const pageIndex = index - 1;
     const page = pagesWithBuffers[pageIndex];
     if (!page) {
-      console.log(`[ZIP] 페이지 없음: index=${index}, pageIndex=${pageIndex}`);
       return;
     }
 
@@ -647,19 +611,11 @@ async function handleGeneratePDF(job) {
       .replace(/[^a-zA-Z0-9가-힣._-]/g, "_")
       .slice(0, 100);
 
-    console.log(
-      `[ZIP] 파일 추가: ${filename} (index=${index}, pageNumber=${pageNumber}, title=${page.title})`
-    );
     zip.file(filename, pdfBuffer);
   });
 
-  console.log(
-    `[ZIP] ZIP 파일 생성 중... (총 ${Object.keys(zip.files).length}개 파일)`
-  );
   const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
-  console.log(`[ZIP] ZIP 파일 생성 완료: 크기=${zipBuffer.length} bytes`);
 
-  // Lambda 이전 버전과 동일: ZIP 파일 생성 완료 진행률 업데이트
   await updateProgress(job.id, {
     current: 100,
     total: 100,
@@ -716,15 +672,6 @@ async function handleGeneratePDF(job) {
   // 스크린샷 PDF 개수 (처리된 페이지 수)
   const screenshotPdfCount = pagesWithBuffers.length;
 
-  console.log(
-    `[Lambda] 파일 크기 정보: 통합 PDF=${mergedPdfSize} bytes (${(
-      mergedPdfSize /
-      1024 /
-      1024
-    ).toFixed(2)} MB), ZIP=${zipSize} bytes (${(zipSize / 1024 / 1024).toFixed(
-      2
-    )} MB), 개별 PDF 개수=${individualPdfCount}, 통합 PDF 페이지 수=${mergedPdfPageCount}, 스크린샷 PDF 개수=${screenshotPdfCount}`
-  );
 
   // 작업 완료
   await updateJobStatus(job.id, {
@@ -748,7 +695,6 @@ async function handleGeneratePDF(job) {
     completed_at: new Date().toISOString(),
   });
 
-  console.log(`[Lambda] PDF 생성 완료: ${job.id}`);
 
   return {
     statusCode: 200,
@@ -768,7 +714,6 @@ async function handleGeneratePDF(job) {
  * Lambda 핸들러
  */
 exports.handler = async (event) => {
-  console.log("[Lambda] 워커 시작", JSON.stringify(event));
 
   // 클라이언트 초기화
   initClients();
@@ -808,7 +753,6 @@ exports.handler = async (event) => {
     }
 
     // 작업 조회
-    console.log(`[Lambda] 작업 조회: ${jobId}, action: ${action}`);
     const { data, error } = await supabase
       .from("jobs")
       .select("*")
