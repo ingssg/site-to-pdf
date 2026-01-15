@@ -9,12 +9,14 @@ interface PDFGenerationProgressModalProps {
     message: string;
     percentage: number;
   } | null;
+  status?: string | null;
   onClose?: () => void;
 }
 
 export default function PDFGenerationProgressModal({
   isOpen,
   progress,
+  status,
   onClose,
 }: PDFGenerationProgressModalProps) {
   const [pdfProgressValue, setPdfProgressValue] = useState<number>(0);
@@ -27,6 +29,8 @@ export default function PDFGenerationProgressModal({
       setAiProgressValue(0);
     }
   }, [isOpen]);
+
+  const aiDone = status === "generating_pdf" || status === "completed";
 
   useEffect(() => {
     if (!isOpen || !progress) return;
@@ -50,8 +54,16 @@ export default function PDFGenerationProgressModal({
     setPdfProgressValue((prev) => Math.max(prev, percentage));
   }, [isOpen, progress?.message, progress?.percentage]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    if (aiDone) {
+      setAiProgressValue((prev) => Math.max(prev, 100));
+    }
+  }, [aiDone, isOpen]);
+
   const isAIGenerating =
-    progress?.message.includes("요약") || progress?.message.includes("AI");
+    !aiDone &&
+    (progress?.message.includes("요약") || progress?.message.includes("AI"));
 
   return (
     <Modal isOpen={isOpen} onClose={onClose || (() => {})} showCloseButton={false}>

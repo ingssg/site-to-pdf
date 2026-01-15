@@ -58,6 +58,7 @@ export default function PageSelector({
     message: string;
     percentage: number;
   } | null>(null);
+  const [jobStatus, setJobStatus] = useState<string | null>(null);
 
   const togglePage = (url: string) => {
     const newSelected = new Set(selectedUrls);
@@ -247,6 +248,7 @@ export default function PageSelector({
             }
 
             const { status, progress: jobProgress, result, error: jobError } = statusData.data;
+            setJobStatus(status || null);
             const progressPercentage =
               typeof jobProgress?.percentage === 'number' ? jobProgress.percentage : null;
             const statusChanged = status && status !== lastStatus;
@@ -750,6 +752,7 @@ export default function PageSelector({
         <PDFGenerationProgressModal
           isOpen={true}
           progress={progress}
+          status={jobStatus}
           onClose={undefined}
         />
       )}

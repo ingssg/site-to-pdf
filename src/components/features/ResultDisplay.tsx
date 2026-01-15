@@ -51,6 +51,16 @@ export default function ResultDisplay({
   const [downloadError, setDownloadError] = useState<AppError | null>(null);
   const [faviconSrc, setFaviconSrc] = useState<string>("");
 
+  const normalizeSizeLabel = (value?: string | number | null) => {
+    if (value === undefined || value === null) return "";
+    const text = String(value).trim();
+    if (!text) return "";
+    if (/(kb|mb|gb)$/i.test(text)) {
+      return text;
+    }
+    return `${text} MB`;
+  };
+
   // 도메인 추출
   const getDomain = () => {
     try {
@@ -172,29 +182,17 @@ export default function ResultDisplay({
       const filename = `${domain}_screenshots_${date}.pdf`;
 
       // 서버에 저장된 스크린샷 PDF 다운로드 (브라우저 오픈 방지)
-      if (
-        pdf.screenshotPdfUrl.startsWith("http://") ||
-        pdf.screenshotPdfUrl.startsWith("https://")
-      ) {
-        const response = await fetch(pdf.screenshotPdfUrl);
-        if (!response.ok) throw new Error("스크린샷 PDF 다운로드 실패");
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      } else {
-        const a = document.createElement("a");
-        a.href = pdf.screenshotPdfUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
+      const response = await fetch(pdf.screenshotPdfUrl);
+      if (!response.ok) throw new Error("스크린샷 PDF 다운로드 실패");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("스크린샷 PDF 다운로드 실패:", error);
       setDownloadError(
@@ -950,7 +948,7 @@ export default function ResultDisplay({
             {/* Full PDF Card */}
             <DownloadCard
               title="전체 웹사이트 PDF"
-              description={`${pdf.pageCount} 페이지 • ${pdf.totalSizeMB} • 단일 파일`}
+              description={`${pdf.pageCount} 페이지 • ${normalizeSizeLabel(pdf.totalSizeMB)} • 단일 파일`}
               icon={
                 <svg
                   className="w-7 h-7 text-red-600 dark:text-red-400"
@@ -974,7 +972,7 @@ export default function ResultDisplay({
             {/* ZIP Card */}
             <DownloadCard
               title="개별 페이지 PDF"
-              description={`ZIP 아카이브 • ${pdf.zipSizeMB || pdf.totalSizeMB} • ${pdf.individualPdfCount || pdf.pageCount}개 파일`}
+              description={`ZIP 아카이브 • ${normalizeSizeLabel(pdf.zipSizeMB || pdf.totalSizeMB)} • ${pdf.individualPdfCount || pdf.pageCount}개 파일`}
               icon={
                 <svg
                   className="w-7 h-7 text-amber-600 dark:text-amber-400"
