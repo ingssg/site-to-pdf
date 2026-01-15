@@ -269,7 +269,7 @@ async function handleCrawl(job) {
       },
     });
 
-    const lambdaUrl = process.env.LAMBDA_FUNCTION_URL;
+    const lambdaUrl = job.config?.lambdaUrl || process.env.LAMBDA_FUNCTION_URL;
     if (lambdaUrl) {
       fetch(lambdaUrl, {
         method: 'POST',

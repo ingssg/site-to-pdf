@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
     const validatedData = CreateJobRequestSchema.parse(body);
 
     const { url, maxPages, crawlMode } = validatedData;
+    const lambdaUrl = process.env.LAMBDA_FUNCTION_URL || null;
 
     // 2. Supabase에 작업 등록
     const { data: job, error } = await supabase
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest) {
           url,
           maxPages,
           crawlMode,
+          lambdaUrl,
         },
         progress: {
           current: 0,
