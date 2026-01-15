@@ -251,6 +251,7 @@ class WebCrawler {
     );
 
     let page = null;
+    let context = null;
     try {
       // 브라우저 연결 상태 확인
       if (!this.browser || !this.browser.isConnected()) {
@@ -258,7 +259,8 @@ class WebCrawler {
         return;
       }
 
-      page = await this.browser.newPage();
+      context = await this.browser.newContext();
+      page = await context.newPage();
       this.openPages.push(page);
 
       await page.goto(url, {
@@ -608,9 +610,7 @@ class WebCrawler {
         anchors.map((a) => a.href)
       );
 
-      // @sparticuz/chromium의 single-process 모드에서는 page.close()가 브라우저를 닫을 수 있음
-      // 따라서 page.close()를 호출하지 않고 페이지를 유지
-      // 모든 크롤링이 완료된 후 close() 메서드에서 일괄 정리
+      // 컨텍스트는 finally에서 정리 (페이지 누적 방지)
 
       const sameDomainLinks = [...new Set(links)].filter((link) => {
         try {
@@ -645,6 +645,20 @@ class WebCrawler {
       }
     } catch (error) {
       console.error(`[Crawler] Failed to crawl ${url}:`, error);
+    } finally {
+      if (page) {
+        const index = this.openPages.indexOf(page);
+        if (index > -1) {
+          this.openPages.splice(index, 1);
+        }
+      }
+      if (context) {
+        try {
+          await context.close();
+        } catch (error) {
+          console.warn("[Crawler] 컨텍스트 닫기 중 에러:", error);
+        }
+      }
     }
   }
 
