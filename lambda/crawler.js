@@ -178,7 +178,9 @@ class WebCrawler {
       const executablePath = await chromium.executablePath();
       console.log("[Crawler] Chromium 경로:", executablePath);
 
-      const launchArgs = chromium.args.filter((arg) => arg !== "--single-process");
+      const launchArgs = chromium.args.filter(
+        (arg) => arg !== "--single-process"
+      );
 
       this.browser = await playwright.launch({
         args: [
