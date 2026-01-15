@@ -171,13 +171,30 @@ export default function ResultDisplay({
       const date = new Date().toISOString().split("T")[0];
       const filename = `${domain}_screenshots_${date}.pdf`;
 
-      // 서버에 저장된 스크린샷 PDF 다운로드
-      const a = document.createElement("a");
-      a.href = pdf.screenshotPdfUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      // 서버에 저장된 스크린샷 PDF 다운로드 (브라우저 오픈 방지)
+      if (
+        pdf.screenshotPdfUrl.startsWith("http://") ||
+        pdf.screenshotPdfUrl.startsWith("https://")
+      ) {
+        const response = await fetch(pdf.screenshotPdfUrl);
+        if (!response.ok) throw new Error("스크린샷 PDF 다운로드 실패");
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      } else {
+        const a = document.createElement("a");
+        a.href = pdf.screenshotPdfUrl;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
     } catch (error) {
       console.error("스크린샷 PDF 다운로드 실패:", error);
       setDownloadError(
