@@ -7,23 +7,30 @@
  * - 'generate-pdf': 선택된 페이지로 PDF 생성 (Step 3)
  */
 
-const { WebCrawler } = require('./crawler');
-const { generateAISummary, generatePageSummary } = require('./ai');
-const { HTMLPDFGenerator } = require('./pdf');
-const { createClient } = require('@supabase/supabase-js');
-const { OpenAI } = require('openai');
-const JSZip = require('jszip');
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
-const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const { WebCrawler } = require("./crawler");
+const { generateAISummary, generatePageSummary } = require("./ai");
+const { HTMLPDFGenerator } = require("./pdf");
+const { createClient } = require("@supabase/supabase-js");
+const { OpenAI } = require("openai");
+const JSZip = require("jszip");
+const {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+} = require("@aws-sdk/client-s3");
+const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 // 환경 변수
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME;
-const S3_REGION = process.env.AWS_REGION || process.env.S3_REGION || 'ap-northeast-2';
+const S3_REGION =
+  process.env.AWS_REGION || process.env.S3_REGION || "ap-northeast-2";
 const S3_PUBLIC_BASE_URL = process.env.S3_PUBLIC_BASE_URL || null;
-const S3_PRESIGNED_EXPIRES_SECONDS = Number(process.env.S3_PRESIGNED_EXPIRES_SECONDS || 604800);
+const S3_PRESIGNED_EXPIRES_SECONDS = Number(
+  process.env.S3_PRESIGNED_EXPIRES_SECONDS || 604800
+);
 
 // 클라이언트 초기화 (지연 초기화 - handler에서 검증)
 let supabase = null;
@@ -32,7 +39,9 @@ let s3 = null;
 
 function initClients() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Supabase 환경 변수가 설정되지 않았습니다. SUPABASE_URL과 SUPABASE_SERVICE_ROLE_KEY를 확인하세요.');
+    throw new Error(
+      "Supabase 환경 변수가 설정되지 않았습니다. SUPABASE_URL과 SUPABASE_SERVICE_ROLE_KEY를 확인하세요."
+    );
   }
 
   if (!supabase) {
@@ -42,7 +51,9 @@ function initClients() {
   if (!openai && OPENAI_API_KEY) {
     openai = new OpenAI({ apiKey: OPENAI_API_KEY });
   } else if (!OPENAI_API_KEY) {
-    console.warn('[Lambda] OPENAI_API_KEY가 설정되지 않았습니다. AI 기능이 작동하지 않을 수 있습니다.');
+    console.warn(
+      "[Lambda] OPENAI_API_KEY가 설정되지 않았습니다. AI 기능이 작동하지 않을 수 있습니다."
+    );
   }
 
   if (!s3) {
@@ -55,15 +66,15 @@ function initClients() {
  */
 async function updateJobStatus(jobId, updates) {
   const { error } = await supabase
-    .from('jobs')
+    .from("jobs")
     .update({
       ...updates,
       updated_at: new Date().toISOString(),
     })
-    .eq('id', jobId);
+    .eq("id", jobId);
 
   if (error) {
-    console.error('[Lambda] 작업 상태 업데이트 에러:', error);
+    console.error("[Lambda] 작업 상태 업데이트 에러:", error);
     throw error;
   }
 }
@@ -72,7 +83,9 @@ async function updateJobStatus(jobId, updates) {
  * 진행률 업데이트
  */
 async function updateProgress(jobId, progress) {
-  console.log(`[Lambda] 진행률 업데이트: ${jobId}, ${progress.message}, ${progress.percentage}%`);
+  console.log(
+    `[Lambda] 진행률 업데이트: ${jobId}, ${progress.message}, ${progress.percentage}%`
+  );
   try {
     await updateJobStatus(jobId, {
       progress: {
@@ -92,9 +105,14 @@ async function updateProgress(jobId, progress) {
 /**
  * S3에 파일 업로드
  */
-async function uploadToStorage(filePath, fileBuffer, contentType) {
+async function uploadToStorage(
+  filePath,
+  fileBuffer,
+  contentType,
+  downloadFilename = null
+) {
   if (!S3_BUCKET_NAME) {
-    throw new Error('S3_BUCKET_NAME이 설정되지 않았습니다.');
+    throw new Error("S3_BUCKET_NAME이 설정되지 않았습니다.");
   }
 
   const command = new PutObjectCommand({
@@ -107,19 +125,25 @@ async function uploadToStorage(filePath, fileBuffer, contentType) {
   try {
     await s3.send(command);
   } catch (error) {
-    console.error('[Lambda] S3 업로드 에러:', error);
+    console.error("[Lambda] S3 업로드 에러:", error);
     throw error;
   }
 
   if (S3_PUBLIC_BASE_URL) {
-    return `${S3_PUBLIC_BASE_URL.replace(/\/$/, '')}/${filePath}`;
+    return `${S3_PUBLIC_BASE_URL.replace(/\/$/, "")}/${filePath}`;
   }
 
+  const safeDownloadName =
+    downloadFilename || filePath.split("/").pop() || "file";
   const signedCommand = new GetObjectCommand({
     Bucket: S3_BUCKET_NAME,
     Key: filePath,
+    ResponseContentType: contentType,
+    ResponseContentDisposition: `attachment; filename="${safeDownloadName}"`,
   });
-  return getSignedUrl(s3, signedCommand, { expiresIn: S3_PRESIGNED_EXPIRES_SECONDS });
+  return getSignedUrl(s3, signedCommand, {
+    expiresIn: S3_PRESIGNED_EXPIRES_SECONDS,
+  });
 }
 
 function computeCrawlPlan(totalPages) {
@@ -163,7 +187,7 @@ async function handleCrawl(job) {
   console.log(`[Lambda] 크롤링 시작: ${job.id}`);
 
   // 작업 상태를 'crawling'으로 업데이트
-  await updateJobStatus(job.id, { status: 'crawling' });
+  await updateJobStatus(job.id, { status: "crawling" });
 
   const totalTargetPages = job.config.maxPages || 50;
   const existingPages = job.result?.crawlResult?.pages || [];
@@ -184,7 +208,10 @@ async function handleCrawl(job) {
       current: baseCount,
       total: totalTargetPages,
       message: initialPath, // 입력한 URL의 경로만 표시
-      percentage: totalTargetPages > 0 ? Math.round((baseCount / totalTargetPages) * 100) : 0,
+      percentage:
+        totalTargetPages > 0
+          ? Math.round((baseCount / totalTargetPages) * 100)
+          : 0,
     });
   } catch (error) {
     // URL 파싱 실패 시 전체 URL 사용
@@ -192,7 +219,10 @@ async function handleCrawl(job) {
       current: baseCount,
       total: totalTargetPages,
       message: initialUrl,
-      percentage: totalTargetPages > 0 ? Math.round((baseCount / totalTargetPages) * 100) : 0,
+      percentage:
+        totalTargetPages > 0
+          ? Math.round((baseCount / totalTargetPages) * 100)
+          : 0,
     });
   }
 
@@ -207,9 +237,10 @@ async function handleCrawl(job) {
       current: overallCurrent,
       total: totalTargetPages,
       message: url, // Lambda 이전 버전과 동일: URL만 전달 (접두사 없음)
-      percentage: totalTargetPages > 0
-        ? Math.round((overallCurrent / totalTargetPages) * 100)
-        : 0,
+      percentage:
+        totalTargetPages > 0
+          ? Math.round((overallCurrent / totalTargetPages) * 100)
+          : 0,
     });
   });
 
@@ -217,7 +248,7 @@ async function handleCrawl(job) {
   try {
     crawlResult = await crawler.crawl(job.result?.crawlState || null);
   } catch (error) {
-    console.error('[Lambda] 크롤링 실행 실패:', error);
+    console.error("[Lambda] 크롤링 실행 실패:", error);
     const fallbackState = job.result?.crawlState || {
       queue: [],
       visitedUrls: [],
@@ -241,11 +272,11 @@ async function handleCrawl(job) {
           screenshotUrl = await uploadToStorage(
             `${job.id}/screenshots/viewport_${index + 1}.jpg`,
             page.screenshot,
-            'image/jpeg'
+            "image/jpeg"
           );
         }
       } catch (error) {
-        console.warn('[Lambda] 스크린샷 업로드 실패:', error);
+        console.warn("[Lambda] 스크린샷 업로드 실패:", error);
       }
 
       try {
@@ -253,17 +284,17 @@ async function handleCrawl(job) {
           fullPageScreenshotUrl = await uploadToStorage(
             `${job.id}/screenshots/full_${index + 1}.jpg`,
             page.fullPageScreenshot,
-            'image/jpeg'
+            "image/jpeg"
           );
         }
       } catch (error) {
-        console.warn('[Lambda] 전체 스크린샷 업로드 실패:', error);
+        console.warn("[Lambda] 전체 스크린샷 업로드 실패:", error);
       }
 
       return {
         url: page.url,
         title: page.title,
-        content: page.content || '',
+        content: page.content || "",
         depth: page.depth,
         pageType: page.pageType,
         screenshotUrl,
@@ -293,10 +324,12 @@ async function handleCrawl(job) {
   if (shouldContinue) {
     console.log(
       `[Lambda] 배치 완료, 다음 배치로 이어짐: ${job.id}, ` +
-      `batch=${batchIndex + 1}/${crawlPlan.length}, remaining=${remainingAfter}, queue=${crawlState.queue.length}`
+        `batch=${batchIndex + 1}/${
+          crawlPlan.length
+        }, remaining=${remainingAfter}, queue=${crawlState.queue.length}`
     );
     await updateJobStatus(job.id, {
-      status: 'crawling',
+      status: "crawling",
       result: {
         ...job.result,
         crawlPlan,
@@ -314,19 +347,21 @@ async function handleCrawl(job) {
     if (lambdaUrl) {
       try {
         const response = await fetch(lambdaUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jobId: job.id, action: 'crawl' }),
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ jobId: job.id, action: "crawl" }),
         });
-        const responseText = await response.text().catch(() => '');
+        const responseText = await response.text().catch(() => "");
         if (!response.ok) {
           throw new Error(`status=${response.status} body=${responseText}`);
         }
-        console.log(`[Lambda] 다음 배치 재호출 요청 완료: ${job.id}, status=${response.status}`);
+        console.log(
+          `[Lambda] 다음 배치 재호출 요청 완료: ${job.id}, status=${response.status}`
+        );
       } catch (error) {
-        console.error('[Lambda] 다음 배치 재호출 실패:', error);
+        console.error("[Lambda] 다음 배치 재호출 실패:", error);
         await updateJobStatus(job.id, {
-          status: 'failed',
+          status: "failed",
           error: `Lambda self-invocation failed: ${error.message}`,
           completed_at: new Date().toISOString(),
         });
@@ -335,16 +370,17 @@ async function handleCrawl(job) {
           body: JSON.stringify({
             success: false,
             jobId: job.id,
-            action: 'crawl',
+            action: "crawl",
             message: `Lambda self-invocation failed: ${error.message}`,
           }),
         };
       }
     } else {
-      const errorMessage = 'Lambda function URL is not configured for self-invocation.';
+      const errorMessage =
+        "Lambda function URL is not configured for self-invocation.";
       console.error(`[Lambda] 다음 배치 재호출 실패: ${errorMessage}`);
       await updateJobStatus(job.id, {
-        status: 'failed',
+        status: "failed",
         error: errorMessage,
         completed_at: new Date().toISOString(),
       });
@@ -353,7 +389,7 @@ async function handleCrawl(job) {
         body: JSON.stringify({
           success: false,
           jobId: job.id,
-          action: 'crawl',
+          action: "crawl",
           message: errorMessage,
         }),
       };
@@ -364,8 +400,8 @@ async function handleCrawl(job) {
       body: JSON.stringify({
         success: true,
         jobId: job.id,
-        action: 'crawl',
-        message: 'Crawling batch completed. Continuing...',
+        action: "crawl",
+        message: "Crawling batch completed. Continuing...",
         totalPages: mergedPages.length,
         remaining: remainingAfter,
       }),
@@ -373,7 +409,7 @@ async function handleCrawl(job) {
   }
 
   await updateJobStatus(job.id, {
-    status: 'crawl_completed',
+    status: "crawl_completed",
     result: {
       ...job.result,
       crawlPlan,
@@ -394,8 +430,8 @@ async function handleCrawl(job) {
     body: JSON.stringify({
       success: true,
       jobId: job.id,
-      action: 'crawl',
-      message: 'Crawling completed. Waiting for page selection.',
+      action: "crawl",
+      message: "Crawling completed. Waiting for page selection.",
       totalPages: mergedPages.length,
     }),
   };
@@ -413,7 +449,7 @@ async function handleGeneratePDF(job) {
     await updateProgress(job.id, {
       current: 0,
       total: 100,
-      message: '페이지 데이터 처리 중...',
+      message: "페이지 데이터 처리 중...",
       percentage: 10,
     });
     console.log(`[Lambda] 초기 진행률 업데이트 완료`);
@@ -427,7 +463,7 @@ async function handleGeneratePDF(job) {
   const crawlResult = job.result?.crawlResult;
 
   if (!crawlResult || !crawlResult.pages) {
-    throw new Error('크롤링 결과가 없습니다. 먼저 크롤링을 수행하세요.');
+    throw new Error("크롤링 결과가 없습니다. 먼저 크롤링을 수행하세요.");
   }
 
   // 선택된 페이지만 필터링 (selectedPages가 비어있으면 모든 페이지 사용)
@@ -439,7 +475,7 @@ async function handleGeneratePDF(job) {
   }
 
   if (pagesToProcess.length === 0) {
-    throw new Error('처리할 페이지가 없습니다.');
+    throw new Error("처리할 페이지가 없습니다.");
   }
 
   // 스크린샷 복원 (Storage URL 또는 base64)
@@ -450,22 +486,27 @@ async function handleGeneratePDF(job) {
 
       try {
         if (page.screenshot) {
-          screenshotBuffer = Buffer.from(page.screenshot, 'base64');
+          screenshotBuffer = Buffer.from(page.screenshot, "base64");
         } else if (page.screenshotUrl) {
           screenshotBuffer = await fetchBufferFromUrl(page.screenshotUrl);
         }
       } catch (error) {
-        console.warn('[Lambda] 스크린샷 다운로드 실패:', error);
+        console.warn("[Lambda] 스크린샷 다운로드 실패:", error);
       }
 
       try {
         if (page.fullPageScreenshot) {
-          fullPageScreenshotBuffer = Buffer.from(page.fullPageScreenshot, 'base64');
+          fullPageScreenshotBuffer = Buffer.from(
+            page.fullPageScreenshot,
+            "base64"
+          );
         } else if (page.fullPageScreenshotUrl) {
-          fullPageScreenshotBuffer = await fetchBufferFromUrl(page.fullPageScreenshotUrl);
+          fullPageScreenshotBuffer = await fetchBufferFromUrl(
+            page.fullPageScreenshotUrl
+          );
         }
       } catch (error) {
-        console.warn('[Lambda] 전체 스크린샷 다운로드 실패:', error);
+        console.warn("[Lambda] 전체 스크린샷 다운로드 실패:", error);
       }
 
       return {
@@ -478,27 +519,31 @@ async function handleGeneratePDF(job) {
   );
 
   // 작업 상태 업데이트
-  await updateJobStatus(job.id, { status: 'summarizing' });
-  
+  await updateJobStatus(job.id, { status: "summarizing" });
+
   // Lambda 이전 버전과 동일: 전체 사이트 AI 요약 생성 시작 진행률 업데이트
   await updateProgress(job.id, {
     current: 0,
     total: 100,
-    message: '전체 사이트 AI 요약 생성 중...',
+    message: "전체 사이트 AI 요약 생성 중...",
     percentage: 20,
   });
 
   // AI 요약 생성 (전체)
   if (!openai) {
-    throw new Error('OpenAI API 키가 설정되지 않았습니다.');
+    throw new Error("OpenAI API 키가 설정되지 않았습니다.");
   }
-  const aiSummary = await generateAISummary(pagesWithBuffers, openai, 'detailed');
+  const aiSummary = await generateAISummary(
+    pagesWithBuffers,
+    openai,
+    "detailed"
+  );
 
   // 개별 페이지 AI 요약 생성
   await updateProgress(job.id, {
     current: 0,
     total: pagesWithBuffers.length,
-    message: '개별 페이지 AI 요약 생성 중...',
+    message: "개별 페이지 AI 요약 생성 중...",
     percentage: 0,
   });
 
@@ -508,43 +553,53 @@ async function handleGeneratePDF(job) {
       page.pageSummary = await generatePageSummary(page, openai);
     } catch (error) {
       console.error(`[Lambda] 페이지 요약 생성 실패 (${page.url}):`, error);
-      page.pageSummary = '비즈니스 인사이트를 추출할 수 없습니다.';
+      page.pageSummary = "비즈니스 인사이트를 추출할 수 없습니다.";
     }
 
     await updateProgress(job.id, {
       current: i + 1,
       total: pagesWithBuffers.length,
-      message: `개별 페이지 AI 요약 생성 중... (${i + 1}/${pagesWithBuffers.length})`,
+      message: `개별 페이지 AI 요약 생성 중... (${i + 1}/${
+        pagesWithBuffers.length
+      })`,
       percentage: Math.round(((i + 1) / pagesWithBuffers.length) * 100),
     });
   }
 
   // PDF 생성
-  await updateJobStatus(job.id, { status: 'generating_pdf' });
-  const domain = new URL(job.config.url).hostname.replace('www.', '');
+  await updateJobStatus(job.id, { status: "generating_pdf" });
+  const domain = new URL(job.config.url).hostname.replace("www.", "");
 
   const generator = new HTMLPDFGenerator();
   let pdfResult;
   try {
-    pdfResult = await generator.generatePDFs(pagesWithBuffers, aiSummary, job.config.crawlMode || 'smart');
+    pdfResult = await generator.generatePDFs(
+      pagesWithBuffers,
+      aiSummary,
+      job.config.crawlMode || "smart"
+    );
   } finally {
     await generator.close();
   }
 
   // ZIP 파일 생성 (Lambda 이전 버전과 동일한 구조)
   // Lambda 이전 버전: src/app/api/generate-pdf/route.ts 참고
-  console.log(`[ZIP] ZIP 파일 생성 시작: individualPdfs 개수 = ${(pdfResult.individualPdfs || []).length}`);
-  
+  console.log(
+    `[ZIP] ZIP 파일 생성 시작: individualPdfs 개수 = ${
+      (pdfResult.individualPdfs || []).length
+    }`
+  );
+
   // Lambda 이전 버전과 동일: ZIP 파일 생성 시작 진행률 업데이트
   await updateProgress(job.id, {
     current: 0,
     total: 100,
-    message: 'ZIP 파일 생성 중...',
+    message: "ZIP 파일 생성 중...",
     percentage: 90,
   });
-  
+
   const zip = new JSZip();
-  
+
   // Lambda 이전 버전과 동일: individualPdfs만 ZIP에 추가
   // - 통합 PDF 전체는 추가하지 않음
   // - 스크린샷 PDF도 ZIP에 포함하지 않음 (별도 다운로드 URL로 제공)
@@ -553,8 +608,10 @@ async function handleGeneratePDF(job) {
 
     if (index === 0) {
       // 첫 번째 PDF는 종합 분석 요약
-      const filename = `${String(pageNumber).padStart(2, '0')}_전체_요약.pdf`;
-      console.log(`[ZIP] 파일 추가: ${filename} (index=${index}, pageNumber=${pageNumber})`);
+      const filename = `${String(pageNumber).padStart(2, "0")}_전체_요약.pdf`;
+      console.log(
+        `[ZIP] 파일 추가: ${filename} (index=${index}, pageNumber=${pageNumber})`
+      );
       zip.file(filename, pdfBuffer);
       return;
     }
@@ -567,44 +624,54 @@ async function handleGeneratePDF(job) {
       return;
     }
 
-    const baseName = `${String(pageNumber).padStart(2, '0')}_${page.title || 'page'}`;
+    const baseName = `${String(pageNumber).padStart(2, "0")}_${
+      page.title || "page"
+    }`;
     const filename = `${baseName}.pdf`
-      .replace(/[^a-zA-Z0-9가-힣._-]/g, '_')
+      .replace(/[^a-zA-Z0-9가-힣._-]/g, "_")
       .slice(0, 100);
 
-    console.log(`[ZIP] 파일 추가: ${filename} (index=${index}, pageNumber=${pageNumber}, title=${page.title})`);
+    console.log(
+      `[ZIP] 파일 추가: ${filename} (index=${index}, pageNumber=${pageNumber}, title=${page.title})`
+    );
     zip.file(filename, pdfBuffer);
   });
 
-  console.log(`[ZIP] ZIP 파일 생성 중... (총 ${Object.keys(zip.files).length}개 파일)`);
-  const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+  console.log(
+    `[ZIP] ZIP 파일 생성 중... (총 ${Object.keys(zip.files).length}개 파일)`
+  );
+  const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
   console.log(`[ZIP] ZIP 파일 생성 완료: 크기=${zipBuffer.length} bytes`);
-  
+
   // Lambda 이전 버전과 동일: ZIP 파일 생성 완료 진행률 업데이트
   await updateProgress(job.id, {
     current: 100,
     total: 100,
-    message: '파일 업로드 중...',
+    message: "파일 업로드 중...",
     percentage: 95,
   });
 
   // Lambda 이전 버전과 동일한 파일명 형식: ${domain}_individual_pdfs_${date}.zip
-  const safeDomain = domain.replace(/\./g, '_');
-  const date = new Date().toISOString().split('T')[0];
+  const safeDomain = domain.replace(/\./g, "_");
+  const date = new Date().toISOString().split("T")[0];
   const zipFilename = `${safeDomain}_individual_pdfs_${date}.zip`;
+  const mergedFilename = `${safeDomain}_business_intelligence_${date}.pdf`;
+  const screenshotFilename = `${safeDomain}_screenshots_${date}.pdf`;
 
   // Supabase Storage에 업로드 (파일명 포함)
   const timestamp = Date.now();
   const zipUrl = await uploadToStorage(
     `${job.id}/${zipFilename}`,
     zipBuffer,
-    'application/zip'
+    "application/zip",
+    zipFilename
   );
 
   const pdfUrl = await uploadToStorage(
     `${job.id}/merged_${timestamp}.pdf`,
     pdfResult.mergedPdf,
-    'application/pdf'
+    "application/pdf",
+    mergedFilename
   );
 
   let screenshotPdfUrl = null;
@@ -612,27 +679,40 @@ async function handleGeneratePDF(job) {
     screenshotPdfUrl = await uploadToStorage(
       `${job.id}/screenshots_${timestamp}.pdf`,
       pdfResult.screenshotPdf,
-      'application/pdf'
+      "application/pdf",
+      screenshotFilename
     );
   }
 
   // 파일 크기 및 개수 계산 (Lambda 이전 버전과 동일)
   const mergedPdfSize = pdfResult.mergedPdf ? pdfResult.mergedPdf.length : 0;
   const zipSize = zipBuffer.length;
-  const individualPdfCount = pdfResult.individualPdfs ? pdfResult.individualPdfs.length : 0;
-  const screenshotPdfSize = pdfResult.screenshotPdf ? pdfResult.screenshotPdf.length : 0;
-  
+  const individualPdfCount = pdfResult.individualPdfs
+    ? pdfResult.individualPdfs.length
+    : 0;
+  const screenshotPdfSize = pdfResult.screenshotPdf
+    ? pdfResult.screenshotPdf.length
+    : 0;
+
   // 통합 PDF 페이지 수 계산 (pdfResult에서 가져오기)
   const mergedPdfPageCount = pdfResult.totalPages || 0;
-  
+
   // 스크린샷 PDF 개수 (처리된 페이지 수)
   const screenshotPdfCount = pagesWithBuffers.length;
 
-  console.log(`[Lambda] 파일 크기 정보: 통합 PDF=${mergedPdfSize} bytes (${(mergedPdfSize / 1024 / 1024).toFixed(2)} MB), ZIP=${zipSize} bytes (${(zipSize / 1024 / 1024).toFixed(2)} MB), 개별 PDF 개수=${individualPdfCount}, 통합 PDF 페이지 수=${mergedPdfPageCount}, 스크린샷 PDF 개수=${screenshotPdfCount}`);
+  console.log(
+    `[Lambda] 파일 크기 정보: 통합 PDF=${mergedPdfSize} bytes (${(
+      mergedPdfSize /
+      1024 /
+      1024
+    ).toFixed(2)} MB), ZIP=${zipSize} bytes (${(zipSize / 1024 / 1024).toFixed(
+      2
+    )} MB), 개별 PDF 개수=${individualPdfCount}, 통합 PDF 페이지 수=${mergedPdfPageCount}, 스크린샷 PDF 개수=${screenshotPdfCount}`
+  );
 
   // 작업 완료
   await updateJobStatus(job.id, {
-    status: 'completed',
+    status: "completed",
     result: {
       ...job.result,
       summary: aiSummary,
@@ -659,8 +739,8 @@ async function handleGeneratePDF(job) {
     body: JSON.stringify({
       success: true,
       jobId: job.id,
-      action: 'generate-pdf',
-      message: 'PDF generation completed.',
+      action: "generate-pdf",
+      message: "PDF generation completed.",
       zipUrl,
       pdfUrl,
       screenshotPdfUrl,
@@ -672,7 +752,7 @@ async function handleGeneratePDF(job) {
  * Lambda 핸들러
  */
 exports.handler = async (event) => {
-  console.log('[Lambda] 워커 시작', JSON.stringify(event));
+  console.log("[Lambda] 워커 시작", JSON.stringify(event));
 
   // 클라이언트 초기화
   initClients();
@@ -683,7 +763,8 @@ exports.handler = async (event) => {
     // 요청 파싱
     let requestBody = {};
     if (event.body) {
-      requestBody = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+      requestBody =
+        typeof event.body === "string" ? JSON.parse(event.body) : event.body;
     } else {
       requestBody = event;
     }
@@ -695,12 +776,12 @@ exports.handler = async (event) => {
         statusCode: 400,
         body: JSON.stringify({
           success: false,
-          error: 'jobId is required',
+          error: "jobId is required",
         }),
       };
     }
 
-    if (!action || !['crawl', 'generate-pdf'].includes(action)) {
+    if (!action || !["crawl", "generate-pdf"].includes(action)) {
       return {
         statusCode: 400,
         body: JSON.stringify({
@@ -713,18 +794,18 @@ exports.handler = async (event) => {
     // 작업 조회
     console.log(`[Lambda] 작업 조회: ${jobId}, action: ${action}`);
     const { data, error } = await supabase
-      .from('jobs')
-      .select('*')
-      .eq('id', jobId)
+      .from("jobs")
+      .select("*")
+      .eq("id", jobId)
       .single();
 
     if (error) {
-      console.error('[Lambda] 작업 조회 에러:', error);
+      console.error("[Lambda] 작업 조회 에러:", error);
       return {
         statusCode: 404,
         body: JSON.stringify({
           success: false,
-          error: 'Job not found',
+          error: "Job not found",
         }),
       };
     }
@@ -732,9 +813,9 @@ exports.handler = async (event) => {
     job = data;
 
     // action에 따라 처리
-    if (action === 'crawl') {
+    if (action === "crawl") {
       // 크롤링은 pending 또는 crawling 상태에서 가능 (배치 이어가기)
-      if (!['pending', 'crawling'].includes(job.status)) {
+      if (!["pending", "crawling"].includes(job.status)) {
         return {
           statusCode: 400,
           body: JSON.stringify({
@@ -744,9 +825,9 @@ exports.handler = async (event) => {
         };
       }
       return await handleCrawl(job);
-    } else if (action === 'generate-pdf') {
+    } else if (action === "generate-pdf") {
       // PDF 생성은 crawl_completed 또는 page_selected 상태에서 가능
-      if (!['crawl_completed', 'page_selected'].includes(job.status)) {
+      if (!["crawl_completed", "page_selected"].includes(job.status)) {
         return {
           statusCode: 400,
           body: JSON.stringify({
@@ -757,20 +838,19 @@ exports.handler = async (event) => {
       }
       return await handleGeneratePDF(job);
     }
-
   } catch (error) {
-    console.error('[Lambda] 에러:', error);
-    console.error('[Lambda] 에러 스택:', error.stack);
+    console.error("[Lambda] 에러:", error);
+    console.error("[Lambda] 에러 스택:", error.stack);
 
     // 작업 실패 처리
     if (job) {
       try {
         await updateJobStatus(job.id, {
-          status: 'failed',
-          error: error.message || '알 수 없는 에러가 발생했습니다',
+          status: "failed",
+          error: error.message || "알 수 없는 에러가 발생했습니다",
         });
       } catch (updateError) {
-        console.error('[Lambda] 작업 상태 업데이트 실패:', updateError);
+        console.error("[Lambda] 작업 상태 업데이트 실패:", updateError);
       }
     }
 
@@ -778,7 +858,7 @@ exports.handler = async (event) => {
       statusCode: 500,
       body: JSON.stringify({
         success: false,
-        error: error.message || '알 수 없는 에러가 발생했습니다',
+        error: error.message || "알 수 없는 에러가 발생했습니다",
         jobId: job ? job.id : null,
       }),
     };
