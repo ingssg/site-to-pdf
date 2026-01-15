@@ -728,8 +728,22 @@ export default function PageSelector({
           const fileName = pdfResult.data?.pdf?.mergedPdf
             ? generateFilename("pdf")
             : generateFilename("zip");
+          const normalizeSizeLabel = (value?: string | number | null) => {
+            if (value === undefined || value === null) {
+              return null;
+            }
+            const text = String(value).trim();
+            if (!text) {
+              return null;
+            }
+            if (/(kb|mb|gb)$/i.test(text)) {
+              return text;
+            }
+            return `${text} MB`;
+          };
+
           const fileSize =
-            pdfResult.data?.pdf?.totalSizeMB ||
+            normalizeSizeLabel(pdfResult.data?.pdf?.totalSizeMB) ||
             (pdfResult.data?.pdf?.mergedPdf ? "2.4 MB" : "24.8 MB");
 
           return (
