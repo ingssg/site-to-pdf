@@ -273,6 +273,10 @@
   1. **브라우저 disconnect 발생 시 in-flight URL을 큐로 복원**
   2. 다음 배치에서 재시도하도록 상태 유지
   - 관련 기록: `docs/lambda-crawler-troubleshooting.md`
+- 배치 완료/재호출 보강:
+  1. **크롤링 실패 시 fallback 상태로 계속 진행**
+  2. **배치 완료/재호출 로그 추가**로 추적 가능
+  - 관련 기록: `docs/lambda-crawler-troubleshooting.md`
 
 ### 2025-01-03
 - PDF 레이아웃 최종 개선:

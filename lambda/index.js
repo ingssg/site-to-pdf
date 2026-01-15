@@ -190,7 +190,22 @@ async function handleCrawl(job) {
     });
   });
 
-  const crawlResult = await crawler.crawl(job.result?.crawlState || null);
+  let crawlResult;
+  try {
+    crawlResult = await crawler.crawl(job.result?.crawlState || null);
+  } catch (error) {
+    console.error('[Lambda] 크롤링 실행 실패:', error);
+    const fallbackState = job.result?.crawlState || {
+      queue: [],
+      visitedUrls: [],
+      skippedUrls: [],
+    };
+    crawlResult = {
+      pages: [],
+      totalPages: 0,
+      crawlState: fallbackState,
+    };
+  }
 
   // 크롤링 결과 저장 (스크린샷은 Storage에 업로드하고 URL만 저장)
   const newPagesForStorage = await Promise.all(
@@ -255,6 +270,10 @@ async function handleCrawl(job) {
   const nextBatchIndex = shouldContinue ? batchIndex + 1 : batchIndex;
 
   if (shouldContinue) {
+    console.log(
+      `[Lambda] 배치 완료, 다음 배치로 이어짐: ${job.id}, ` +
+      `batch=${batchIndex + 1}/${crawlPlan.length}, remaining=${remainingAfter}, queue=${crawlState.queue.length}`
+    );
     await updateJobStatus(job.id, {
       status: 'crawling',
       result: {
@@ -279,6 +298,9 @@ async function handleCrawl(job) {
       }).catch((error) => {
         console.error('[Jobs] Lambda 재호출 실패:', error);
       });
+      console.log(`[Lambda] 다음 배치 재호출 요청 완료: ${job.id}`);
+    } else {
+      console.error('[Lambda] 다음 배치 재호출 실패: lambdaUrl 없음');
     }
 
     return {
