@@ -269,6 +269,10 @@
   3. **원본 스크린샷 PDF 다운로드 방식 통일 (fetch → blob)**
   4. **스크린샷 PDF 넘버링: 표지 제외, 1부터 시작**
   - 관련 기록: `docs/ui-status-fixes.md`
+- 크롤링 배치 정지 대응:
+  1. **브라우저 disconnect 발생 시 in-flight URL을 큐로 복원**
+  2. 다음 배치에서 재시도하도록 상태 유지
+  - 관련 기록: `docs/lambda-crawler-troubleshooting.md`
 
 ### 2025-01-03
 - PDF 레이아웃 최종 개선:

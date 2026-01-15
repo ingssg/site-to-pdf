@@ -252,7 +252,7 @@ class WebCrawler {
         ? crawlState.queue
         : [{ url: startUrl, depth: 0 }];
     const queuedUrls = new Set(queue.map((item) => normalizeUrl(item.url)));
-    const inFlight = new Set();
+    const inFlight = new Map();
 
     const enqueueLinks = (links, nextDepth) => {
       if (!links || links.length === 0) {
@@ -282,8 +282,26 @@ class WebCrawler {
       (queue.length > 0 || inFlight.size > 0) &&
       this.crawledPages.length < this.config.maxPages
     ) {
-      if (this.browserDisconnected || !this.browser || !this.browser.isConnected()) {
+      if (
+        this.browserDisconnected ||
+        !this.browser ||
+        !this.browser.isConnected()
+      ) {
         console.warn("[Crawler] 브라우저 연결 끊김 감지, 큐 처리 중단");
+        if (inFlight.size > 0) {
+          for (const { url, depth } of inFlight.values()) {
+            if (!url) continue;
+            const normalizedLink = normalizeUrl(url);
+            if (
+              this.visitedUrls.has(normalizedLink) ||
+              queuedUrls.has(normalizedLink)
+            ) {
+              continue;
+            }
+            queuedUrls.add(normalizedLink);
+            queue.push({ url, depth });
+          }
+        }
         break;
       }
       while (
@@ -302,16 +320,28 @@ class WebCrawler {
           .finally(() => {
             inFlight.delete(promise);
           });
-        inFlight.add(promise);
+        inFlight.set(promise, { url, depth });
       }
 
       if (inFlight.size > 0) {
-        await Promise.race(inFlight);
+        await Promise.race(inFlight.keys());
       }
     }
 
     if (inFlight.size > 0) {
-      await Promise.allSettled(inFlight);
+      await Promise.allSettled(inFlight.keys());
+      for (const { url, depth } of inFlight.values()) {
+        if (!url) continue;
+        const normalizedLink = normalizeUrl(url);
+        if (
+          this.visitedUrls.has(normalizedLink) ||
+          queuedUrls.has(normalizedLink)
+        ) {
+          continue;
+        }
+        queuedUrls.add(normalizedLink);
+        queue.push({ url, depth });
+      }
     }
 
     return {
@@ -324,7 +354,11 @@ class WebCrawler {
   async crawlPage(url, depth) {
     const normalizedUrl = normalizeUrl(url);
 
-    if (this.browserDisconnected || !this.browser || !this.browser.isConnected()) {
+    if (
+      this.browserDisconnected ||
+      !this.browser ||
+      !this.browser.isConnected()
+    ) {
       return [];
     }
 
