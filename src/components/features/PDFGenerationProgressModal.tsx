@@ -61,9 +61,22 @@ export default function PDFGenerationProgressModal({
     }
   }, [aiDone, isOpen]);
 
-  const isAIGenerating =
-    !aiDone &&
-    (progress?.message.includes("요약") || progress?.message.includes("AI"));
+  const isAiMessage =
+    !!progress?.message &&
+    (progress.message.includes("요약") || progress.message.includes("AI"));
+  const isPdfMessage =
+    !!progress?.message &&
+    (progress.message.includes("PDF") || progress.message.includes("ZIP"));
+
+  const aiMessage = isAiMessage
+    ? progress?.message
+    : aiDone
+      ? "AI 요약 완료"
+      : "AI 요약 준비 중...";
+
+  const pdfMessage = isPdfMessage
+    ? progress?.message
+    : "PDF 생성 준비 중...";
 
   return (
     <Modal isOpen={isOpen} onClose={onClose || (() => {})} showCloseButton={false}>
@@ -122,7 +135,7 @@ export default function PDFGenerationProgressModal({
               ></div>
             </div>
             <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 font-medium pl-5 sm:pl-7">
-              벡터 에셋 렌더링 중...
+              {pdfMessage}
             </p>
           </div>
 
@@ -130,38 +143,23 @@ export default function PDFGenerationProgressModal({
           <div className="flex flex-col gap-1.5 sm:gap-2">
             <div className="flex items-center justify-between text-xs sm:text-sm">
               <div className="flex items-center gap-1.5 sm:gap-2 text-slate-800 dark:text-slate-200 font-semibold">
-                <span className={`material-symbols-outlined text-primary text-[16px] sm:text-[18px] md:text-[20px] ${isAIGenerating ? "animate-pulse" : ""}`}>
+                <span className="material-symbols-outlined text-primary text-[16px] sm:text-[18px] md:text-[20px]">
                   auto_awesome
                 </span>
                 AI 요약
               </div>
-              {isAIGenerating ? (
-                <div className="h-3 w-3 sm:h-4 sm:w-4 border-2 border-slate-200 dark:border-slate-600 border-t-primary rounded-full animate-spin"></div>
-              ) : (
-                <span className="text-primary font-bold tabular-nums text-xs sm:text-sm">
-                  {aiProgressValue}%
-                </span>
-              )}
+              <span className="text-primary font-bold tabular-nums text-xs sm:text-sm">
+                {aiProgressValue}%
+              </span>
             </div>
-            {/* Indeterminate Progress Bar with Shimmer */}
-            <div className="h-1.5 sm:h-2 w-full bg-[#f6f6f8] dark:bg-gray-700 rounded-full overflow-hidden relative">
-              {isAIGenerating ? (
-                <div 
-                  className="absolute top-0 left-0 h-full w-full bg-gradient-to-r from-transparent via-primary to-transparent opacity-90 drop-shadow-[0_0_6px_rgba(19,55,236,0.5)]"
-                  style={{
-                    animation: 'shimmer 1.5s linear infinite'
-                  }}
-                ></div>
-              ) : (
-                <div
-                  className="h-full bg-primary rounded-full shadow-[0_0_10px_rgba(19,55,236,0.5)] transition-all duration-300"
-                  style={{ width: `${aiProgressValue}%` }}
-                ></div>
-              )}
+            <div className="h-1.5 sm:h-2 w-full bg-[#f6f6f8] dark:bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full shadow-[0_0_10px_rgba(19,55,236,0.5)] transition-all duration-300"
+                style={{ width: `${aiProgressValue}%` }}
+              ></div>
             </div>
             <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 font-medium pl-5 sm:pl-7 flex items-center gap-1">
-              핵심 인사이트 추출 중
-              {isAIGenerating && <span className="animate-pulse">...</span>}
+              {aiMessage}
             </p>
           </div>
         </div>

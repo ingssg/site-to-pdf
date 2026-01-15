@@ -46,6 +46,7 @@ export default function PageSelector({
   const [generating, setGenerating] = useState(false);
   const [aiFiltering, setAiFiltering] = useState(false);
   const [aiReasoning, setAiReasoning] = useState<string | null>(null);
+  const [aiSelectedUrls, setAiSelectedUrls] = useState<Set<string> | null>(null);
   const [showReasoning, setShowReasoning] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
   const [completed, setCompleted] = useState(false);
@@ -105,6 +106,11 @@ export default function PageSelector({
 
   // AI 자동 선택
   const handleAIFilter = async () => {
+    if (aiSelectedUrls && aiSelectedUrls.size > 0) {
+      setSelectedUrls(new Set(aiSelectedUrls));
+      return;
+    }
+
     setAiFiltering(true);
     setError(null);
     setShowReasoning(false); // 초기에 접혀있게 (명시적으로 false 설정)
@@ -157,7 +163,9 @@ export default function PageSelector({
       console.log(`[AI Filter] 유효한 URL: ${validUrls.length}개, 무효한 URL: ${invalidUrls.length}개`);
 
       // 선택된 URL들로 상태 업데이트 (유효한 URL만)
-      setSelectedUrls(new Set(validUrls));
+      const nextSelected = new Set(validUrls);
+      setSelectedUrls(nextSelected);
+      setAiSelectedUrls(nextSelected);
 
       // AI 선택 이유 저장 (기본 접힌 상태 유지)
       setAiReasoning(result.data.reasoning);
@@ -582,12 +590,11 @@ export default function PageSelector({
           </label>
 
           {/* AI 자동 선택 버튼 - 프리미엄 (완료 후 숨김) */}
-          {!aiReasoning && (
-            <button
-              onClick={handleAIFilter}
-              disabled={aiFiltering || pages.length === 0}
-              className="w-full px-3 py-2 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 rounded-lg hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 transition-colors border border-purple-200 dark:border-purple-800 flex flex-col items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed relative"
-            >
+          <button
+            onClick={handleAIFilter}
+            disabled={aiFiltering || pages.length === 0}
+            className="w-full px-3 py-2 text-xs font-bold bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 text-purple-700 dark:text-purple-300 rounded-lg hover:from-purple-100 hover:to-pink-100 dark:hover:from-purple-900/30 dark:hover:to-pink-900/30 transition-colors border border-purple-200 dark:border-purple-800 flex flex-col items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed relative"
+          >
             {aiFiltering ? (
               <>
                 {/* AI 분석 중 애니메이션 */}
@@ -609,7 +616,7 @@ export default function PageSelector({
               <>
                 <div className="flex items-center gap-2">
                   <span className="text-base">🤖</span>
-                  <span>AI 자동 선택</span>
+                  <span>{aiSelectedUrls ? "AI 자동 선택 다시 적용" : "AI 자동 선택"}</span>
                   <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider bg-gradient-to-r from-yellow-400 to-orange-400 text-white rounded shadow-sm">
                     ✨ Premium
                   </span>
@@ -620,7 +627,6 @@ export default function PageSelector({
               </>
             )}
           </button>
-          )}
 
           {/* AI 선택 이유 박스 - 컴팩트 */}
           {aiReasoning && (
@@ -632,7 +638,7 @@ export default function PageSelector({
                 <div className="flex items-center gap-2">
                   <span className="text-sm">🤖</span>
                   <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
-                    AI가 {selectedUrls.size}개 페이지를 선택했습니다
+                    AI가 {(aiSelectedUrls || selectedUrls).size}개 페이지를 선택했습니다
                   </span>
                 </div>
                 <svg
