@@ -6,12 +6,16 @@ import type {
   GeneratePDFResponse,
   APIErrorResponse,
 } from "@/types/api";
-import type { AppError } from '@/types/errors';
+import type { AppError } from "@/types/errors";
 import PDFGenerationProgressModal from "./PDFGenerationProgressModal";
 import PDFCompletionModal from "./PDFCompletionModal";
 import ErrorDisplay from "@/components/ui/ErrorDisplay";
 import GuideModal from "@/components/ui/GuideModal";
-import { ErrorCode, getErrorInfo, inferErrorCode } from '@/constants/errorMessages';
+import {
+  ErrorCode,
+  getErrorInfo,
+  inferErrorCode,
+} from "@/constants/errorMessages";
 
 interface PageSelectorProps {
   pages: Array<{
@@ -46,13 +50,17 @@ export default function PageSelector({
   const [generating, setGenerating] = useState(false);
   const [aiFiltering, setAiFiltering] = useState(false);
   const [aiReasoning, setAiReasoning] = useState<string | null>(null);
-  const [aiSelectedUrls, setAiSelectedUrls] = useState<Set<string> | null>(null);
+  const [aiSelectedUrls, setAiSelectedUrls] = useState<Set<string> | null>(
+    null
+  );
   const [showReasoning, setShowReasoning] = useState(false);
   const [error, setError] = useState<AppError | null>(null);
   const [completed, setCompleted] = useState(false);
   const [pdfResult, setPdfResult] = useState<GeneratePDFResponse | null>(null);
   const [showGuide, setShowGuide] = useState(false);
-  const [selectedPagesForResult, setSelectedPagesForResult] = useState<typeof pages>([]);
+  const [selectedPagesForResult, setSelectedPagesForResult] = useState<
+    typeof pages
+  >([]);
 
   // PDF 생성 진행률 상태
   const [progress, setProgress] = useState<{
@@ -116,11 +124,11 @@ export default function PageSelector({
     setShowReasoning(false); // 초기에 접혀있게 (명시적으로 false 설정)
 
     try {
-      console.log('[PageSelector] AI 필터링 시작...');
+      console.log("[PageSelector] AI 필터링 시작...");
 
       // API 호출용 데이터 준비 (콘텐츠 1500자로 증가 - 맥락 개선)
       const requestData = {
-        pages: pages.map(page => ({
+        pages: pages.map((page) => ({
           url: page.url,
           title: page.title,
           content: page.content.substring(0, 1500),
@@ -129,38 +137,50 @@ export default function PageSelector({
         })),
       };
 
-      const response = await fetch('/api/ai-filter', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/ai-filter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestData),
       });
 
       if (!response.ok) {
-        throw new Error('AI 필터링 API 호출 실패');
+        throw new Error("AI 필터링 API 호출 실패");
       }
 
       const result = await response.json();
 
       if (!result.success) {
-        throw new Error(result.error?.userMessage || 'AI 필터링 실패');
+        throw new Error(result.error?.userMessage || "AI 필터링 실패");
       }
 
       console.log(`[AI Filter] API 응답:`, result.data.selectedUrls);
-      console.log(`[AI Filter] pages 배열 URLs:`, pages.map(p => p.url));
+      console.log(
+        `[AI Filter] pages 배열 URLs:`,
+        pages.map((p) => p.url)
+      );
 
       // 선택된 URL들이 실제 pages 배열에 있는지 확인
-      const validUrls = result.data.selectedUrls.filter((url: string) =>
-        pages.some(p => p.url === url)
+      const selectedUrlsFromAI = Array.isArray(result.data.selectedUrls)
+        ? (result.data.selectedUrls as string[])
+        : [];
+
+      const validUrls = selectedUrlsFromAI.filter((url) =>
+        pages.some((p) => p.url === url)
       );
-      const invalidUrls = result.data.selectedUrls.filter((url: string) =>
-        !pages.some(p => p.url === url)
+      const invalidUrls = selectedUrlsFromAI.filter(
+        (url) => !pages.some((p) => p.url === url)
       );
 
       if (invalidUrls.length > 0) {
-        console.error(`[AI Filter] ⚠️ pages 배열에 없는 URL이 선택됨:`, invalidUrls);
+        console.error(
+          `[AI Filter] ⚠️ pages 배열에 없는 URL이 선택됨:`,
+          invalidUrls
+        );
       }
 
-      console.log(`[AI Filter] 유효한 URL: ${validUrls.length}개, 무효한 URL: ${invalidUrls.length}개`);
+      console.log(
+        `[AI Filter] 유효한 URL: ${validUrls.length}개, 무효한 URL: ${invalidUrls.length}개`
+      );
 
       // 선택된 URL들로 상태 업데이트 (유효한 URL만)
       const nextSelected = new Set(validUrls);
@@ -171,14 +191,19 @@ export default function PageSelector({
       setAiReasoning(result.data.reasoning);
       // setShowReasoning(false); // 이미 위에서 false로 설정됨
 
-      console.log(`[AI Filter] ${validUrls.length}개 선택 (${result.data.selectedUrls.length}개 중)`);
+      console.log(
+        `[AI Filter] ${validUrls.length}개 선택 (${result.data.selectedUrls.length}개 중)`
+      );
       console.log(`[AI Filter] 이유: ${result.data.reasoning}`);
-
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'AI 자동 선택 실패';
-      const errorData = getErrorInfo(inferErrorCode(errorMessage), errorMessage);
+      const errorMessage =
+        err instanceof Error ? err.message : "AI 자동 선택 실패";
+      const errorData = getErrorInfo(
+        inferErrorCode(errorMessage),
+        errorMessage
+      );
       setError(errorData);
-      console.error('[PageSelector] AI 필터링 에러:', err);
+      console.error("[PageSelector] AI 필터링 에러:", err);
     } finally {
       setAiFiltering(false);
     }
@@ -195,7 +220,7 @@ export default function PageSelector({
     setError(null);
     // Lambda 이전 버전과 동일: 초기 진행률 즉시 설정
     setProgress({
-      message: 'PDF 생성 준비 중...',
+      message: "PDF 생성 준비 중...",
       percentage: 0,
     });
 
@@ -214,8 +239,8 @@ export default function PageSelector({
 
         // 1. PDF 생성 트리거
         const triggerResponse = await fetch(`/api/jobs/${jobId}/generate-pdf`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             selectedPages: Array.from(selectedUrls),
           }),
@@ -223,7 +248,9 @@ export default function PageSelector({
 
         if (!triggerResponse.ok) {
           const errorData = await triggerResponse.json();
-          throw new Error(errorData.error?.userMessage || 'PDF 생성 트리거 실패');
+          throw new Error(
+            errorData.error?.userMessage || "PDF 생성 트리거 실패"
+          );
         }
 
         // 2. 폴링 함수 정의 (백오프 적용)
@@ -252,38 +279,61 @@ export default function PageSelector({
             const statusData = await statusResponse.json();
 
             if (!statusData.success) {
-              throw new Error(statusData.error?.userMessage || '상태 확인 실패');
+              throw new Error(
+                statusData.error?.userMessage || "상태 확인 실패"
+              );
             }
 
-            const { status, progress: jobProgress, result, error: jobError } = statusData.data;
+            const {
+              status,
+              progress: jobProgress,
+              result,
+              error: jobError,
+            } = statusData.data;
             setJobStatus(status || null);
             const progressPercentage =
-              typeof jobProgress?.percentage === 'number' ? jobProgress.percentage : null;
-            const isPdfPhase = ['summarizing', 'generating_pdf', 'completed', 'failed'].includes(
-              status || ''
-            );
+              typeof jobProgress?.percentage === "number"
+                ? jobProgress.percentage
+                : null;
+            const isPdfPhase = [
+              "summarizing",
+              "generating_pdf",
+              "completed",
+              "failed",
+            ].includes(status || "");
             const statusChanged = status && status !== lastStatus;
             const progressIncreased =
-              progressPercentage !== null && progressPercentage > lastPercentage;
+              progressPercentage !== null &&
+              progressPercentage > lastPercentage;
 
             // 디버깅: 상태 확인
-            console.log('[PageSelector] 상태 확인:', { status, hasResult: !!result, result, jobProgress });
+            console.log("[PageSelector] 상태 확인:", {
+              status,
+              hasResult: !!result,
+              result,
+              jobProgress,
+            });
 
             // 진행률 업데이트 (PDF 단계에서만 백엔드 진행률 반영)
             if (jobProgress && isPdfPhase) {
               setProgress({
-                message: jobProgress.message || 'PDF 생성 중...',
+                message: jobProgress.message || "PDF 생성 중...",
                 percentage: jobProgress.percentage || 0,
               });
             }
             // jobProgress가 없어도 기존 progress 유지 (초기값 "PDF 생성 준비 중..." 0%)
 
             // 완료 처리
-            if (status === 'completed') {
-              console.log('[PageSelector] PDF 생성 완료, status:', status, 'result:', result);
-              
+            if (status === "completed") {
+              console.log(
+                "[PageSelector] PDF 생성 완료, status:",
+                status,
+                "result:",
+                result
+              );
+
               if (!result) {
-                console.error('[PageSelector] 완료되었지만 result가 없습니다');
+                console.error("[PageSelector] 완료되었지만 result가 없습니다");
                 isPolling = false;
                 if (pollTimer) {
                   clearTimeout(pollTimer);
@@ -293,16 +343,22 @@ export default function PageSelector({
                 setError(
                   getErrorInfo(
                     ErrorCode.UNKNOWN_ERROR,
-                    'PDF 생성은 완료되었지만 결과를 가져올 수 없습니다.'
+                    "PDF 생성은 완료되었지만 결과를 가져올 수 없습니다."
                   )
                 );
                 return;
               }
 
               // result가 문자열인 경우 파싱
-              const resultData = typeof result === 'string' ? JSON.parse(result) : result;
-              console.log('[PageSelector] resultData:', resultData);
-              console.log('[PageSelector] pdfUrl:', resultData.pdfUrl, 'zipUrl:', resultData.zipUrl);
+              const resultData =
+                typeof result === "string" ? JSON.parse(result) : result;
+              console.log("[PageSelector] resultData:", resultData);
+              console.log(
+                "[PageSelector] pdfUrl:",
+                resultData.pdfUrl,
+                "zipUrl:",
+                resultData.zipUrl
+              );
 
               isPolling = false;
               if (pollTimer) {
@@ -323,38 +379,54 @@ export default function PageSelector({
                     screenshotPdfUrl: resultData.screenshotPdfUrl || null,
                     warnings: [],
                     // Lambda 이전 버전과 동일: 실제 값 사용
-                    pageCount: resultData.pageCount || resultData.processedPages || selectedPages.length,
+                    pageCount:
+                      resultData.pageCount ||
+                      resultData.processedPages ||
+                      selectedPages.length,
                     totalSize: resultData.totalSize || 0,
-                    totalSizeMB: resultData.totalSizeMB ? `${resultData.totalSizeMB}` : '0',
+                    totalSizeMB: resultData.totalSizeMB
+                      ? `${resultData.totalSizeMB}`
+                      : "0",
                     // ZIP 파일 정보 (Lambda 이전 버전과 동일)
                     zipSize: resultData.zipSize || 0,
-                    zipSizeMB: resultData.zipSizeMB ? `${resultData.zipSizeMB}` : '0',
-                    individualPdfCount: resultData.individualPdfCount || (resultData.processedPages || selectedPages.length),
-                    screenshotPdfCount: resultData.screenshotPdfCount || resultData.processedPages || selectedPages.length,
+                    zipSizeMB: resultData.zipSizeMB
+                      ? `${resultData.zipSizeMB}`
+                      : "0",
+                    individualPdfCount:
+                      resultData.individualPdfCount ||
+                      resultData.processedPages ||
+                      selectedPages.length,
+                    screenshotPdfCount:
+                      resultData.screenshotPdfCount ||
+                      resultData.processedPages ||
+                      selectedPages.length,
                   },
                   summary: resultData.summary,
                 },
               };
-              console.log('[PageSelector] pdfResult 생성 완료:', pdfResult);
+              console.log("[PageSelector] pdfResult 생성 완료:", pdfResult);
               setPdfResult(pdfResult);
               return;
             }
 
             // 실패 처리
-            if (status === 'failed') {
+            if (status === "failed") {
               isPolling = false;
               if (pollTimer) {
                 clearTimeout(pollTimer);
                 pollTimer = null;
               }
-              throw new Error(jobError || '작업 실패');
+              throw new Error(jobError || "작업 실패");
             }
 
             // 백오프 업데이트
             if ((isPdfPhase && progressIncreased) || statusChanged) {
               resetBackoff();
             } else {
-              backoffIndex = Math.min(backoffIndex + 1, backoffSteps.length - 1);
+              backoffIndex = Math.min(
+                backoffIndex + 1,
+                backoffSteps.length - 1
+              );
             }
             if (isPdfPhase && progressPercentage !== null) {
               lastPercentage = progressPercentage;
@@ -370,8 +442,12 @@ export default function PageSelector({
               clearTimeout(pollTimer);
               pollTimer = null;
             }
-            const errorMessage = err instanceof Error ? err.message : '상태 확인 실패';
-            const errorData = getErrorInfo(inferErrorCode(errorMessage), errorMessage);
+            const errorMessage =
+              err instanceof Error ? err.message : "상태 확인 실패";
+            const errorData = getErrorInfo(
+              inferErrorCode(errorMessage),
+              errorMessage
+            );
             setError(errorData);
             setGenerating(false);
           }
@@ -442,9 +518,10 @@ export default function PageSelector({
                 setCompleted(true);
                 setPdfResult(data as GeneratePDFResponse);
               } else if (data.type === "error") {
-                const errorData = typeof data.error === 'string'
-                  ? getErrorInfo(inferErrorCode(data.error), data.error)
-                  : data.error;
+                const errorData =
+                  typeof data.error === "string"
+                    ? getErrorInfo(inferErrorCode(data.error), data.error)
+                    : data.error;
                 setError(errorData);
                 throw new Error(errorData.userMessage);
               }
@@ -455,8 +532,12 @@ export default function PageSelector({
         }
       }
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "알 수 없는 에러가 발생했습니다";
-      const errorData = getErrorInfo(inferErrorCode(errorMessage), errorMessage);
+      const errorMessage =
+        err instanceof Error ? err.message : "알 수 없는 에러가 발생했습니다";
+      const errorData = getErrorInfo(
+        inferErrorCode(errorMessage),
+        errorMessage
+      );
       setError(errorData);
       setGenerating(false);
     } finally {
@@ -600,15 +681,38 @@ export default function PageSelector({
                 {/* AI 분석 중 애니메이션 */}
                 <div className="flex items-center gap-2">
                   <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                      fill="none"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
                   </svg>
-                  <span className="font-bold">AI가 페이지를 분석하고 있습니다</span>
+                  <span className="font-bold">
+                    AI가 페이지를 분석하고 있습니다
+                  </span>
                 </div>
                 <div className="flex items-center gap-1 text-[10px] opacity-75">
-                  <div className="w-1 h-1 bg-purple-600 dark:bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                  <div className="w-1 h-1 bg-purple-600 dark:bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                  <div className="w-1 h-1 bg-purple-600 dark:bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  <div
+                    className="w-1 h-1 bg-purple-600 dark:bg-purple-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "0ms" }}
+                  ></div>
+                  <div
+                    className="w-1 h-1 bg-purple-600 dark:bg-purple-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "150ms" }}
+                  ></div>
+                  <div
+                    className="w-1 h-1 bg-purple-600 dark:bg-purple-400 rounded-full animate-bounce"
+                    style={{ animationDelay: "300ms" }}
+                  ></div>
                   <span className="ml-1">콘텐츠 기반 필터링 중</span>
                 </div>
               </>
@@ -616,7 +720,9 @@ export default function PageSelector({
               <>
                 <div className="flex items-center gap-2">
                   <span className="text-base">🤖</span>
-                  <span>{aiSelectedUrls ? "AI 자동 선택 다시 적용" : "AI 자동 선택"}</span>
+                  <span>
+                    {aiSelectedUrls ? "AI 자동 선택 다시 적용" : "AI 자동 선택"}
+                  </span>
                   <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider bg-gradient-to-r from-yellow-400 to-orange-400 text-white rounded shadow-sm">
                     ✨ Premium
                   </span>
@@ -638,18 +744,24 @@ export default function PageSelector({
                 <div className="flex items-center gap-2">
                   <span className="text-sm">🤖</span>
                   <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">
-                    AI가 {(aiSelectedUrls || selectedUrls).size}개 페이지를 선택했습니다
+                    AI가 {(aiSelectedUrls || selectedUrls).size}개 페이지를
+                    선택했습니다
                   </span>
                 </div>
                 <svg
                   className={`w-4 h-4 text-purple-700 dark:text-purple-300 transition-transform ${
-                    showReasoning ? 'rotate-180' : ''
+                    showReasoning ? "rotate-180" : ""
                   }`}
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 9l-7 7-7-7"
+                  />
                 </svg>
               </button>
 
@@ -711,7 +823,11 @@ export default function PageSelector({
                         onClick={(e) => {
                           e.preventDefault(); // 체크박스 토글 방지
                           e.stopPropagation();
-                          window.open(page.url, '_blank', 'noopener,noreferrer');
+                          window.open(
+                            page.url,
+                            "_blank",
+                            "noopener,noreferrer"
+                          );
                         }}
                         className="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-semibold rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 transition-colors flex items-center gap-1"
                         title="새 탭에서 사이트 확인"
