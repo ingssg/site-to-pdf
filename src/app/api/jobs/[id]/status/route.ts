@@ -17,8 +17,12 @@ const shouldRetrySelfInvoke = (status: string, error: string | null) => {
     return false;
   }
   return (
+    error.includes("Lambda self-invocation retryable") ||
     error.includes("Lambda self-invocation rate limited") ||
-    error.includes("ConcurrentInvocationLimitExceeded")
+    error.includes("ConcurrentInvocationLimitExceeded") ||
+    error.includes("This operation was aborted") ||
+    error.includes("AbortError") ||
+    error.includes("HeadersTimeoutError")
   );
 };
 

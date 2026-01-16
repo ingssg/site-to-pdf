@@ -403,15 +403,22 @@ async function handleCrawl(job) {
       try {
         await invokeLambdaSelf(lambdaUrl, { jobId: job.id, action: "crawl" });
       } catch (error) {
+        const errorMessage = String(error?.message || "");
         const isRateLimited =
           error?.code === "RATE_LIMITED" ||
-          String(error?.message || "").includes("status=429") ||
-          String(error?.message || "").includes("ConcurrentInvocationLimitExceeded");
+          errorMessage.includes("status=429") ||
+          errorMessage.includes("ConcurrentInvocationLimitExceeded");
+        const isAborted =
+          error?.name === "AbortError" ||
+          errorMessage.includes("AbortError") ||
+          errorMessage.includes("This operation was aborted");
+        const isHeadersTimeout = errorMessage.includes("HeadersTimeoutError");
+        const isRetryable = isRateLimited || isAborted || isHeadersTimeout;
         console.error("[Lambda] 다음 배치 재호출 실패:", error);
-        if (isRateLimited) {
+        if (isRetryable) {
           await updateJobStatus(job.id, {
             status: "crawling",
-            error: `Lambda self-invocation rate limited: ${error.message}`,
+            error: `Lambda self-invocation retryable: ${error.message}`,
           });
           return {
             statusCode: 202,
@@ -419,7 +426,7 @@ async function handleCrawl(job) {
               success: true,
               jobId: job.id,
               action: "crawl",
-              message: "Rate limited. Will retry self-invocation.",
+              message: "Self-invocation retryable error. Will retry.",
             }),
           };
         }
