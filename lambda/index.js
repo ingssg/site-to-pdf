@@ -29,6 +29,54 @@ const logDebug = (...args) => {
   }
 };
 
+const SELF_INVOKE_TIMEOUT_MS = Number(
+  process.env.SELF_INVOKE_TIMEOUT_MS || 20000
+);
+const SELF_INVOKE_MAX_RETRIES = Number(
+  process.env.SELF_INVOKE_MAX_RETRIES || 3
+);
+const SELF_INVOKE_BACKOFF_MS = Number(
+  process.env.SELF_INVOKE_BACKOFF_MS || 2000
+);
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function invokeLambdaSelf(lambdaUrl, payload) {
+  for (let attempt = 1; attempt <= SELF_INVOKE_MAX_RETRIES; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(
+      () => controller.abort(),
+      SELF_INVOKE_TIMEOUT_MS
+    );
+
+    try {
+      const response = await fetch(lambdaUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      const responseText = await response.text().catch(() => "");
+      if (!response.ok) {
+        throw new Error(`status=${response.status} body=${responseText}`);
+      }
+      return;
+    } catch (error) {
+      const isLast = attempt === SELF_INVOKE_MAX_RETRIES;
+      console.warn(
+        `[Lambda] 다음 배치 재호출 실패 (attempt ${attempt}/${SELF_INVOKE_MAX_RETRIES}):`,
+        error
+      );
+      if (isLast) {
+        throw error;
+      }
+      await sleep(SELF_INVOKE_BACKOFF_MS * attempt);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+}
+
 // 환경 변수
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -335,15 +383,7 @@ async function handleCrawl(job) {
     const lambdaUrl = job.config?.lambdaUrl || process.env.LAMBDA_FUNCTION_URL;
     if (lambdaUrl) {
       try {
-        const response = await fetch(lambdaUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ jobId: job.id, action: "crawl" }),
-        });
-        const responseText = await response.text().catch(() => "");
-        if (!response.ok) {
-          throw new Error(`status=${response.status} body=${responseText}`);
-        }
+        await invokeLambdaSelf(lambdaUrl, { jobId: job.id, action: "crawl" });
       } catch (error) {
         console.error("[Lambda] 다음 배치 재호출 실패:", error);
         await updateJobStatus(job.id, {
