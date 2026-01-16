@@ -33,10 +33,13 @@ const SELF_INVOKE_TIMEOUT_MS = Number(
   process.env.SELF_INVOKE_TIMEOUT_MS || 60000
 );
 const SELF_INVOKE_MAX_RETRIES = Number(
-  process.env.SELF_INVOKE_MAX_RETRIES || 5
+  process.env.SELF_INVOKE_MAX_RETRIES || 7
 );
 const SELF_INVOKE_BACKOFF_MS = Number(
-  process.env.SELF_INVOKE_BACKOFF_MS || 3000
+  process.env.SELF_INVOKE_BACKOFF_MS || 5000
+);
+const SELF_INVOKE_RATE_LIMIT_BACKOFF_MS = Number(
+  process.env.SELF_INVOKE_RATE_LIMIT_BACKOFF_MS || 15000
 );
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -57,6 +60,19 @@ async function invokeLambdaSelf(lambdaUrl, payload) {
         signal: controller.signal,
       });
       const responseText = await response.text().catch(() => "");
+      if (response.status === 429) {
+        const retryAfterHeader = response.headers.get("retry-after");
+        const retryAfterSeconds = Number(retryAfterHeader);
+        const retryAfterMs = Number.isFinite(retryAfterSeconds)
+          ? retryAfterSeconds * 1000
+          : SELF_INVOKE_RATE_LIMIT_BACKOFF_MS;
+        const rateLimitError = new Error(
+          `status=429 body=${responseText}`.trim()
+        );
+        rateLimitError.code = "RATE_LIMITED";
+        rateLimitError.retryAfterMs = retryAfterMs;
+        throw rateLimitError;
+      }
       if (!response.ok) {
         throw new Error(`status=${response.status} body=${responseText}`);
       }
@@ -70,7 +86,9 @@ async function invokeLambdaSelf(lambdaUrl, payload) {
       if (isLast) {
         throw error;
       }
-      await sleep(SELF_INVOKE_BACKOFF_MS * attempt);
+      const retryAfterMs =
+        error?.retryAfterMs ?? SELF_INVOKE_BACKOFF_MS * attempt;
+      await sleep(retryAfterMs);
     } finally {
       clearTimeout(timeout);
     }
