@@ -657,16 +657,24 @@ async function handleGeneratePDF(job, context) {
     });
   };
 
-  // 작업 상태 업데이트
-  await updateJobStatus(job.id, { status: "summarizing" });
+  const hasAiSummary = !!existingAiState.aiSummary;
+  const hasAllPageSummaries =
+    pagesForAi.length > 0 &&
+    pagesForAi.every((page) => pageSummaries[page.url]);
+  const aiAlreadyDone = hasAiSummary && hasAllPageSummaries;
 
-  // Lambda 이전 버전과 동일: 전체 사이트 AI 요약 생성 시작 진행률 업데이트
-  await updateProgress(job.id, {
-    current: 0,
-    total: 100,
-    message: "전체 사이트 AI 요약 생성 중...",
-    percentage: 20,
-  });
+  if (!aiAlreadyDone) {
+    // 작업 상태 업데이트
+    await updateJobStatus(job.id, { status: "summarizing" });
+
+    // Lambda 이전 버전과 동일: 전체 사이트 AI 요약 생성 시작 진행률 업데이트
+    await updateProgress(job.id, {
+      current: 0,
+      total: 100,
+      message: "전체 사이트 AI 요약 생성 중...",
+      percentage: 20,
+    });
+  }
 
   // AI 요약 생성 (전체)
   if (!openai) {
@@ -698,12 +706,14 @@ async function handleGeneratePDF(job, context) {
   }
 
   // 개별 페이지 AI 요약 생성
-  await updateProgress(job.id, {
-    current: 0,
-    total: pagesForAi.length,
-    message: "개별 페이지 AI 요약 생성 중...",
-    percentage: 0,
-  });
+  if (!aiAlreadyDone) {
+    await updateProgress(job.id, {
+      current: 0,
+      total: pagesForAi.length,
+      message: "개별 페이지 AI 요약 생성 중...",
+      percentage: 0,
+    });
+  }
 
   let completedCount = 0;
   let startIndex = pagesForAi.length;
@@ -1107,7 +1117,15 @@ async function handleGeneratePDF(job, context) {
   });
 
   // Lambda 이전 버전과 동일한 파일명 형식: ${domain}_individual_pdfs_${date}.zip
-  const safeDomain = domain.replace(/\./g, "_");
+  let safeDomain = "site";
+  try {
+    const domainForFiles = job.config?.url
+      ? new URL(job.config.url).hostname.replace("www.", "")
+      : "site";
+    safeDomain = domainForFiles.replace(/\./g, "_");
+  } catch {
+    safeDomain = "site";
+  }
   const date = new Date().toISOString().split("T")[0];
   const zipFilename = `${safeDomain}_individual_pdfs_${date}.zip`;
   const mergedFilename = `${safeDomain}_business_intelligence_${date}.pdf`;
@@ -1269,17 +1287,20 @@ exports.handler = async (event, context) => {
       }
       return await handleCrawl(job);
     } else if (action === "generate-pdf") {
-      // PDF 생성은 crawl_completed/page_selected 또는 summarizing 상태에서 가능 (재호출)
+      // PDF 생성은 crawl_completed/page_selected/summarizing/generating_pdf 상태에서 가능 (재호출)
       if (
-        !["crawl_completed", "page_selected", "summarizing"].includes(
-          job.status
-        )
+        ![
+          "crawl_completed",
+          "page_selected",
+          "summarizing",
+          "generating_pdf",
+        ].includes(job.status)
       ) {
         return {
           statusCode: 400,
           body: JSON.stringify({
             success: false,
-            error: `Job status is ${job.status}. PDF generation requires crawl_completed, page_selected, or summarizing status.`,
+            error: `Job status is ${job.status}. PDF generation requires crawl_completed, page_selected, summarizing, or generating_pdf status.`,
           }),
         };
       }
