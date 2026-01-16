@@ -139,6 +139,18 @@ export const ERROR_MESSAGES: Record<
     retryable: false,
   },
 
+  [ErrorCode.CRAWL_NOT_COMPLETED]: {
+    category: ErrorCategory.CRAWLING,
+    code: ErrorCode.CRAWL_NOT_COMPLETED,
+    message: "Crawling not completed",
+    userMessage: "크롤링이 완료된 후에만 PDF를 생성할 수 있습니다",
+    helpText: [
+      "크롤링 진행률이 100%가 될 때까지 기다려주세요",
+      "크롤링이 계속 멈춘다면 다시 시도해주세요",
+    ],
+    retryable: true,
+  },
+
   // PDF Generation Errors
   [ErrorCode.PDF_SIZE_TOO_LARGE]: {
     category: ErrorCategory.PDF_GENERATION,
@@ -290,6 +302,12 @@ export function inferErrorCode(message: string): ErrorCode {
   }
   if (lowerMessage.includes("captcha")) {
     return ErrorCode.CRAWL_CAPTCHA_DETECTED;
+  }
+  if (
+    lowerMessage.includes("크롤링 완료") ||
+    lowerMessage.includes("crawling")
+  ) {
+    return ErrorCode.CRAWL_NOT_COMPLETED;
   }
   if (lowerMessage.includes("크롤링") && lowerMessage.includes("실패")) {
     return ErrorCode.CRAWL_NO_PAGES_FOUND;

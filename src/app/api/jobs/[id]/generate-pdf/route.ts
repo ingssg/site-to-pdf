@@ -45,11 +45,12 @@ export async function POST(
 
     // 크롤링 완료 상태인지 확인
     if (!['crawl_completed', 'page_selected'].includes(job.status)) {
+      const errorMessage = `PDF 생성은 크롤링 완료 후에만 가능합니다. 현재 상태: ${job.status}`;
       return NextResponse.json(
         {
           success: false,
           error: {
-            userMessage: `PDF 생성은 크롤링 완료 후에만 가능합니다. 현재 상태: ${job.status}`,
+            ...getErrorInfo(ErrorCode.CRAWL_NOT_COMPLETED, errorMessage),
           },
         },
         { status: 400 }
