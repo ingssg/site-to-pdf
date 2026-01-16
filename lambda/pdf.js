@@ -998,6 +998,104 @@ class HTMLPDFGenerator {
     this.browser = null;
   }
 
+  buildPdfContext(pages, aiSummary, overrides = {}) {
+    const firstPageUrl = pages[0]?.url || "";
+    const domain = this.getDomainFromUrl(firstPageUrl);
+    const generatedDate =
+      overrides.generatedDate ||
+      new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      });
+    const reportId =
+      overrides.reportId || `SPD-${Date.now().toString().slice(-8)}`;
+
+    const pagesWithScreenshots = pages.filter(
+      (page) =>
+        page.screenshot ||
+        page.screenshotUrl ||
+        page.fullPageScreenshot ||
+        page.fullPageScreenshotUrl
+    );
+
+    const tocItems = [];
+
+    if (aiSummary) {
+      tocItems.push({
+        title: "종합 분석 요약",
+        url: "AI Summary",
+        pageNumber: 1,
+      });
+    }
+
+    let pageNumber = 2;
+    pagesWithScreenshots.forEach((page) => {
+      tocItems.push({
+        title: page.title || page.url,
+        url: page.url,
+        pageNumber,
+      });
+      pageNumber += 1;
+    });
+
+    const vars = {
+      COMPANY_NAME: domain,
+      COMPANY_URL: firstPageUrl,
+      GENERATED_DATE: generatedDate,
+      DOMAIN_NAME: domain,
+      REPORT_ID: reportId,
+      COMPANY_OVERVIEW: this.escapeHtml(
+        aiSummary?.overview || aiSummary?.oneLineSummary || "N/A"
+      ),
+      PROBLEM_SOLVED_ITEMS: this.buildProblemSolvedItems(aiSummary),
+      KEY_DIFFERENTIATORS: this.escapeHtml(
+        (aiSummary?.uniqueFeatures || []).join(", ") || "N/A"
+      ),
+      PRODUCTS_SERVICES: this.buildProductsServices(aiSummary),
+      TARGET_CUSTOMERS: this.buildTargetCustomers(aiSummary),
+      GROWTH_OPPORTUNITIES: this.buildGrowthOpportunities(aiSummary),
+      TOC_ITEMS: this.buildTocItems(tocItems),
+      PAGE_SECTIONS: "",
+      EXTRA_CSS: "",
+    };
+
+    return {
+      domain,
+      generatedDate,
+      reportId,
+      pagesWithScreenshots,
+      tocItems,
+      vars,
+    };
+  }
+
+  async generateFrontPdf(vars) {
+    const frontHtml = this.replaceTemplateVars(ALL_IN_ONE_TEMPLATE, vars);
+    return this.htmlToPDF(frontHtml);
+  }
+
+  async generatePageChunkPdf(
+    vars,
+    chunk,
+    domain,
+    generatedDate,
+    nextPageNumber
+  ) {
+    const chunkHtml = this.replaceTemplateVars(ALL_IN_ONE_TEMPLATE, {
+      ...vars,
+      PAGE_SECTIONS: this.buildPageSections(
+        chunk,
+        domain,
+        generatedDate,
+        nextPageNumber
+      ),
+      EXTRA_CSS:
+        ".cover-page, .toc-page, .exec-summary-page { display: none !important; }",
+    });
+    return this.htmlToPDF(chunkHtml);
+  }
+
   getDomainFromUrl(url) {
     try {
       const urlObj = new URL(url);
@@ -1545,66 +1643,10 @@ class HTMLPDFGenerator {
     try {
       await this.initBrowser();
 
-      const firstPageUrl = pages[0]?.url || "";
-      const domain = this.getDomainFromUrl(firstPageUrl);
-      const generatedDate = new Date().toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      });
-      const reportId = `SPD-${Date.now().toString().slice(-8)}`;
+      const { domain, generatedDate, pagesWithScreenshots, tocItems, vars } =
+        this.buildPdfContext(pages, aiSummary);
 
-      const pagesWithScreenshots = pages.filter(
-        (page) =>
-          page.screenshot ||
-          page.screenshotUrl ||
-          page.fullPageScreenshot ||
-          page.fullPageScreenshotUrl
-      );
-
-      const tocItems = [];
-
-      if (aiSummary) {
-        tocItems.push({
-          title: "종합 분석 요약",
-          url: "AI Summary",
-          pageNumber: 1,
-        });
-      }
-
-      let pageNumber = 2;
-      pagesWithScreenshots.forEach((page, index) => {
-        tocItems.push({
-          title: page.title || page.url,
-          url: page.url,
-          pageNumber: pageNumber,
-        });
-        pageNumber++;
-      });
-
-      const vars = {
-        COMPANY_NAME: domain,
-        COMPANY_URL: firstPageUrl,
-        GENERATED_DATE: generatedDate,
-        DOMAIN_NAME: domain,
-        REPORT_ID: reportId,
-        COMPANY_OVERVIEW: this.escapeHtml(
-          aiSummary?.overview || aiSummary?.oneLineSummary || "N/A"
-        ),
-        PROBLEM_SOLVED_ITEMS: this.buildProblemSolvedItems(aiSummary),
-        KEY_DIFFERENTIATORS: this.escapeHtml(
-          (aiSummary?.uniqueFeatures || []).join(", ") || "N/A"
-        ),
-        PRODUCTS_SERVICES: this.buildProductsServices(aiSummary),
-        TARGET_CUSTOMERS: this.buildTargetCustomers(aiSummary),
-        GROWTH_OPPORTUNITIES: this.buildGrowthOpportunities(aiSummary),
-        TOC_ITEMS: this.buildTocItems(tocItems),
-        PAGE_SECTIONS: "",
-        EXTRA_CSS: "",
-      };
-
-      const frontHtml = this.replaceTemplateVars(ALL_IN_ONE_TEMPLATE, vars);
-      const frontPdf = await this.htmlToPDF(frontHtml);
+      const frontPdf = await this.generateFrontPdf(vars);
 
       const mergedDoc = await PDFDocument.create();
       await this.appendPdfPages(mergedDoc, frontPdf);
@@ -1613,18 +1655,13 @@ class HTMLPDFGenerator {
       let nextPageNumber = 2;
       for (let i = 0; i < pagesWithScreenshots.length; i += chunkSize) {
         const chunk = pagesWithScreenshots.slice(i, i + chunkSize);
-        const chunkHtml = this.replaceTemplateVars(ALL_IN_ONE_TEMPLATE, {
-          ...vars,
-          PAGE_SECTIONS: this.buildPageSections(
-            chunk,
-            domain,
-            generatedDate,
-            nextPageNumber
-          ),
-          EXTRA_CSS:
-            ".cover-page, .toc-page, .exec-summary-page { display: none !important; }",
-        });
-        const chunkPdf = await this.htmlToPDF(chunkHtml);
+        const chunkPdf = await this.generatePageChunkPdf(
+          vars,
+          chunk,
+          domain,
+          generatedDate,
+          nextPageNumber
+        );
         await this.appendPdfPages(mergedDoc, chunkPdf);
         nextPageNumber += chunk.length;
       }

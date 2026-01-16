@@ -18,6 +18,7 @@ const {
   PutObjectCommand,
   GetObjectCommand,
 } = require("@aws-sdk/client-s3");
+const { PDFDocument } = require("pdf-lib");
 const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
@@ -47,7 +48,8 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function invokeLambdaSelf(lambdaUrl, payload) {
   const functionName =
-    process.env.SELF_INVOKE_FUNCTION_NAME || process.env.AWS_LAMBDA_FUNCTION_NAME;
+    process.env.SELF_INVOKE_FUNCTION_NAME ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME;
   const canUseSdk = !!functionName && !!lambdaClient;
   for (let attempt = 1; attempt <= SELF_INVOKE_MAX_RETRIES; attempt += 1) {
     const controller = new AbortController();
@@ -210,6 +212,40 @@ async function updateProgress(jobId, progress) {
     console.error(`[Lambda] 진행률 업데이트 실패: ${jobId}`, error);
     // 진행률 업데이트 실패해도 계속 진행
   }
+}
+
+async function streamToBuffer(stream) {
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+async function downloadFromStorage(filePath) {
+  if (!S3_BUCKET_NAME) {
+    throw new Error("S3_BUCKET_NAME이 설정되지 않았습니다.");
+  }
+  const command = new GetObjectCommand({
+    Bucket: S3_BUCKET_NAME,
+    Key: filePath,
+  });
+  const response = await s3.send(command);
+  if (!response.Body) {
+    throw new Error(`S3 다운로드 실패: ${filePath}`);
+  }
+  return streamToBuffer(response.Body);
+}
+
+function getRemainingTimeMs(context) {
+  if (!context || typeof context.getRemainingTimeInMillis !== "function") {
+    return Number.POSITIVE_INFINITY;
+  }
+  return context.getRemainingTimeInMillis();
+}
+
+function shouldStopForTimeout(context, bufferMs) {
+  return getRemainingTimeMs(context) < bufferMs;
 }
 
 /**
@@ -544,7 +580,7 @@ async function handleCrawl(job) {
 /**
  * Step 3: 선택된 페이지로 PDF 생성
  */
-async function handleGeneratePDF(job) {
+async function handleGeneratePDF(job, context) {
   logDebug(`[Lambda] generate-pdf 시작: ${job.id}`);
   logDebug(
     `[Lambda] 메모리 시작: ${Math.round(
@@ -598,6 +634,29 @@ async function handleGeneratePDF(job) {
     }) => rest
   );
 
+  const lambdaUrl = job.config?.lambdaUrl || process.env.LAMBDA_FUNCTION_URL;
+  const existingAiState = job.result?.aiSummaryState || {};
+  const pageSummaries = { ...(job.result?.pageSummaries || {}) };
+  const TIMEOUT_BUFFER_MS = 45000;
+  const CHECKPOINT_EVERY = 10;
+
+  const checkpointAiState = async (nextIndex, reason) => {
+    await updateJobStatus(job.id, {
+      status: "summarizing",
+      result: {
+        ...(job.result || {}),
+        aiSummaryState: {
+          ...existingAiState,
+          aiSummary,
+          pageSummaryIndex: nextIndex,
+          updatedAt: new Date().toISOString(),
+          reason,
+        },
+        pageSummaries,
+      },
+    });
+  };
+
   // 작업 상태 업데이트
   await updateJobStatus(job.id, { status: "summarizing" });
 
@@ -613,8 +672,30 @@ async function handleGeneratePDF(job) {
   if (!openai) {
     throw new Error("OpenAI API 키가 설정되지 않았습니다.");
   }
-  const aiSummary = await generateAISummary(pagesForAi, openai, "detailed");
-  logDebug(`[Lambda] AI 요약 완료: ${job.id} (${pagesForAi.length} pages)`);
+  let aiSummary = existingAiState.aiSummary;
+  if (!aiSummary) {
+    if (shouldStopForTimeout(context, TIMEOUT_BUFFER_MS)) {
+      if (lambdaUrl) {
+        await checkpointAiState(0, "timeout-before-summary");
+        await invokeLambdaSelf(lambdaUrl, {
+          jobId: job.id,
+          action: "generate-pdf",
+        });
+        return {
+          statusCode: 202,
+          body: JSON.stringify({
+            success: true,
+            jobId: job.id,
+            action: "generate-pdf",
+            message: "AI summary will continue in next invocation.",
+          }),
+        };
+      }
+    }
+    aiSummary = await generateAISummary(pagesForAi, openai, "detailed");
+    logDebug(`[Lambda] AI 요약 완료: ${job.id} (${pagesForAi.length} pages)`);
+    await checkpointAiState(0, "summary-completed");
+  }
 
   // 개별 페이지 AI 요약 생성
   await updateProgress(job.id, {
@@ -624,37 +705,339 @@ async function handleGeneratePDF(job) {
     percentage: 0,
   });
 
-  for (let i = 0; i < pagesForAi.length; i++) {
+  let completedCount = 0;
+  let startIndex = pagesForAi.length;
+  for (let i = 0; i < pagesForAi.length; i += 1) {
     const page = pagesForAi[i];
-    try {
-      pagesForPdf[i].pageSummary = await generatePageSummary(page, openai);
-    } catch (error) {
-      console.error(`[Lambda] 페이지 요약 생성 실패 (${page.url}):`, error);
-      pagesForPdf[i].pageSummary = "비즈니스 인사이트를 추출할 수 없습니다.";
+    const cachedSummary = pageSummaries[page.url];
+    if (cachedSummary) {
+      pagesForPdf[i].pageSummary = cachedSummary;
+      completedCount += 1;
+      continue;
     }
+    if (startIndex === pagesForAi.length) {
+      startIndex = i;
+    }
+  }
 
+  if (completedCount > 0) {
     await updateProgress(job.id, {
-      current: i + 1,
+      current: completedCount,
       total: pagesForAi.length,
-      message: `개별 페이지 AI 요약 생성 중... (${i + 1}/${pagesForAi.length})`,
-      percentage: Math.round(((i + 1) / pagesForAi.length) * 100),
+      message: `개별 페이지 AI 요약 생성 중... (${completedCount}/${pagesForAi.length})`,
+      percentage: Math.round((completedCount / pagesForAi.length) * 100),
     });
   }
 
-  // PDF 생성
-  await updateJobStatus(job.id, { status: "generating_pdf" });
-  const domain = new URL(job.config.url).hostname.replace("www.", "");
+  for (let i = startIndex; i < pagesForAi.length; i++) {
+    const page = pagesForAi[i];
+    if (pageSummaries[page.url]) {
+      continue;
+    }
 
-  const generator = new HTMLPDFGenerator();
+    if (shouldStopForTimeout(context, TIMEOUT_BUFFER_MS)) {
+      if (lambdaUrl) {
+        try {
+          await checkpointAiState(i, "timeout-before-page-summary");
+          await invokeLambdaSelf(lambdaUrl, {
+            jobId: job.id,
+            action: "generate-pdf",
+          });
+          return {
+            statusCode: 202,
+            body: JSON.stringify({
+              success: true,
+              jobId: job.id,
+              action: "generate-pdf",
+              message: "AI summary will continue in next invocation.",
+            }),
+          };
+        } catch (error) {
+          const errorMessage = String(error?.message || "");
+          const isRateLimited =
+            error?.code === "RATE_LIMITED" ||
+            errorMessage.includes("status=429") ||
+            errorMessage.includes("ConcurrentInvocationLimitExceeded");
+          const isAborted =
+            error?.name === "AbortError" ||
+            errorMessage.includes("AbortError") ||
+            errorMessage.includes("This operation was aborted");
+          const isHeadersTimeout = errorMessage.includes("HeadersTimeoutError");
+          const isRetryable = isRateLimited || isAborted || isHeadersTimeout;
+          console.error("[Lambda] generate-pdf 재호출 실패:", error);
+          if (isRetryable) {
+            await updateJobStatus(job.id, {
+              status: "summarizing",
+              error: `Lambda self-invocation retryable: ${error.message}`,
+            });
+            return {
+              statusCode: 202,
+              body: JSON.stringify({
+                success: true,
+                jobId: job.id,
+                action: "generate-pdf",
+                message: "Self-invocation retryable error. Will retry.",
+              }),
+            };
+          }
+          throw error;
+        }
+      }
+    }
+
+    try {
+      const summary = await generatePageSummary(page, openai);
+      pageSummaries[page.url] = summary;
+      pagesForPdf[i].pageSummary = summary;
+    } catch (error) {
+      console.error(`[Lambda] 페이지 요약 생성 실패 (${page.url}):`, error);
+      const fallback = "비즈니스 인사이트를 추출할 수 없습니다.";
+      pageSummaries[page.url] = fallback;
+      pagesForPdf[i].pageSummary = fallback;
+    }
+
+    completedCount += 1;
+    await updateProgress(job.id, {
+      current: completedCount,
+      total: pagesForAi.length,
+      message: `개별 페이지 AI 요약 생성 중... (${completedCount}/${pagesForAi.length})`,
+      percentage: Math.round((completedCount / pagesForAi.length) * 100),
+    });
+
+    if (completedCount % CHECKPOINT_EVERY === 0) {
+      await checkpointAiState(i + 1, "page-summary-checkpoint");
+    }
+  }
+
+  await checkpointAiState(pagesForAi.length, "page-summary-completed");
+
+  // PDF 생성 (컴파일 배치 재호출)
+  await updateJobStatus(job.id, { status: "generating_pdf" });
+  await updateProgress(job.id, {
+    current: 0,
+    total: 100,
+    message: "PDF 생성 중...",
+    percentage: 30,
+  });
+
+  const PDF_COMPILE_CHUNK_SIZE = Number(
+    process.env.PDF_COMPILE_CHUNK_SIZE || 8
+  );
+  const PDF_COMPILE_TIMEOUT_BUFFER_MS = Number(
+    process.env.PDF_COMPILE_TIMEOUT_BUFFER_MS || 45000
+  );
+
+  const generator = new HTMLPDFGenerator({
+    pageChunkSize: PDF_COMPILE_CHUNK_SIZE,
+  });
   let pdfResult;
   try {
-    logDebug(`[Lambda] PDF 컴파일 시작: ${job.id}`);
-    pdfResult = await generator.generatePDFs(
+    const compileState = job.result?.pdfCompileState || {};
+    const lambdaUrl = job.config?.lambdaUrl || process.env.LAMBDA_FUNCTION_URL;
+
+    const pdfContext = generator.buildPdfContext(pagesForPdf, aiSummary, {
+      generatedDate: compileState.generatedDate,
+      reportId: compileState.reportId,
+    });
+    const totalChunks = Math.ceil(
+      pdfContext.pagesWithScreenshots.length / PDF_COMPILE_CHUNK_SIZE
+    );
+    let nextChunkIndex = Number(compileState.nextChunkIndex || 0);
+    const chunkKeys = Array.isArray(compileState.chunkKeys)
+      ? [...compileState.chunkKeys]
+      : [];
+    let frontPdfKey = compileState.frontPdfKey;
+
+    const checkpointPdfState = async (nextIndex, stage, reason) => {
+      await updateJobStatus(job.id, {
+        status: "generating_pdf",
+        result: {
+          ...(job.result || {}),
+          pdfCompileState: {
+            stage,
+            chunkSize: PDF_COMPILE_CHUNK_SIZE,
+            nextChunkIndex: nextIndex,
+            totalChunks,
+            frontPdfKey,
+            chunkKeys,
+            generatedDate: pdfContext.generatedDate,
+            reportId: pdfContext.reportId,
+            pagesWithScreenshotsCount: pdfContext.pagesWithScreenshots.length,
+            updatedAt: new Date().toISOString(),
+            reason,
+          },
+        },
+      });
+    };
+
+    if (!frontPdfKey) {
+      logDebug(`[Lambda] PDF 프론트 생성 시작: ${job.id}`);
+      const frontPdf = await generator.generateFrontPdf(pdfContext.vars);
+      frontPdfKey = `${job.id}/pdf/chunks/front.pdf`;
+      await uploadToStorage(frontPdfKey, frontPdf, "application/pdf");
+      await checkpointPdfState(nextChunkIndex, "chunks", "front-created");
+    }
+
+    for (
+      let chunkIndex = nextChunkIndex;
+      chunkIndex < totalChunks;
+      chunkIndex += 1
+    ) {
+      if (shouldStopForTimeout(context, PDF_COMPILE_TIMEOUT_BUFFER_MS)) {
+        if (lambdaUrl) {
+          await checkpointPdfState(
+            chunkIndex,
+            "chunks",
+            "timeout-before-chunk"
+          );
+          await invokeLambdaSelf(lambdaUrl, {
+            jobId: job.id,
+            action: "generate-pdf",
+          });
+          return {
+            statusCode: 202,
+            body: JSON.stringify({
+              success: true,
+              jobId: job.id,
+              action: "generate-pdf",
+              message: "PDF compile will continue in next invocation.",
+            }),
+          };
+        }
+      }
+
+      const start = chunkIndex * PDF_COMPILE_CHUNK_SIZE;
+      const chunk = pdfContext.pagesWithScreenshots.slice(
+        start,
+        start + PDF_COMPILE_CHUNK_SIZE
+      );
+      const nextPageNumber = 2 + start;
+      const chunkPdf = await generator.generatePageChunkPdf(
+        pdfContext.vars,
+        chunk,
+        pdfContext.domain,
+        pdfContext.generatedDate,
+        nextPageNumber
+      );
+      const chunkKey = `${job.id}/pdf/chunks/chunk_${chunkIndex + 1}.pdf`;
+      await uploadToStorage(chunkKey, chunkPdf, "application/pdf");
+      chunkKeys[chunkIndex] = chunkKey;
+      nextChunkIndex = chunkIndex + 1;
+
+      const chunkProgress = totalChunks
+        ? Math.round((nextChunkIndex / totalChunks) * 30)
+        : 0;
+      await updateProgress(job.id, {
+        current: nextChunkIndex,
+        total: totalChunks,
+        message: `PDF 컴파일 중... (${nextChunkIndex}/${totalChunks})`,
+        percentage: 40 + chunkProgress,
+      });
+
+      if (nextChunkIndex % 2 === 0) {
+        await checkpointPdfState(nextChunkIndex, "chunks", "chunk-checkpoint");
+      }
+    }
+
+    await checkpointPdfState(totalChunks, "merge", "chunk-completed");
+
+    if (shouldStopForTimeout(context, PDF_COMPILE_TIMEOUT_BUFFER_MS)) {
+      if (lambdaUrl) {
+        await invokeLambdaSelf(lambdaUrl, {
+          jobId: job.id,
+          action: "generate-pdf",
+        });
+        return {
+          statusCode: 202,
+          body: JSON.stringify({
+            success: true,
+            jobId: job.id,
+            action: "generate-pdf",
+            message: "PDF merge will continue in next invocation.",
+          }),
+        };
+      }
+    }
+
+    logDebug(`[Lambda] PDF 병합 시작: ${job.id}`);
+    const mergedDoc = await PDFDocument.create();
+    const frontPdfBuffer = await downloadFromStorage(frontPdfKey);
+    await generator.appendPdfPages(mergedDoc, frontPdfBuffer);
+    for (const key of chunkKeys) {
+      if (!key) continue;
+      const chunkBuffer = await downloadFromStorage(key);
+      await generator.appendPdfPages(mergedDoc, chunkBuffer);
+    }
+
+    const creationDate = new Date();
+    mergedDoc.setCreationDate(creationDate);
+    mergedDoc.setModificationDate(creationDate);
+    const mergedBytes = await mergedDoc.save();
+    const finalPdfBuffer = Buffer.from(mergedBytes);
+    const totalSize = finalPdfBuffer.length;
+    const totalPages = mergedDoc.getPageCount();
+
+    const coverPages = 1;
+    const tocPages = Math.max(
+      1,
+      totalPages - pdfContext.pagesWithScreenshots.length - 2
+    );
+    const summaryPages = 1;
+    const pageStructure = {
+      coverPages,
+      tocPages,
+      summaryPages,
+      summaryPageIndex: coverPages + tocPages,
+      individualPagesStartIndex: coverPages + tocPages + summaryPages,
+    };
+
+    if (shouldStopForTimeout(context, PDF_COMPILE_TIMEOUT_BUFFER_MS)) {
+      if (lambdaUrl) {
+        await checkpointPdfState(
+          totalChunks,
+          "merge",
+          "timeout-before-extract"
+        );
+        await invokeLambdaSelf(lambdaUrl, {
+          jobId: job.id,
+          action: "generate-pdf",
+        });
+        return {
+          statusCode: 202,
+          body: JSON.stringify({
+            success: true,
+            jobId: job.id,
+            action: "generate-pdf",
+            message: "PDF finalization will continue in next invocation.",
+          }),
+        };
+      }
+    }
+
+    const screenshotPdf = await generator.generateScreenshotPDF(
       pagesForPdf,
-      aiSummary,
+      pdfContext.domain,
+      pdfContext.generatedDate,
       job.config.crawlMode || "smart"
     );
+    const individualPdfs = await generator.extractIndividualPDFsFromDocument(
+      mergedDoc,
+      pdfContext.pagesWithScreenshots.length,
+      pageStructure,
+      creationDate
+    );
+
+    pdfResult = {
+      mergedPdf: finalPdfBuffer,
+      individualPdfs,
+      tableOfContents: pdfContext.tocItems,
+      totalSize,
+      totalPages,
+      warnings: [],
+      screenshotPdf,
+    };
     logDebug(`[Lambda] PDF 컴파일 완료: ${job.id}`);
+    await checkpointPdfState(totalChunks, "completed", "pdf-completed");
   } finally {
     await generator.close();
   }
@@ -814,7 +1197,7 @@ async function handleGeneratePDF(job) {
 /**
  * Lambda 핸들러
  */
-exports.handler = async (event) => {
+exports.handler = async (event, context) => {
   // 클라이언트 초기화
   initClients();
 
@@ -886,17 +1269,21 @@ exports.handler = async (event) => {
       }
       return await handleCrawl(job);
     } else if (action === "generate-pdf") {
-      // PDF 생성은 crawl_completed 또는 page_selected 상태에서 가능
-      if (!["crawl_completed", "page_selected"].includes(job.status)) {
+      // PDF 생성은 crawl_completed/page_selected 또는 summarizing 상태에서 가능 (재호출)
+      if (
+        !["crawl_completed", "page_selected", "summarizing"].includes(
+          job.status
+        )
+      ) {
         return {
           statusCode: 400,
           body: JSON.stringify({
             success: false,
-            error: `Job status is ${job.status}. PDF generation requires crawl_completed or page_selected status.`,
+            error: `Job status is ${job.status}. PDF generation requires crawl_completed, page_selected, or summarizing status.`,
           }),
         };
       }
-      return await handleGeneratePDF(job);
+      return await handleGeneratePDF(job, context);
     }
   } catch (error) {
     console.error("[Lambda] 에러:", error);

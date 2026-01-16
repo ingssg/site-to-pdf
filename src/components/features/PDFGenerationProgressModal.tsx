@@ -61,6 +61,13 @@ export default function PDFGenerationProgressModal({
     }
   }, [aiDone, isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    if (status === "generating_pdf") {
+      setPdfProgressValue((prev) => Math.max(prev, 30));
+    }
+  }, [isOpen, status]);
+
   const isAiMessage =
     !!progress?.message &&
     (progress.message.includes("요약") || progress.message.includes("AI"));
@@ -68,18 +75,20 @@ export default function PDFGenerationProgressModal({
     !!progress?.message &&
     (progress.message.includes("PDF") || progress.message.includes("ZIP"));
 
-  const aiMessage = isAiMessage
+  const aiMessage = aiDone
+    ? "AI 요약 완료!"
+    : isAiMessage
     ? progress?.message
-    : aiDone
-      ? "AI 요약 완료"
-      : "AI 요약 준비 중...";
+    : "AI 요약 준비 중...";
 
-  const pdfMessage = isPdfMessage
-    ? progress?.message
-    : "PDF 생성 준비 중...";
+  const pdfMessage = isPdfMessage ? progress?.message : "PDF 생성 중";
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose || (() => {})} showCloseButton={false}>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose || (() => {})}
+      showCloseButton={false}
+    >
       <div className="w-full px-4 sm:px-6 pt-2 pb-4 sm:pb-6 md:pb-8 flex flex-col items-center relative">
         {/* Step Indicator */}
         <p className="text-primary text-xs sm:text-sm font-bold tracking-wide leading-normal text-center uppercase mb-1">
@@ -89,17 +98,25 @@ export default function PDFGenerationProgressModal({
         {/* Hero Image / Visual Interest */}
         <div className="flex justify-center my-4 sm:my-5 md:my-6">
           <div className="relative w-24 h-24 sm:w-28 sm:h-28 md:w-32 md:h-32 rounded-full bg-[#f6f6f8] dark:bg-[#1a1d2d] flex items-center justify-center shadow-inner">
-            <div className="absolute inset-0 rounded-full border-2 sm:border-3 md:border-4 border-primary/10 border-t-primary animate-spin" style={{ animationDuration: "3s" }}></div>
-            <span 
+            <div
+              className="absolute inset-0 rounded-full border-2 sm:border-3 md:border-4 border-primary/10 border-t-primary animate-spin"
+              style={{ animationDuration: "3s" }}
+            ></div>
+            <span
               className="material-symbols-outlined text-3xl sm:text-4xl md:text-5xl text-primary"
-              style={{ fontVariationSettings: "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 48" }}
+              style={{
+                fontVariationSettings:
+                  "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 48",
+              }}
             >
               description
             </span>
             {/* Floating Badge */}
             <div className="absolute -bottom-0.5 sm:-bottom-1 -right-0.5 sm:-right-1 bg-white dark:bg-[#101322] p-1 sm:p-1.5 rounded-full shadow-lg">
               <div className="bg-primary text-white rounded-full p-1 sm:p-1.5 flex items-center justify-center">
-                <span className="material-symbols-outlined text-sm sm:text-base md:text-lg">auto_awesome</span>
+                <span className="material-symbols-outlined text-sm sm:text-base md:text-lg">
+                  auto_awesome
+                </span>
               </div>
             </div>
           </div>
@@ -121,7 +138,9 @@ export default function PDFGenerationProgressModal({
           <div className="flex flex-col gap-1.5 sm:gap-2">
             <div className="flex items-center justify-between text-xs sm:text-sm">
               <div className="flex items-center gap-1.5 sm:gap-2 text-slate-800 dark:text-slate-200 font-semibold">
-                <span className="material-symbols-outlined text-slate-400 text-[16px] sm:text-[18px] md:text-[20px]">picture_as_pdf</span>
+                <span className="material-symbols-outlined text-slate-400 text-[16px] sm:text-[18px] md:text-[20px]">
+                  picture_as_pdf
+                </span>
                 PDF 컴파일
               </div>
               <span className="text-primary font-bold tabular-nums text-xs sm:text-sm">
@@ -170,4 +189,3 @@ export default function PDFGenerationProgressModal({
     </Modal>
   );
 }
-

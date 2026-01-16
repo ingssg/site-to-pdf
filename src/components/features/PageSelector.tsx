@@ -199,7 +199,7 @@ export default function PageSelector({
     setGenerating(true);
     setError(null);
     setProgress({
-      message: "PDF 생성 준비 중...",
+      message: "PDF 생성 중",
       percentage: 0,
     });
 
@@ -307,7 +307,7 @@ export default function PageSelector({
                 percentage: jobProgress.percentage || 0,
               });
             }
-            // jobProgress가 없어도 기존 progress 유지 (초기값 "PDF 생성 준비 중..." 0%)
+            // jobProgress가 없어도 기존 progress 유지 (초기값 "PDF 생성 중" 0%)
 
             // 완료 처리
             if (status === "completed") {
