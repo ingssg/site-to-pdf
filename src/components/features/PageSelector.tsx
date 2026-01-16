@@ -204,6 +204,28 @@ export default function PageSelector({
     });
 
     try {
+      if (jobId) {
+        const statusResponse = await fetch(`/api/jobs/${jobId}/status`);
+        const statusData = await statusResponse.json();
+        if (!statusData.success) {
+          throw new Error(
+            statusData.error?.userMessage || "상태 확인 실패"
+          );
+        }
+        const status = statusData.data?.status;
+        if (!["crawl_completed", "page_selected"].includes(status)) {
+          setJobStatus(status || null);
+          setGenerating(false);
+          setError(
+            getErrorInfo(
+              ErrorCode.CRAWL_NOT_COMPLETED,
+              `PDF 생성은 크롤링 완료 후에만 가능합니다. 현재 상태: ${status}`
+            )
+          );
+          return;
+        }
+      }
+
       const selectedPages = pages.filter((p) => selectedUrls.has(p.url));
       setSelectedPagesForResult(selectedPages);
 
