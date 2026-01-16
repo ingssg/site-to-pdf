@@ -60,6 +60,15 @@ async function invokeLambdaSelf(lambdaUrl, payload) {
         signal: controller.signal,
       });
       const responseText = await response.text().catch(() => "");
+      if (response.status === 400) {
+        const isAlreadyFinalized =
+          responseText.includes("already crawl_completed") ||
+          responseText.includes("already failed") ||
+          responseText.includes("requires pending or crawling status");
+        if (isAlreadyFinalized) {
+          return;
+        }
+      }
       if (response.status === 429) {
         const retryAfterHeader = response.headers.get("retry-after");
         const retryAfterSeconds = Number(retryAfterHeader);
