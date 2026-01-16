@@ -9,6 +9,19 @@ import { supabase } from "@/lib/db/supabase";
 import { getErrorInfo, inferErrorCode } from "@/constants/errorMessages";
 import { ErrorCode } from "@/types/errors";
 
+const SELF_INVOKE_RETRY_COOLDOWN_MS = 30000;
+const SELF_INVOKE_TIMEOUT_MS = 4000;
+
+const shouldRetrySelfInvoke = (status: string, error: string | null) => {
+  if (status !== "crawling" || !error) {
+    return false;
+  }
+  return (
+    error.includes("Lambda self-invocation rate limited") ||
+    error.includes("ConcurrentInvocationLimitExceeded")
+  );
+};
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -66,6 +79,61 @@ export async function GET(
     }
 
     // 작업 상태 반환
+    if (
+      shouldRetrySelfInvoke(job.status, job.error) &&
+      job.updated_at &&
+      Date.now() - new Date(job.updated_at).getTime() > SELF_INVOKE_RETRY_COOLDOWN_MS
+    ) {
+      try {
+        const { data: configRow } = await supabase
+          .from("jobs")
+          .select("config")
+          .eq("id", jobId)
+          .single();
+
+        const lambdaUrl =
+          configRow?.config?.lambdaUrl || process.env.LAMBDA_FUNCTION_URL;
+
+        if (lambdaUrl) {
+          await supabase
+            .from("jobs")
+            .update({
+              error: "Lambda self-invocation retrying",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", jobId);
+
+          const controller = new AbortController();
+          const timeout = setTimeout(
+            () => controller.abort(),
+            SELF_INVOKE_TIMEOUT_MS
+          );
+
+          try {
+            await fetch(lambdaUrl, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ jobId, action: "crawl" }),
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timeout);
+          }
+        }
+      } catch (invokeError) {
+        console.error("[Jobs] self-invocation 재시도 실패:", invokeError);
+        await supabase
+          .from("jobs")
+          .update({
+            error: `Lambda self-invocation retry failed: ${
+              invokeError instanceof Error ? invokeError.message : "unknown"
+            }`,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", jobId);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: {

@@ -403,7 +403,26 @@ async function handleCrawl(job) {
       try {
         await invokeLambdaSelf(lambdaUrl, { jobId: job.id, action: "crawl" });
       } catch (error) {
+        const isRateLimited =
+          error?.code === "RATE_LIMITED" ||
+          String(error?.message || "").includes("status=429") ||
+          String(error?.message || "").includes("ConcurrentInvocationLimitExceeded");
         console.error("[Lambda] 다음 배치 재호출 실패:", error);
+        if (isRateLimited) {
+          await updateJobStatus(job.id, {
+            status: "crawling",
+            error: `Lambda self-invocation rate limited: ${error.message}`,
+          });
+          return {
+            statusCode: 202,
+            body: JSON.stringify({
+              success: true,
+              jobId: job.id,
+              action: "crawl",
+              message: "Rate limited. Will retry self-invocation.",
+            }),
+          };
+        }
         await updateJobStatus(job.id, {
           status: "failed",
           error: `Lambda self-invocation failed: ${error.message}`,
