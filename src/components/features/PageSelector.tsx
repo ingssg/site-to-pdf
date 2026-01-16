@@ -208,9 +208,7 @@ export default function PageSelector({
         const statusResponse = await fetch(`/api/jobs/${jobId}/status`);
         const statusData = await statusResponse.json();
         if (!statusData.success) {
-          throw new Error(
-            statusData.error?.userMessage || "상태 확인 실패"
-          );
+          throw new Error(statusData.error?.userMessage || "상태 확인 실패");
         }
         const status = statusData.data?.status;
         if (!["crawl_completed", "page_selected"].includes(status)) {
