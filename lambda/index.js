@@ -18,6 +18,7 @@ const {
   PutObjectCommand,
   GetObjectCommand,
 } = require("@aws-sdk/client-s3");
+const { LambdaClient, InvokeCommand } = require("@aws-sdk/client-lambda");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const LOG_LEVEL = process.env.LOG_LEVEL || "info";
@@ -45,6 +46,9 @@ const SELF_INVOKE_RATE_LIMIT_BACKOFF_MS = Number(
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function invokeLambdaSelf(lambdaUrl, payload) {
+  const functionName =
+    process.env.SELF_INVOKE_FUNCTION_NAME || process.env.AWS_LAMBDA_FUNCTION_NAME;
+  const canUseSdk = !!functionName && !!lambdaClient;
   for (let attempt = 1; attempt <= SELF_INVOKE_MAX_RETRIES; attempt += 1) {
     const controller = new AbortController();
     const timeout = setTimeout(
@@ -53,40 +57,59 @@ async function invokeLambdaSelf(lambdaUrl, payload) {
     );
 
     try {
-      const response = await fetch(lambdaUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      const responseText = await response.text().catch(() => "");
-      if (response.status === 400) {
-        const isAlreadyFinalized =
-          responseText.includes("already crawl_completed") ||
-          responseText.includes("already failed") ||
-          responseText.includes("requires pending or crawling status");
-        if (isAlreadyFinalized) {
-          return;
+      if (canUseSdk) {
+        const command = new InvokeCommand({
+          FunctionName: functionName,
+          InvocationType: "Event",
+          Payload: Buffer.from(JSON.stringify(payload)),
+        });
+        await lambdaClient.send(command);
+      } else {
+        const response = await fetch(lambdaUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        const responseText = await response.text().catch(() => "");
+        if (response.status === 400) {
+          const isAlreadyFinalized =
+            responseText.includes("already crawl_completed") ||
+            responseText.includes("already failed") ||
+            responseText.includes("requires pending or crawling status");
+          if (isAlreadyFinalized) {
+            return;
+          }
         }
-      }
-      if (response.status === 429) {
-        const retryAfterHeader = response.headers.get("retry-after");
-        const retryAfterSeconds = Number(retryAfterHeader);
-        const retryAfterMs = Number.isFinite(retryAfterSeconds)
-          ? retryAfterSeconds * 1000
-          : SELF_INVOKE_RATE_LIMIT_BACKOFF_MS;
-        const rateLimitError = new Error(
-          `status=429 body=${responseText}`.trim()
-        );
-        rateLimitError.code = "RATE_LIMITED";
-        rateLimitError.retryAfterMs = retryAfterMs;
-        throw rateLimitError;
-      }
-      if (!response.ok) {
-        throw new Error(`status=${response.status} body=${responseText}`);
+        if (response.status === 429) {
+          const retryAfterHeader = response.headers.get("retry-after");
+          const retryAfterSeconds = Number(retryAfterHeader);
+          const retryAfterMs = Number.isFinite(retryAfterSeconds)
+            ? retryAfterSeconds * 1000
+            : SELF_INVOKE_RATE_LIMIT_BACKOFF_MS;
+          const rateLimitError = new Error(
+            `status=429 body=${responseText}`.trim()
+          );
+          rateLimitError.code = "RATE_LIMITED";
+          rateLimitError.retryAfterMs = retryAfterMs;
+          throw rateLimitError;
+        }
+        if (!response.ok) {
+          throw new Error(`status=${response.status} body=${responseText}`);
+        }
       }
       return;
     } catch (error) {
+      if (
+        canUseSdk &&
+        (error?.name === "TooManyRequestsException" ||
+          error?.name === "ThrottlingException")
+      ) {
+        const rateLimitError = new Error(error.message || "Rate limited");
+        rateLimitError.code = "RATE_LIMITED";
+        rateLimitError.retryAfterMs = SELF_INVOKE_RATE_LIMIT_BACKOFF_MS;
+        error = rateLimitError;
+      }
       const isLast = attempt === SELF_INVOKE_MAX_RETRIES;
       console.warn(
         `[Lambda] 다음 배치 재호출 실패 (attempt ${attempt}/${SELF_INVOKE_MAX_RETRIES}):`,
@@ -120,6 +143,7 @@ const S3_PRESIGNED_EXPIRES_SECONDS = Number(
 let supabase = null;
 let openai = null;
 let s3 = null;
+let lambdaClient = null;
 
 function initClients() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -142,6 +166,9 @@ function initClients() {
 
   if (!s3) {
     s3 = new S3Client({ region: S3_REGION });
+  }
+  if (!lambdaClient) {
+    lambdaClient = new LambdaClient({ region: S3_REGION });
   }
 }
 
