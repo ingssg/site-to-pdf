@@ -422,19 +422,7 @@ class WebCrawler {
         return [];
       }
 
-      const viewportScreenshotQuality = Number(
-        process.env.VIEWPORT_SCREENSHOT_QUALITY || 90
-      );
-      const fullPageScreenshotQuality = Number(
-        process.env.FULLPAGE_SCREENSHOT_QUALITY || 90
-      );
-      const deviceScaleFactor = Number(process.env.SCREENSHOT_SCALE || 1);
-
-      context = await this.browser.newContext({
-        deviceScaleFactor: Number.isFinite(deviceScaleFactor)
-          ? deviceScaleFactor
-          : 1,
-      });
+      context = await this.browser.newContext();
       page = await context.newPage();
       this.openPages.push(page);
 
@@ -636,7 +624,7 @@ class WebCrawler {
       const screenshot = await page.screenshot({
         fullPage: false,
         type: "jpeg",
-        quality: Math.max(1, Math.min(100, viewportScreenshotQuality)),
+        quality: 70,
       });
 
       await page.evaluate(async () => {
@@ -788,7 +776,7 @@ class WebCrawler {
       const fullPageScreenshot = await page.screenshot({
         fullPage: true,
         type: "jpeg",
-        quality: Math.max(1, Math.min(100, fullPageScreenshotQuality)),
+        quality: 80,
       });
 
       if (this.crawledPages.length < this.config.maxPages) {
