@@ -30,13 +30,13 @@ const logDebug = (...args) => {
 };
 
 const SELF_INVOKE_TIMEOUT_MS = Number(
-  process.env.SELF_INVOKE_TIMEOUT_MS || 20000
+  process.env.SELF_INVOKE_TIMEOUT_MS || 60000
 );
 const SELF_INVOKE_MAX_RETRIES = Number(
-  process.env.SELF_INVOKE_MAX_RETRIES || 3
+  process.env.SELF_INVOKE_MAX_RETRIES || 5
 );
 const SELF_INVOKE_BACKOFF_MS = Number(
-  process.env.SELF_INVOKE_BACKOFF_MS || 2000
+  process.env.SELF_INVOKE_BACKOFF_MS || 3000
 );
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
