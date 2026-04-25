@@ -775,8 +775,9 @@ export default function PageSelector({
           {pages.map((page, idx) => {
             const isSelected = selectedUrls.has(page.url);
             return (
-              <label
+              <div
                 key={page.url}
+                onClick={() => togglePage(page.url)}
                 className={`group relative flex items-start gap-2 sm:gap-3 md:gap-4 p-3 sm:p-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer transition-all hover:border-primary/40 ${
                   !isSelected ? "opacity-70 hover:opacity-100" : ""
                 }`}
@@ -786,6 +787,8 @@ export default function PageSelector({
                     type="checkbox"
                     checked={isSelected}
                     onChange={() => togglePage(page.url)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`${page.title || "제목 없음"} 선택`}
                     className="custom-checkbox h-5 w-5 sm:h-6 sm:w-6 appearance-none rounded border-2 border-[#cfd3e7] dark:border-slate-600 bg-transparent text-primary checked:bg-primary checked:border-primary focus:ring-0 focus:ring-offset-0 transition-all"
                     style={{
                       backgroundImage: isSelected
@@ -813,15 +816,12 @@ export default function PageSelector({
                       )}
 
                       {/* 사이트 확인 버튼 */}
-                      <button
+                      <a
+                        href={page.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         onClick={(e) => {
-                          e.preventDefault(); // 체크박스 토글 방지
                           e.stopPropagation();
-                          window.open(
-                            page.url,
-                            "_blank",
-                            "noopener,noreferrer"
-                          );
                         }}
                         className="px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-semibold rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 border border-slate-200 dark:border-slate-600 transition-colors flex items-center gap-1"
                         title="새 탭에서 사이트 확인"
@@ -840,7 +840,7 @@ export default function PageSelector({
                           />
                         </svg>
                         <span className="hidden sm:inline">확인</span>
-                      </button>
+                      </a>
                     </div>
                   </div>
 
@@ -860,7 +860,7 @@ export default function PageSelector({
                     {page.content.slice(0, 150)}...
                   </p>
                 </div>
-              </label>
+              </div>
             );
           })}
         </div>
