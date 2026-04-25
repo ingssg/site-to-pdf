@@ -201,6 +201,49 @@ export class WebCrawler {
     });
   }
 
+  private async lockVisibleElementsForFullPageScreenshot(
+    page: Page
+  ): Promise<void> {
+    await page.evaluate(() => {
+      const visibleElements = Array.from(
+        document.querySelectorAll<HTMLElement>("body *")
+      ).filter((el) => {
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.top < window.innerHeight &&
+          rect.bottom > 0 &&
+          rect.left < window.innerWidth &&
+          rect.right > 0 &&
+          style.display !== "none"
+        );
+      });
+
+      visibleElements.forEach((el) => {
+        const style = window.getComputedStyle(el);
+        const opacity = Number(style.opacity);
+        const hasRevealState =
+          opacity < 0.98 ||
+          style.transform !== "none" ||
+          style.filter.includes("blur") ||
+          style.animationName !== "none" ||
+          style.transitionDuration !== "0s";
+
+        if (!hasRevealState) {
+          return;
+        }
+
+        el.style.opacity = "1";
+        el.style.transform = "none";
+        el.style.filter = "none";
+        el.style.animation = "none";
+        el.style.transition = "none";
+      });
+    });
+  }
+
   private async crawlPage(url: string, depth: number): Promise<void> {
     const normalizedUrl = this.normalizeUrl(url);
 
@@ -414,6 +457,7 @@ export class WebCrawler {
         fullPage: false, // viewport 크기만 캡처
         type: "jpeg",
         quality: 80,
+        animations: "disabled",
       });
       console.log(
         `[Crawler] Screenshot (viewport) captured for ${url} (${(
@@ -471,6 +515,43 @@ export class WebCrawler {
         while (scrollPosition < totalHeight || stableCount < 2) {
           window.scrollTo(0, scrollPosition);
           await new Promise((resolve) => setTimeout(resolve, 300)); // 스크롤 안정화 대기
+
+          // 스크롤 진입 시점에 보인 요소를 고정해 scroll-reveal 섹션이
+          // fullPage 캡처 시 다시 희미해지지 않도록 한다.
+          const revealElements = Array.from(
+            document.querySelectorAll<HTMLElement>("body *")
+          ).filter((el) => {
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            return (
+              rect.width > 0 &&
+              rect.height > 0 &&
+              rect.top < window.innerHeight &&
+              rect.bottom > 0 &&
+              rect.left < window.innerWidth &&
+              rect.right > 0 &&
+              style.display !== "none"
+            );
+          });
+
+          revealElements.forEach((el) => {
+            const style = window.getComputedStyle(el);
+            const opacity = Number(style.opacity);
+            const hasRevealState =
+              opacity < 0.98 ||
+              style.transform !== "none" ||
+              style.filter.includes("blur") ||
+              style.animationName !== "none" ||
+              style.transitionDuration !== "0s";
+
+            if (hasRevealState) {
+              el.style.opacity = "1";
+              el.style.transform = "none";
+              el.style.filter = "none";
+              el.style.animation = "none";
+              el.style.transition = "none";
+            }
+          });
 
           // 현재 뷰포트 내의 모든 이미지가 로드될 때까지 대기
           const visibleImages = Array.from(
@@ -613,12 +694,14 @@ export class WebCrawler {
       });
 
       // 추가 렌더링 안정화 대기
+      await this.lockVisibleElementsForFullPageScreenshot(page);
       await page.waitForTimeout(1000);
 
       const fullPageScreenshot = await page.screenshot({
         fullPage: true, // 페이지 전체 캡처
         type: "jpeg",
         quality: 80,
+        animations: "disabled",
       });
       console.log(
         `[Crawler] Screenshot (fullPage) captured for ${url} (${(

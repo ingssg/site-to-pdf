@@ -269,6 +269,47 @@ async function waitForViewportImages(page) {
   });
 }
 
+async function lockVisibleElementsForFullPageScreenshot(page) {
+  await page.evaluate(() => {
+    const visibleElements = Array.from(document.querySelectorAll("body *")).filter(
+      (el) => {
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        return (
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.top < window.innerHeight &&
+          rect.bottom > 0 &&
+          rect.left < window.innerWidth &&
+          rect.right > 0 &&
+          style.display !== "none"
+        );
+      }
+    );
+
+    visibleElements.forEach((el) => {
+      const style = window.getComputedStyle(el);
+      const opacity = Number(style.opacity);
+      const hasRevealState =
+        opacity < 0.98 ||
+        style.transform !== "none" ||
+        style.filter.includes("blur") ||
+        style.animationName !== "none" ||
+        style.transitionDuration !== "0s";
+
+      if (!hasRevealState) {
+        return;
+      }
+
+      el.style.opacity = "1";
+      el.style.transform = "none";
+      el.style.filter = "none";
+      el.style.animation = "none";
+      el.style.transition = "none";
+    });
+  });
+}
+
 class WebCrawler {
   constructor(config, onProgress) {
     this.config = config;
@@ -728,6 +769,7 @@ class WebCrawler {
         fullPage: false,
         type: "jpeg",
         quality: 70,
+        animations: "disabled",
       });
 
       await page.evaluate(async () => {
@@ -769,6 +811,41 @@ class WebCrawler {
         while (scrollPosition < totalHeight || stableCount < 2) {
           window.scrollTo(0, scrollPosition);
           await new Promise((resolve) => setTimeout(resolve, 300));
+
+          const revealElements = Array.from(
+            document.querySelectorAll("body *")
+          ).filter((el) => {
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            return (
+              rect.width > 0 &&
+              rect.height > 0 &&
+              rect.top < window.innerHeight &&
+              rect.bottom > 0 &&
+              rect.left < window.innerWidth &&
+              rect.right > 0 &&
+              style.display !== "none"
+            );
+          });
+
+          revealElements.forEach((el) => {
+            const style = window.getComputedStyle(el);
+            const opacity = Number(style.opacity);
+            const hasRevealState =
+              opacity < 0.98 ||
+              style.transform !== "none" ||
+              style.filter.includes("blur") ||
+              style.animationName !== "none" ||
+              style.transitionDuration !== "0s";
+
+            if (hasRevealState) {
+              el.style.opacity = "1";
+              el.style.transform = "none";
+              el.style.filter = "none";
+              el.style.animation = "none";
+              el.style.transition = "none";
+            }
+          });
 
           const visibleImages = Array.from(
             document.querySelectorAll("img")
@@ -868,6 +945,7 @@ class WebCrawler {
         await new Promise((resolve) => setTimeout(resolve, 500));
       });
 
+      await lockVisibleElementsForFullPageScreenshot(page);
       await page.waitForTimeout(1000);
 
       // 브라우저 연결 상태 확인
@@ -880,6 +958,7 @@ class WebCrawler {
         fullPage: true,
         type: "jpeg",
         quality: 80,
+        animations: "disabled",
       });
 
       if (this.crawledPages.length < this.config.maxPages) {
