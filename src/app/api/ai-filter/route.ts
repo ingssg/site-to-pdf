@@ -43,6 +43,48 @@ const HARD_EXCLUDE_PATTERNS = [
   // 주의: event, promo, apply, trial 등은 제품 설명 페이지일 수 있어서 AI가 콘텐츠로 판단하도록 함
 ];
 
+const AI_FILTER_MODEL = process.env.AI_FILTER_MODEL || "gpt-4.1-mini";
+const MAX_CONTENT_CHARS_PER_PAGE = 8000;
+
+const AI_FILTER_RESPONSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["selectedPages", "reasoning"],
+  properties: {
+    selectedPages: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["pageId", "score", "category", "confidence", "reason"],
+        properties: {
+          pageId: { type: "integer" },
+          score: { type: "integer", minimum: 0, maximum: 10 },
+          category: {
+            type: "string",
+            enum: [
+              "company_overview",
+              "company_background",
+              "product_service",
+              "pricing_revenue",
+              "customer_proof",
+              "strategy_market",
+              "technology_security",
+              "other_business_critical",
+            ],
+          },
+          confidence: {
+            type: "string",
+            enum: ["high", "medium", "low"],
+          },
+          reason: { type: "string" },
+        },
+      },
+    },
+    reasoning: { type: "string" },
+  },
+} as const;
+
 // 제목 키워드 제외 패턴 (명확한 것만)
 const TITLE_EXCLUDE_KEYWORDS = [
   /^(로그인|sign\s*in|log\s*in|login)$/i, // 로그인 (완전 일치)
@@ -55,9 +97,6 @@ const TITLE_EXCLUDE_KEYWORDS = [
 
 // 콘텐츠 키워드 제외 (짧은 페이지 + 키워드 조합)
 function shouldExcludeByContent(title: string, content: string): boolean {
-  const contentLower = content.toLowerCase();
-  const titleLower = title.toLowerCase();
-
   // 콘텐츠가 매우 짧고 (<300자) 명확한 키워드가 있으면 제외
   if (content.length < 300) {
     const shortPageKeywords = [
@@ -73,6 +112,30 @@ function shouldExcludeByContent(title: string, content: string): boolean {
   }
 
   return false;
+}
+
+function createContentEvidence(content: string): string {
+  const normalized = content.replace(/\s+/g, " ").trim();
+
+  if (normalized.length <= MAX_CONTENT_CHARS_PER_PAGE) {
+    return normalized;
+  }
+
+  const headLength = 4200;
+  const middleLength = 1600;
+  const tailLength = MAX_CONTENT_CHARS_PER_PAGE - headLength - middleLength;
+  const middleStart = Math.max(
+    headLength,
+    Math.floor(normalized.length / 2 - middleLength / 2)
+  );
+
+  return [
+    normalized.slice(0, headLength),
+    "\n[중간 발췌]\n",
+    normalized.slice(middleStart, middleStart + middleLength),
+    "\n[후반 발췌]\n",
+    normalized.slice(-tailLength),
+  ].join("");
 }
 
 export async function POST(request: NextRequest) {
@@ -114,163 +177,91 @@ export async function POST(request: NextRequest) {
       }개 제외됨)`
     );
 
-    // 3. AI 프롬프트 생성 (Few-shot Learning 적용)
-    // 기획서 목적: 비즈니스 분석에 필요한 페이지만 선택 (개수 제한 없음)
-    const systemMessage = `당신은 VC/PE 투자자, B2B 영업팀, 컨설팅 업계를 위한 웹사이트 분석 전문가입니다.
-기업 실사(Due Diligence), 비즈니스 분석, 경쟁사 조사를 위해 가장 중요한 페이지를 선별하는 것이 목표입니다.
+    const pagesForAI = eligiblePages.map((page, index) => ({
+      pageId: index + 1,
+      ...page,
+      contentEvidence: createContentEvidence(page.content),
+    }));
 
-**핵심 원칙: 실제 콘텐츠 내용으로만 판단하세요**
-URL이나 페이지 타입은 무시하고, 각 페이지의 실제 텍스트 내용을 읽고 평가하세요.
+    // 3. AI 프롬프트 생성: 정확도와 재현성을 우선하는 실사 기준 루브릭
+    const systemMessage = `당신은 투자 실사, B2B 영업 리서치, 경쟁사 분석을 위한 웹사이트 페이지 선별 전문가입니다.
+목표는 PDF/리포트에 포함할 "비즈니스 분석 핵심 페이지"만 자동 선별하는 것입니다.
 
-**최우선 정보 유형 (이런 내용이 있으면 필수 선택):**
-다음 정보를 담은 페이지를 찾으면 반드시 선택하세요:
-1. 회사 전반 소개 - 비전, 미션, 핵심 가치 제안, 사업 개요
-2. 회사 배경 정보 - 팀 구성, 창립자, 투자 이력, 연혁
-3. 제품/서비스 상세 - 주요 기능, 사용 방법, 기술 스택, 차별화 요소
-4. 가격 정책 - 수익 모델, 플랜 구조, 가격대
-5. 고객 증명 - 고객 사례, 성공 스토리, 추천사, 실적 데이터
+판단 원칙:
+- 각 페이지의 실제 콘텐츠 증거를 최우선으로 판단합니다. URL, 제목, pageType, importance는 보조 신호입니다.
+- 선택 개수에는 제한이 없습니다. 가치 있는 페이지는 모두 선택하고, 정보 가치가 낮은 페이지는 제외하세요.
+- 애매한 페이지를 많이 포함하는 것보다, 실사/영업 분석에 직접 도움이 되는 페이지를 신뢰성 있게 고르는 것이 중요합니다.
+- 반드시 입력에 있는 pageId만 반환하세요. URL을 새로 만들거나 수정하지 마세요.
 
-**추가 가치 정보 (있으면 선택):**
-- 제품 로드맵, 업데이트 계획
-- 투자 유치, 파트너십 체결
-- 시장 분석, 산업 트렌드, 비즈니스 전략
-- 기술 아키텍처, 보안 정책
+핵심 정보 유형:
+1. company_overview: 회사/서비스 개요, 미션, 가치 제안, 시장 포지셔닝
+2. company_background: 창업자, 팀, 연혁, 투자 이력, 조직 역량
+3. product_service: 제품/서비스 기능, 사용 사례, 기술 차별점, 솔루션 상세
+4. pricing_revenue: 요금제, 가격, 수익 모델, 플랜 구조
+5. customer_proof: 고객사, 사례, 성과 지표, 추천사, 도입 실적
+6. strategy_market: 로드맵, 파트너십, 시장/전략 인사이트
+7. technology_security: 기술 아키텍처, 보안, 컴플라이언스, 인프라
 
-**반드시 제외 (이런 페이지는 절대 선택하지 마세요):**
-1. 마케팅/프로모션: 이벤트, 할인, 무상 체험, 캠페인, 경품, 프로모션
-   - 예: "무상 이벤트 신청", "할인 행사", "프로모션", "이벤트 참여하기"
-2. 단순 신청 폼: 콘텐츠가 신청 폼(이름, 이메일, 전화번호)만 있는 페이지
-   - 예: "무료 상담 신청" (단, 제품 상세 설명이 없는 경우만)
-3. 채용/내부: 채용 공고, 사무실 소식, 회사 소식
-4. 단순 목록: 내용 없는 보도자료 리스트, 블로그 목록
-5. 인증/법적: 로그인, 회원가입, 약관, 개인정보처리방침
+점수 기준:
+- 9-10: 투자자나 B2B 영업팀이 반드시 읽어야 하는 핵심 페이지
+- 7-8: 위 핵심 정보 중 하나 이상을 구체적 근거와 함께 담은 페이지
+- 5-6: 일부 유용하지만 중복이 있거나 정보 밀도가 낮은 페이지
+- 0-4: 단순 안내, 목록, 폼, 채용, 이벤트, 법적 문서, 로그인, 정보 부족 페이지
 
-**중요한 예외 처리:**
-- 제목에 "상담받기", "신청하기"가 있어도, 콘텐츠에 **제품/서비스 상세 설명**(기능, 가격, 기술 스택, 사용 사례)이 충분하면 선택하세요
-- 예: "가상대기실 솔루션 상담받기" 페이지에 솔루션 기능 5가지, 기술 아키텍처, 고객 사례가 있으면 → 선택
-- 예: "무료 상담 신청하기" 페이지에 이름/이메일 입력란만 있고 설명 2줄뿐이면 → 제외
-- **핵심**: CTA 키워드보다 실제 비즈니스 정보의 양과 질이 우선입니다.
+선택 규칙:
+- score 7 이상만 selectedPages에 포함하세요.
+- 가격/제품/고객사례/회사배경/기술보안처럼 희소하고 의사결정 가치가 높은 정보는 우선 선택하세요.
+- 같은 정보를 반복하는 페이지가 여러 개면 가장 상세하고 증거가 풍부한 페이지만 선택하세요.
+- 제목에 "상담", "신청", "무료", "체험"이 있어도 제품/가격/고객/기술 설명이 충분하면 선택하세요.
+- 프로모션, 이벤트, 단순 신청 폼, 채용 공고, 블로그 목록, 보도자료 목록은 구체적 비즈니스 인사이트가 없으면 제외하세요.
+- 블로그/뉴스도 제품 로드맵, 고객 성과, 시장 전략, 기술 차별화 같은 실질 정보가 있으면 선택하세요.
 
-**평가 방법:**
-- 각 페이지 콘텐츠를 읽고 어떤 정보를 담고 있는지 파악
-- URL(/about, /blog 등)은 참고만 하고, 내용이 핵심
-- 블로그든 뭐든 "회사 소개" 내용이 있으면 그게 About 페이지
-- "제품 상세 설명"이 있으면 그게 Product 페이지
-
----
-
-# 구체적인 예시 (Few-shot Learning)
-
-## ✅ 반드시 선택해야 할 페이지들:
-
-**예시 1: 제품 소개 + CTA**
-제목: "에스티씨랩 | 가상대기실 솔루션 트래픽 폭주 관리 상담받기"
-콘텐츠: "가상대기실 솔루션은 트래픽 폭주 시 사용자를 순차적으로 입장시켜 서버 다운을 방지합니다. 주요 기능: 1) 실시간 트래픽 모니터링 2) 자동 대기열 생성 3) 공정한 FIFO 알고리즘 4) 커스텀 대기 화면 5) API 연동 지원. 기술 스택: AWS CloudFront + Lambda@Edge. 고객사: 삼성, LG, 현대자동차 티켓팅 시스템 적용..."
-→ **선택 이유**: 제목에 "상담받기"가 있지만, 제품의 기능 5가지, 기술 스택, 고객 사례가 포함되어 비즈니스 분석 가치가 높음
-
-**예시 2: 가격 정책**
-제목: "Pricing | 요금제 안내"
-콘텐츠: "3가지 플랜 제공: Starter ($99/월) - 월 100만 요청, Basic ($299/월) - 월 500만 요청, Enterprise (맞춤 견적) - 무제한 요청. 모든 플랜에 24/7 고객 지원, API 무제한 호출 포함. 연간 결제 시 20% 할인..."
-→ **선택 이유**: 수익 모델과 가격 구조가 명확히 드러나 투자 분석에 필수
-
-**예시 3: 회사 소개**
-제목: "About Us | 우리의 미션"
-콘텐츠: "2018년 설립된 에스티씨랩은 대규모 트래픽 처리 전문 기업입니다. 팀: CEO 김철수(전 네이버 개발자 10년), CTO 이영희(AWS 공인 아키텍트). 투자: 2021년 시리즈 A 50억 유치(카카오벤처스). 비전: 모든 기업이 트래픽 걱정 없는 세상..."
-→ **선택 이유**: 팀 배경, 투자 이력, 비전이 포함되어 실사(Due Diligence)에 필수
-
-## ❌ 반드시 제외해야 할 페이지들:
-
-**예시 4: 단순 프로모션**
-제목: "무상 이벤트 신청하기 | 6월 한정"
-콘텐츠: "6월 한 달간 신규 가입 고객에게 첫 달 무료! 지금 바로 신청하세요. 이벤트 기간: 2024.06.01 - 06.30. 이름, 이메일, 전화번호 입력 후 제출."
-→ **제외 이유**: 한시적 프로모션으로 비즈니스 본질 파악에 도움 안 됨
-
-**예시 5: 단순 신청 폼**
-제목: "무료 상담 신청"
-콘텐츠: "전문가와 1:1 상담을 원하시나요? 아래 정보를 입력하세요. [이름] [이메일] [전화번호] [회사명] [문의사항]"
-→ **제외 이유**: 제품/서비스 설명 없이 폼만 있어 정보 가치 없음
-
-**예시 6: 채용 공고**
-제목: "Join Us | 채용 안내"
-콘텐츠: "백엔드 개발자 모집. 자격요건: Node.js 3년 이상, AWS 경험자 우대. 지원 방법: careers@example.com으로 이력서 발송"
-→ **제외 이유**: 채용 정보는 비즈니스 모델 분석과 무관
-
-## ⚖️ 경계선 케이스 판단 기준:
-
-**케이스 1: 70% 제품 설명 + 30% CTA**
-→ **선택**: 비즈니스 정보가 충분하면 CTA는 무시
-
-**케이스 2: 30% 간단한 소개 + 70% 신청 폼**
-→ **제외**: 실질적 정보가 부족하면 제외
-
-**핵심 기준**: 콘텐츠의 **정보 밀도**가 기준입니다. "이 페이지를 읽고 VC가 투자 결정에 도움이 되는가?"`;
+reason은 선택 결과가 어떤 핵심 정보 유형을 커버하는지 간결하게 설명하세요.`;
 
     const userPrompt = `다음은 웹사이트에서 크롤링한 ${
-      eligiblePages.length
+      pagesForAI.length
     }개의 페이지 목록입니다.
-각 페이지의 실제 콘텐츠를 분석하여 비즈니스 분석에 필요한 페이지만 선택해주세요.
-(비즈니스 분석에 필요한 만큼만 선택하세요 - 5개면 5개, 20개면 20개, 개수 제한 없음)
+각 페이지의 실제 콘텐츠 증거를 분석하여 비즈니스 분석에 필요한 핵심 페이지만 선택하세요.
+선택 수 제한은 없습니다. pageId는 반드시 아래 목록에 있는 값만 사용하세요.
 
 # 페이지 리스트:
-${eligiblePages
+${pagesForAI
   .map(
-    (page, index) => `
-━━━ 페이지 ${index + 1} ━━━
+    (page) => `
+━━━ pageId ${page.pageId} ━━━
 URL: ${page.url}
 제목: ${page.title}
 타입: ${page.pageType || "General"}
 중요도 점수: ${page.importance || "N/A"}/100
 
-실제 콘텐츠:
-${page.content}
+콘텐츠 증거:
+${page.contentEvidence}
 ━━━━━━━━━━━━━━
 `
   )
   .join("\n")}
+`;
 
-# 분석 목적:
-- VC/PE 투자자: 비즈니스 모델, 성장 가능성, 팀 역량, 시장 기회 파악
-- B2B 영업팀: 제품 가치 제안, 가격 정책, 고객 성공 사례, 차별화 포인트
-- 컨설턴트: 경쟁사 대비 강점, 시장 포지셔닝, 전략적 방향성
-
-# 선택 기준 (콘텐츠 내용 기반):
-1. **최우선**: 각 페이지 콘텐츠를 읽고 "회사 소개", "제품 설명", "가격 정책", "고객 사례" 정보가 있는지 확인
-2. **정보 유형별 균형**: 5가지 정보 유형(회사 소개, 배경, 제품, 가격, 고객)을 모두 커버하도록 선택
-3. **블로그 주의**: 블로그는 비즈니스 전략/제품 로드맵 같은 명확한 가치가 있을 때만 추가
-4. **CTA 페이지 판단**: 제목에 "상담받기", "신청하기"가 있어도 콘텐츠를 먼저 확인
-   - 제품/서비스 상세 설명이 충분하면 → 선택
-   - 단순 신청 폼(이름/이메일/전화번호)만 있으면 → 제외
-5. **마케팅 프로모션 제외**: "이벤트", "할인", "무상", "프로모션", "캠페인" 키워드가 주된 내용이면 제외
-6. 중복 정보는 가장 상세한 1개만
-7. **비즈니스 분석에 필요한 만큼만 선택** (개수 제한 없음 - 필요한 페이지만)
-
-**핵심**: URL이 /blog여도 "제품 상세 설명"이 있으면 선택. URL이 /about여도 단순 연락처뿐이면 제외.
-콘텐츠 내용이 전부입니다.
-
-# 응답 형식 (JSON):
-{
-  "selectedUrls": [
-    "https://example.com/",
-    "https://example.com/about",
-    "https://example.com/pricing",
-    "https://example.com/products"
-  ],
-  "reasoning": "5가지 정보 유형 모두 커버: (1) 회사 소개 - 비전과 핵심 가치(Homepage), (2) 회사 배경 - 팀 구성 및 투자 이력(About), (3) 제품 상세 - 5가지 핵심 기능과 기술 스택(Products 페이지 2개), (4) 가격 정책 - 3개 플랜 구조(Pricing), (5) 고객 증명 - Fortune 500 사례 3개(Case Studies). 추가로 제품 로드맵을 다룬 블로그 1개 포함. 총 12페이지."
-}
-
-**중요**: 반드시 JSON 형식으로만 응답하고, reasoning에서 5가지 정보 유형별로 어떤 내용을 담은 페이지인지 설명하세요.`;
-
-    // 4. OpenAI API 호출 (Few-shot Learning 적용)
-    console.log("[AI Filter] OpenAI API 호출 중 (Few-shot + 긴 콘텐츠)...");
+    // 4. OpenAI API 호출
+    console.log(
+      `[AI Filter] OpenAI API 호출 중 (${AI_FILTER_MODEL}, structured outputs, ${pagesForAI.length}개 페이지)...`
+    );
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: AI_FILTER_MODEL,
       messages: [
         { role: "system", content: systemMessage },
         { role: "user", content: userPrompt },
       ],
-      temperature: 0.1, // 0.2 → 0.1로 낮춰서 일관성 강화
-      max_tokens: 2000, // 1500 → 2000으로 증가 (더 상세한 reasoning)
-      response_format: { type: "json_object" }, // JSON 모드 강제
+      temperature: 0,
+      max_tokens: 3000,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "business_page_selection",
+          strict: true,
+          schema: AI_FILTER_RESPONSE_SCHEMA,
+        },
+      },
     });
 
     // 5. 응답 파싱
@@ -278,21 +269,27 @@ ${page.content}
     const parsed = JSON.parse(responseText);
 
     // 6. 유효성 검증
-    if (!parsed.selectedUrls || !Array.isArray(parsed.selectedUrls)) {
+    if (!parsed.selectedPages || !Array.isArray(parsed.selectedPages)) {
       throw new Error(
-        "Invalid AI response format: selectedUrls is missing or not an array"
+        "Invalid AI response format: selectedPages is missing or not an array"
       );
     }
 
+    const pageById = new Map(pagesForAI.map((page) => [page.pageId, page]));
+    const selectedUrls = parsed.selectedPages
+      .map((selection: { pageId: number }) => pageById.get(selection.pageId))
+      .filter(Boolean)
+      .map((page: (typeof pagesForAI)[number]) => page.url);
+
     console.log(
-      `[AI Filter] AI 선택 완료: ${parsed.selectedUrls.length}개 페이지`
+      `[AI Filter] AI 선택 완료: ${selectedUrls.length}개 페이지`
     );
     console.log(`[AI Filter] 선택 이유: ${parsed.reasoning}`);
 
     const response: AIFilterResponse = {
       success: true,
       data: {
-        selectedUrls: parsed.selectedUrls,
+        selectedUrls,
         reasoning: parsed.reasoning || "",
         processedCount: eligiblePages.length,
       },

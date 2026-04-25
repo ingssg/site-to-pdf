@@ -36,6 +36,32 @@ interface PageSelectorProps {
   jobId?: string; // Lambda PDF 생성용 jobId
 }
 
+const AI_FILTER_CONTENT_CHARS = 8000;
+
+function createAIFilterContentEvidence(content: string): string {
+  const normalized = content.replace(/\s+/g, " ").trim();
+
+  if (normalized.length <= AI_FILTER_CONTENT_CHARS) {
+    return normalized;
+  }
+
+  const headLength = 4200;
+  const middleLength = 1600;
+  const tailLength = AI_FILTER_CONTENT_CHARS - headLength - middleLength;
+  const middleStart = Math.max(
+    headLength,
+    Math.floor(normalized.length / 2 - middleLength / 2)
+  );
+
+  return [
+    normalized.slice(0, headLength),
+    "\n[중간 발췌]\n",
+    normalized.slice(middleStart, middleStart + middleLength),
+    "\n[후반 발췌]\n",
+    normalized.slice(-tailLength),
+  ].join("");
+}
+
 export default function PageSelector({
   pages,
   onComplete,
@@ -124,12 +150,12 @@ export default function PageSelector({
     setShowReasoning(false); // 초기에 접혀있게 (명시적으로 false 설정)
 
     try {
-      // API 호출용 데이터 준비 (콘텐츠 1500자로 증가 - 맥락 개선)
+      // API 호출용 데이터 준비: 앞/중간/끝 발췌로 하단 가격/고객사례 정보 손실을 줄임
       const requestData = {
         pages: pages.map((page) => ({
           url: page.url,
           title: page.title,
-          content: page.content.substring(0, 1500),
+          content: createAIFilterContentEvidence(page.content),
           pageType: page.pageType,
           importance: page.importance,
         })),
