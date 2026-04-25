@@ -15,6 +15,7 @@ export class WebCrawler {
   private onProgress?: (current: number, total: number, url: string) => void;
   private skippedUrls: Set<string> = new Set(); // 스마트 모드에서 제외된 URL 추적
   private readonly CONCURRENT_LIMIT = 5; // 동시에 5개 페이지 크롤링
+  private readonly SCREENSHOT_VIEWPORT = { width: 1920, height: 1080 };
 
   constructor(
     config: CrawlConfig,
@@ -100,6 +101,106 @@ export class WebCrawler {
   /**
    * 개별 페이지 크롤링 (재귀)
    */
+  private async waitForNetworkIdle(page: Page): Promise<void> {
+    try {
+      await page.waitForLoadState("networkidle", { timeout: 2500 });
+    } catch {
+      // 일부 사이트는 polling/analytics 때문에 networkidle이 오지 않으므로 fallback
+    }
+  }
+
+  private async waitForLayoutStability(page: Page): Promise<void> {
+    await page.evaluate(async () => {
+      const selectors = [
+        '[class*="skeleton"]',
+        '[class*="loading"]',
+        '[class*="spinner"]',
+        '[aria-busy="true"]',
+      ];
+
+      const hasVisibleLoading = () =>
+        selectors.some((selector) =>
+          Array.from(document.querySelectorAll(selector)).some((el) => {
+            const rect = (el as HTMLElement).getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            return (
+              rect.width > 0 &&
+              rect.height > 0 &&
+              style.display !== "none" &&
+              style.visibility !== "hidden" &&
+              Number(style.opacity) !== 0
+            );
+          })
+        );
+
+      const startedAt = Date.now();
+      while (hasVisibleLoading() && Date.now() - startedAt < 1500) {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+
+      let stableFrames = 0;
+      let lastSnapshot = "";
+      const maxWait = 1800;
+      const layoutStartedAt = Date.now();
+
+      while (stableFrames < 3 && Date.now() - layoutStartedAt < maxWait) {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const snapshot = [
+          document.documentElement.scrollHeight,
+          document.body.scrollHeight,
+          document.body.innerText.length,
+        ].join(":");
+
+        if (snapshot === lastSnapshot) {
+          stableFrames += 1;
+        } else {
+          stableFrames = 0;
+          lastSnapshot = snapshot;
+        }
+      }
+    });
+  }
+
+  private async waitForViewportImages(page: Page): Promise<void> {
+    await page.evaluate(async () => {
+      const images = Array.from(document.querySelectorAll("img")).filter(
+        (img) => {
+          const rect = img.getBoundingClientRect();
+          return (
+            rect.top < window.innerHeight &&
+            rect.bottom > 0 &&
+            rect.left < window.innerWidth &&
+            rect.right > 0
+          );
+        }
+      );
+
+      await Promise.all(
+        images.map((img) => {
+          if (img.loading === "lazy") {
+            img.loading = "eager";
+          }
+
+          if (img.complete && img.naturalHeight !== 0) {
+            return Promise.resolve();
+          }
+
+          return new Promise<void>((resolve) => {
+            const timeout = setTimeout(resolve, 3000);
+            img.onload = () => {
+              clearTimeout(timeout);
+              resolve();
+            };
+            img.onerror = () => {
+              clearTimeout(timeout);
+              resolve();
+            };
+          });
+        })
+      );
+    });
+  }
+
   private async crawlPage(url: string, depth: number): Promise<void> {
     const normalizedUrl = this.normalizeUrl(url);
 
@@ -133,12 +234,14 @@ export class WebCrawler {
 
     try {
       const page = await this.browser!.newPage();
+      await page.setViewportSize(this.SCREENSHOT_VIEWPORT);
 
       // 페이지 로드 (DOM 로드만 대기 - 속도 최적화)
       await page.goto(url, {
         waitUntil: "domcontentloaded", // networkidle → domcontentloaded (빠른 로딩)
         timeout: 15000, // 15초 타임아웃
       });
+      await this.waitForNetworkIdle(page);
 
       // 짧은 대기 (렌더링 안정화)
       await page.waitForTimeout(500); // 0.5초만
@@ -303,11 +406,9 @@ export class WebCrawler {
 
       console.log(`[Crawler] Images loaded, taking screenshot for ${url}`);
 
-      // 16:9 비율 스크린샷 (모니터 크기, 상단만 캡처) - 전체 웹사이트 PDF용
-      await page.setViewportSize({ width: 1920, height: 1080 });
-
-      // 이미지 로딩 후 추가 대기 (렌더링 안정화)
-      await page.waitForTimeout(500);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await this.waitForViewportImages(page);
+      await this.waitForLayoutStability(page);
 
       const screenshot = await page.screenshot({
         fullPage: false, // viewport 크기만 캡처

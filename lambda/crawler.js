@@ -14,6 +14,7 @@ const logDebug = (...args) => {
     console.log(...args);
   }
 };
+const SCREENSHOT_VIEWPORT = { width: 1920, height: 1080 };
 
 // 페이지 타입 감지 (로컬 환경의 page-filter.ts와 동일)
 function detectPageType(url) {
@@ -166,6 +167,106 @@ function isSameDomain(baseUrl, targetUrl) {
   } catch {
     return false;
   }
+}
+
+async function waitForNetworkIdle(page) {
+  try {
+    await page.waitForLoadState("networkidle", { timeout: 2500 });
+  } catch {
+    // 일부 사이트는 polling/analytics 때문에 networkidle이 오지 않으므로 fallback
+  }
+}
+
+async function waitForLayoutStability(page) {
+  await page.evaluate(async () => {
+    const selectors = [
+      '[class*="skeleton"]',
+      '[class*="loading"]',
+      '[class*="spinner"]',
+      '[aria-busy="true"]',
+    ];
+
+    const hasVisibleLoading = () =>
+      selectors.some((selector) =>
+        Array.from(document.querySelectorAll(selector)).some((el) => {
+          const rect = el.getBoundingClientRect();
+          const style = window.getComputedStyle(el);
+          return (
+            rect.width > 0 &&
+            rect.height > 0 &&
+            style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            Number(style.opacity) !== 0
+          );
+        })
+      );
+
+    const startedAt = Date.now();
+    while (hasVisibleLoading() && Date.now() - startedAt < 1500) {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+
+    let stableFrames = 0;
+    let lastSnapshot = "";
+    const maxWait = 1800;
+    const layoutStartedAt = Date.now();
+
+    while (stableFrames < 3 && Date.now() - layoutStartedAt < maxWait) {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const snapshot = [
+        document.documentElement.scrollHeight,
+        document.body.scrollHeight,
+        document.body.innerText.length,
+      ].join(":");
+
+      if (snapshot === lastSnapshot) {
+        stableFrames += 1;
+      } else {
+        stableFrames = 0;
+        lastSnapshot = snapshot;
+      }
+    }
+  });
+}
+
+async function waitForViewportImages(page) {
+  await page.evaluate(async () => {
+    const images = Array.from(document.querySelectorAll("img")).filter(
+      (img) => {
+        const rect = img.getBoundingClientRect();
+        return (
+          rect.top < window.innerHeight &&
+          rect.bottom > 0 &&
+          rect.left < window.innerWidth &&
+          rect.right > 0
+        );
+      }
+    );
+
+    await Promise.all(
+      images.map((img) => {
+        if (img.loading === "lazy") {
+          img.loading = "eager";
+        }
+
+        if (img.complete && img.naturalHeight !== 0) {
+          return Promise.resolve();
+        }
+
+        return new Promise((resolve) => {
+          const timeout = setTimeout(resolve, 3000);
+          img.onload = () => {
+            clearTimeout(timeout);
+            resolve();
+          };
+          img.onerror = () => {
+            clearTimeout(timeout);
+            resolve();
+          };
+        });
+      })
+    );
+  });
 }
 
 class WebCrawler {
@@ -422,7 +523,7 @@ class WebCrawler {
         return [];
       }
 
-      context = await this.browser.newContext();
+      context = await this.browser.newContext({ viewport: SCREENSHOT_VIEWPORT });
       page = await context.newPage();
       this.openPages.push(page);
 
@@ -455,6 +556,7 @@ class WebCrawler {
         waitUntil: "domcontentloaded",
         timeout: 15000,
       });
+      await waitForNetworkIdle(page);
 
       await page.waitForTimeout(500);
       await page.evaluate(async () => {
@@ -612,8 +714,9 @@ class WebCrawler {
         return [];
       }
 
-      await page.setViewportSize({ width: 1920, height: 1080 });
-      await page.waitForTimeout(500);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await waitForViewportImages(page);
+      await waitForLayoutStability(page);
 
       // 브라우저 연결 상태 확인
       if (!this.browser || !this.browser.isConnected() || page.isClosed()) {
