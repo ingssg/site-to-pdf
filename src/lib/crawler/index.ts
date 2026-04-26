@@ -4,6 +4,7 @@
  */
 
 import { chromium, Browser, Page } from "playwright";
+import sharp from "sharp";
 import type { CrawlConfig, CrawledPage, CrawlResult } from "@/types";
 import { shouldExcludeByDefault } from "./page-filter";
 
@@ -16,6 +17,10 @@ export class WebCrawler {
   private skippedUrls: Set<string> = new Set(); // 스마트 모드에서 제외된 URL 추적
   private readonly CONCURRENT_LIMIT = 5; // 동시에 5개 페이지 크롤링
   private readonly SCREENSHOT_VIEWPORT = { width: 1920, height: 1080 };
+  private readonly STITCH_SCROLL_RATIO = 0.85;
+  private readonly STITCH_MAX_SECTIONS = 80;
+  private readonly STITCH_MAX_HEIGHT = 60000;
+  private readonly STITCH_FLOATING_CROP_TOP = 96;
 
   constructor(
     config: CrawlConfig,
@@ -242,6 +247,167 @@ export class WebCrawler {
         el.style.transition = "none";
       });
     });
+  }
+
+  private async setFloatingElementsHidden(
+    page: Page,
+    hidden: boolean
+  ): Promise<void> {
+    await page.evaluate((shouldHide) => {
+      const attr = "data-site-to-pdf-floating-original-visibility";
+      const elements = Array.from(
+        document.querySelectorAll<HTMLElement>("body *")
+      );
+
+      elements.forEach((el) => {
+        const style = window.getComputedStyle(el);
+        const isFloating =
+          style.position === "fixed" || style.position === "sticky";
+
+        if (!isFloating) {
+          return;
+        }
+
+        if (shouldHide) {
+          if (!el.hasAttribute(attr)) {
+            el.setAttribute(attr, el.style.visibility || "");
+          }
+          el.style.visibility = "hidden";
+          return;
+        }
+
+        if (el.hasAttribute(attr)) {
+          el.style.visibility = el.getAttribute(attr) || "";
+          el.removeAttribute(attr);
+        }
+      });
+    }, hidden);
+  }
+
+  private async getPageCaptureMetrics(page: Page): Promise<{
+    width: number;
+    height: number;
+    viewportHeight: number;
+  }> {
+    return page.evaluate(() => {
+      const scrollingElement = document.scrollingElement || document.documentElement;
+      return {
+        width: Math.ceil(window.innerWidth),
+        height: Math.ceil(
+          Math.max(
+            scrollingElement.scrollHeight,
+            document.documentElement.scrollHeight,
+            document.body.scrollHeight
+          )
+        ),
+        viewportHeight: Math.ceil(window.innerHeight),
+      };
+    });
+  }
+
+  private async captureFullPageScreenshotByStitch(
+    page: Page,
+    url: string
+  ): Promise<Buffer> {
+    const metrics = await this.getPageCaptureMetrics(page);
+    const targetHeight = Math.min(metrics.height, this.STITCH_MAX_HEIGHT);
+    const scrollStep = Math.max(
+      1,
+      Math.floor(metrics.viewportHeight * this.STITCH_SCROLL_RATIO)
+    );
+    const yPositions: number[] = [];
+
+    const lastY = Math.max(0, targetHeight - metrics.viewportHeight);
+
+    for (
+      let y = 0;
+      y < lastY && yPositions.length < this.STITCH_MAX_SECTIONS;
+      y += scrollStep
+    ) {
+      yPositions.push(y);
+    }
+
+    if (
+      yPositions[yPositions.length - 1] !== lastY &&
+      yPositions.length < this.STITCH_MAX_SECTIONS
+    ) {
+      yPositions.push(lastY);
+    }
+
+    const composites: sharp.OverlayOptions[] = [];
+
+    for (const [index, y] of yPositions.entries()) {
+      await page.evaluate((scrollY) => window.scrollTo(0, scrollY), y);
+      await page.waitForTimeout(index === 0 ? 700 : 1000);
+      await this.waitForViewportImages(page);
+      await this.lockVisibleElementsForFullPageScreenshot(page);
+      await this.setFloatingElementsHidden(page, index > 0);
+
+      const section = await page.screenshot({
+        fullPage: false,
+        type: "jpeg",
+        quality: 82,
+        animations: "disabled",
+      });
+
+      const cropTop =
+        index === 0 ? 0 : Math.min(this.STITCH_FLOATING_CROP_TOP, metrics.viewportHeight - 1);
+      const cropHeight = Math.min(
+        metrics.viewportHeight - cropTop,
+        targetHeight - y - cropTop
+      );
+
+      if (cropHeight <= 0) {
+        continue;
+      }
+
+      const sectionInput =
+        cropTop > 0 || cropHeight < metrics.viewportHeight
+          ? await sharp(section)
+              .extract({
+                left: 0,
+                top: cropTop,
+                width: metrics.width,
+                height: cropHeight,
+              })
+              .toBuffer()
+          : section;
+
+      composites.push({
+        input: sectionInput,
+        left: 0,
+        top: y + cropTop,
+      });
+    }
+
+    await this.setFloatingElementsHidden(page, false);
+    await page.evaluate(() => window.scrollTo(0, 0));
+
+    const stitched = await sharp({
+      create: {
+        width: metrics.width,
+        height: targetHeight,
+        channels: 3,
+        background: "#ffffff",
+      },
+    })
+      .composite(composites)
+      .jpeg({ quality: 80 })
+      .toBuffer();
+
+    console.log(
+      `[Crawler] Screenshot (stitched fullPage) captured for ${url} (${(
+        stitched.length / 1024
+      ).toFixed(1)}KB, ${yPositions.length} sections, ${metrics.width}x${targetHeight})`
+    );
+
+    if (metrics.height > targetHeight) {
+      console.warn(
+        `[Crawler] Full-page screenshot truncated for ${url}: ${metrics.height}px -> ${targetHeight}px`
+      );
+    }
+
+    return stitched;
   }
 
   private async crawlPage(url: string, depth: number): Promise<void> {
@@ -511,8 +677,20 @@ export class WebCrawler {
         let scrollPosition = 0;
         let lastHeight = 0;
         let stableCount = 0;
+        let scrollSteps = 0;
+        const scrollStartedAt = Date.now();
+        const maxScrollSteps = Math.min(
+          40,
+          Math.max(8, Math.ceil(totalHeight / scrollStep) + 8)
+        );
+        const maxScrollWait = 30000;
 
-        while (scrollPosition < totalHeight || stableCount < 2) {
+        while (
+          (scrollPosition < totalHeight || stableCount < 2) &&
+          scrollSteps < maxScrollSteps &&
+          Date.now() - scrollStartedAt < maxScrollWait
+        ) {
+          scrollSteps += 1;
           window.scrollTo(0, scrollPosition);
           await new Promise((resolve) => setTimeout(resolve, 300)); // 스크롤 안정화 대기
 
@@ -583,7 +761,7 @@ export class WebCrawler {
                 const timeout = setTimeout(() => {
                   console.warn(`Image load timeout: ${img.src}`);
                   resolve(); // 타임아웃되어도 계속 진행
-                }, 3000);
+                }, 1500);
 
                 const onLoad = () => {
                   clearTimeout(timeout);
@@ -602,12 +780,7 @@ export class WebCrawler {
                 img.addEventListener("load", onLoad);
                 img.addEventListener("error", onError);
 
-                // 이미지 강제 리로드 시도
-                if (img.src) {
-                  const currentSrc = img.src;
-                  img.src = "";
-                  img.src = currentSrc;
-                }
+                img.decoding = "async";
               });
             })
           );
@@ -663,7 +836,7 @@ export class WebCrawler {
                 return;
               }
 
-              const timeout = setTimeout(() => resolve(), 2000);
+              const timeout = setTimeout(() => resolve(), 1500);
               const onLoad = () => {
                 clearTimeout(timeout);
                 img.removeEventListener("load", onLoad);
@@ -697,12 +870,25 @@ export class WebCrawler {
       await this.lockVisibleElementsForFullPageScreenshot(page);
       await page.waitForTimeout(1000);
 
-      const fullPageScreenshot = await page.screenshot({
-        fullPage: true, // 페이지 전체 캡처
-        type: "jpeg",
-        quality: 80,
-        animations: "disabled",
-      });
+      let fullPageScreenshot: Buffer;
+      try {
+        fullPageScreenshot = await this.captureFullPageScreenshotByStitch(
+          page,
+          url
+        );
+      } catch (error) {
+        console.warn(
+          `[Crawler] Stitched fullPage screenshot failed for ${url}, falling back to native fullPage:`,
+          error
+        );
+        await this.setFloatingElementsHidden(page, false).catch(() => {});
+        fullPageScreenshot = await page.screenshot({
+          fullPage: true, // 페이지 전체 캡처
+          type: "jpeg",
+          quality: 80,
+          animations: "disabled",
+        });
+      }
       console.log(
         `[Crawler] Screenshot (fullPage) captured for ${url} (${(
           fullPageScreenshot.length / 1024

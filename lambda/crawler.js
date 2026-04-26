@@ -5,6 +5,7 @@
 
 const chromium = require("@sparticuz/chromium");
 const { chromium: playwright } = require("playwright-core");
+const sharp = require("sharp");
 
 const LOG_LEVEL = process.env.LOG_LEVEL || "info";
 const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
@@ -15,6 +16,10 @@ const logDebug = (...args) => {
   }
 };
 const SCREENSHOT_VIEWPORT = { width: 1920, height: 1080 };
+const STITCH_SCROLL_RATIO = 0.85;
+const STITCH_MAX_SECTIONS = 80;
+const STITCH_MAX_HEIGHT = 60000;
+const STITCH_FLOATING_CROP_TOP = 96;
 
 // 페이지 타입 감지 (로컬 환경의 page-filter.ts와 동일)
 function detectPageType(url) {
@@ -308,6 +313,157 @@ async function lockVisibleElementsForFullPageScreenshot(page) {
       el.style.transition = "none";
     });
   });
+}
+
+async function setFloatingElementsHidden(page, hidden) {
+  await page.evaluate((shouldHide) => {
+    const attr = "data-site-to-pdf-floating-original-visibility";
+    const elements = Array.from(document.querySelectorAll("body *"));
+
+    elements.forEach((el) => {
+      const style = window.getComputedStyle(el);
+      const isFloating =
+        style.position === "fixed" || style.position === "sticky";
+
+      if (!isFloating) {
+        return;
+      }
+
+      if (shouldHide) {
+        if (!el.hasAttribute(attr)) {
+          el.setAttribute(attr, el.style.visibility || "");
+        }
+        el.style.visibility = "hidden";
+        return;
+      }
+
+      if (el.hasAttribute(attr)) {
+        el.style.visibility = el.getAttribute(attr) || "";
+        el.removeAttribute(attr);
+      }
+    });
+  }, hidden);
+}
+
+async function getPageCaptureMetrics(page) {
+  return page.evaluate(() => {
+    const scrollingElement = document.scrollingElement || document.documentElement;
+    return {
+      width: Math.ceil(window.innerWidth),
+      height: Math.ceil(
+        Math.max(
+          scrollingElement.scrollHeight,
+          document.documentElement.scrollHeight,
+          document.body.scrollHeight
+        )
+      ),
+      viewportHeight: Math.ceil(window.innerHeight),
+    };
+  });
+}
+
+async function captureFullPageScreenshotByStitch(page, url) {
+  const metrics = await getPageCaptureMetrics(page);
+  const targetHeight = Math.min(metrics.height, STITCH_MAX_HEIGHT);
+  const scrollStep = Math.max(
+    1,
+    Math.floor(metrics.viewportHeight * STITCH_SCROLL_RATIO)
+  );
+  const yPositions = [];
+
+  const lastY = Math.max(0, targetHeight - metrics.viewportHeight);
+
+  for (
+    let y = 0;
+    y < lastY && yPositions.length < STITCH_MAX_SECTIONS;
+    y += scrollStep
+  ) {
+    yPositions.push(y);
+  }
+
+  if (
+    yPositions[yPositions.length - 1] !== lastY &&
+    yPositions.length < STITCH_MAX_SECTIONS
+  ) {
+    yPositions.push(lastY);
+  }
+
+  const composites = [];
+
+  for (const [index, y] of yPositions.entries()) {
+    await page.evaluate((scrollY) => window.scrollTo(0, scrollY), y);
+    await page.waitForTimeout(index === 0 ? 700 : 1000);
+    await waitForViewportImages(page);
+    await lockVisibleElementsForFullPageScreenshot(page);
+    await setFloatingElementsHidden(page, index > 0);
+
+    const section = await page.screenshot({
+      fullPage: false,
+      type: "jpeg",
+      quality: 82,
+      animations: "disabled",
+    });
+
+    const cropTop =
+      index === 0
+        ? 0
+        : Math.min(STITCH_FLOATING_CROP_TOP, metrics.viewportHeight - 1);
+    const cropHeight = Math.min(
+      metrics.viewportHeight - cropTop,
+      targetHeight - y - cropTop
+    );
+
+    if (cropHeight <= 0) {
+      continue;
+    }
+
+    const sectionInput =
+      cropTop > 0 || cropHeight < metrics.viewportHeight
+        ? await sharp(section)
+            .extract({
+              left: 0,
+              top: cropTop,
+              width: metrics.width,
+              height: cropHeight,
+            })
+            .toBuffer()
+        : section;
+
+    composites.push({
+      input: sectionInput,
+      left: 0,
+      top: y + cropTop,
+    });
+  }
+
+  await setFloatingElementsHidden(page, false);
+  await page.evaluate(() => window.scrollTo(0, 0));
+
+  const stitched = await sharp({
+    create: {
+      width: metrics.width,
+      height: targetHeight,
+      channels: 3,
+      background: "#ffffff",
+    },
+  })
+    .composite(composites)
+    .jpeg({ quality: 80 })
+    .toBuffer();
+
+  logDebug(
+    `[Crawler] Screenshot (stitched fullPage) captured for ${url} (${(
+      stitched.length / 1024
+    ).toFixed(1)}KB, ${yPositions.length} sections, ${metrics.width}x${targetHeight})`
+  );
+
+  if (metrics.height > targetHeight) {
+    console.warn(
+      `[Crawler] Full-page screenshot truncated for ${url}: ${metrics.height}px -> ${targetHeight}px`
+    );
+  }
+
+  return stitched;
 }
 
 class WebCrawler {
@@ -807,8 +963,20 @@ class WebCrawler {
         let scrollPosition = 0;
         let lastHeight = 0;
         let stableCount = 0;
+        let scrollSteps = 0;
+        const scrollStartedAt = Date.now();
+        const maxScrollSteps = Math.min(
+          40,
+          Math.max(8, Math.ceil(totalHeight / scrollStep) + 8)
+        );
+        const maxScrollWait = 30000;
 
-        while (scrollPosition < totalHeight || stableCount < 2) {
+        while (
+          (scrollPosition < totalHeight || stableCount < 2) &&
+          scrollSteps < maxScrollSteps &&
+          Date.now() - scrollStartedAt < maxScrollWait
+        ) {
+          scrollSteps += 1;
           window.scrollTo(0, scrollPosition);
           await new Promise((resolve) => setTimeout(resolve, 300));
 
@@ -871,7 +1039,7 @@ class WebCrawler {
                   return;
                 }
 
-                const timeout = setTimeout(() => resolve(), 3000);
+                const timeout = setTimeout(() => resolve(), 1500);
                 const onLoad = () => {
                   clearTimeout(timeout);
                   img.removeEventListener("load", onLoad);
@@ -886,11 +1054,7 @@ class WebCrawler {
                 };
                 img.addEventListener("load", onLoad);
                 img.addEventListener("error", onError);
-                if (img.src) {
-                  const currentSrc = img.src;
-                  img.src = "";
-                  img.src = currentSrc;
-                }
+                img.decoding = "async";
               });
             })
           );
@@ -922,7 +1086,7 @@ class WebCrawler {
                 resolve();
                 return;
               }
-              const timeout = setTimeout(() => resolve(), 2000);
+              const timeout = setTimeout(() => resolve(), 1500);
               const onLoad = () => {
                 clearTimeout(timeout);
                 img.removeEventListener("load", onLoad);
@@ -954,12 +1118,22 @@ class WebCrawler {
         return [];
       }
 
-      const fullPageScreenshot = await page.screenshot({
-        fullPage: true,
-        type: "jpeg",
-        quality: 80,
-        animations: "disabled",
-      });
+      let fullPageScreenshot = null;
+      try {
+        fullPageScreenshot = await captureFullPageScreenshotByStitch(page, url);
+      } catch (error) {
+        console.warn(
+          `[Crawler] Stitched fullPage screenshot failed for ${url}, falling back to native fullPage:`,
+          error
+        );
+        await setFloatingElementsHidden(page, false).catch(() => {});
+        fullPageScreenshot = await page.screenshot({
+          fullPage: true,
+          type: "jpeg",
+          quality: 80,
+          animations: "disabled",
+        });
+      }
 
       if (this.crawledPages.length < this.config.maxPages) {
         this.crawledPages.push({
